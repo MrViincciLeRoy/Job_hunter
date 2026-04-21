@@ -23,18 +23,26 @@
   .top-bar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 1.2rem 2rem; border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--surface); flex-wrap: wrap; gap: 0.75rem;
   }
   .logo { font-family: 'Space Mono', monospace; font-size: 1.1rem; color: var(--accent); letter-spacing: -0.02em; }
   .logo span { color: var(--muted); }
+  .top-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-  .upload-btn {
-    background: var(--accent); color: #000; font-family: 'Space Mono', monospace;
-    font-size: 0.75rem; font-weight: 700; padding: 0.5rem 1rem;
-    border: none; cursor: pointer; text-decoration: none; display: inline-block;
-    transition: opacity 0.15s;
+  .btn {
+    font-family: 'Space Mono', monospace; font-size: 0.72rem; font-weight: 700;
+    padding: 0.5rem 1rem; border: none; cursor: pointer;
+    text-decoration: none; display: inline-block; transition: opacity 0.15s;
   }
-  .upload-btn:hover { opacity: 0.85; }
+  .btn:hover { opacity: 0.8; }
+  .btn-green { background: var(--accent); color: #000; }
+  .btn-purple { background: var(--accent2); color: #fff; }
+  .btn-outline {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
+  .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.65rem; }
 
   .stats-row {
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
@@ -53,6 +61,24 @@
   .msg { padding: 0.6rem 1rem; margin-bottom: 0.4rem; font-size: 0.85rem; border-left: 3px solid; }
   .msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
   .msg.error { border-color: var(--danger); background: rgba(255,68,102,0.05); }
+
+  /* Action bar */
+  .action-bar {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    padding: 1rem 2rem; border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .action-bar-label {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+    margin-right: 0.25rem;
+  }
+  .divider { width: 1px; height: 20px; background: var(--border); }
+  .dry-label {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted);
+    display: flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  }
+  .dry-label input { accent-color: var(--accent2); }
 
   .main { display: grid; grid-template-columns: 1fr 340px; gap: 0; }
 
@@ -85,12 +111,11 @@
   .job-info { min-width: 0; }
   .job-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .job-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
-  .job-meta .platform { 
-    display: inline-block; padding: 0.1rem 0.4rem; 
+  .job-meta .platform {
+    display: inline-block; padding: 0.1rem 0.4rem;
     border: 1px solid var(--border); font-family: 'Space Mono', monospace;
     font-size: 0.6rem; margin-left: 0.4rem; vertical-align: middle;
   }
-
   .job-actions { display: flex; align-items: center; gap: 0.5rem; }
   .email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .no-email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
@@ -102,7 +127,6 @@
   .job-url:hover { color: var(--accent2); }
 
   .side-panel { padding: 0; }
-
   .cv-card { padding: 1.5rem; border-bottom: 1px solid var(--border); }
   .cv-card h3 { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
   .cv-name { font-size: 1rem; font-weight: 600; color: var(--accent); margin-bottom: 0.25rem; }
@@ -122,14 +146,16 @@
   .app-company { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
   .app-date { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--accent); margin-top: 0.25rem; }
 
-  .cmd-block {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 1rem 1.5rem; margin: 1rem 1.5rem;
-  }
-  .cmd-block h3 { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
-  .cmd { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--accent2); padding: 0.2rem 0; }
-
   .empty { padding: 2rem 1.5rem; color: var(--muted); font-size: 0.85rem; }
+
+  /* Running indicator */
+  .running-badge {
+    display: none; align-items: center; gap: 0.4rem;
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent);
+  }
+  .running-badge.show { display: flex; }
+  .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
 
   @media (max-width: 900px) {
     .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -142,7 +168,10 @@
 
 <div class="top-bar">
   <div class="logo">job<span>/</span>hunter</div>
-  <a href="/upload-cv/" class="upload-btn">+ Upload CV</a>
+  <div class="top-actions">
+    <span class="running-badge" id="running-badge"><span class="pulse"></span> RUNNING...</span>
+    <a href="/upload-cv/" class="btn btn-outline btn-sm">+ Upload CV</a>
+  </div>
 </div>
 
 {% if messages %}
@@ -152,6 +181,27 @@
   {% endfor %}
 </div>
 {% endif %}
+
+<div class="action-bar">
+  <span class="action-bar-label">Run</span>
+
+  <form method="POST" action="/trigger/" id="pipeline-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" id="action-input" value="all">
+    <input type="hidden" name="dry_run" id="dry-run-input" value="0">
+  </form>
+
+  <button class="btn btn-green btn-sm" onclick="submit('all')">⚡ Run All</button>
+  <button class="btn btn-outline btn-sm" onclick="submit('scrape')">Scrape</button>
+  <button class="btn btn-outline btn-sm" onclick="submit('match')">Match</button>
+  <button class="btn btn-purple btn-sm" onclick="submit('apply')">Apply</button>
+
+  <div class="divider"></div>
+
+  <label class="dry-label">
+    <input type="checkbox" id="dry-run-toggle" onchange="toggleDry(this)"> Dry run
+  </label>
+</div>
 
 <div class="stats-row">
   <div class="stat">
@@ -210,7 +260,7 @@
         {% endwith %}
       {% endfor %}
     {% else %}
-      <div class="empty">No jobs yet. Run <code>python run.py scrape</code> to start.</div>
+      <div class="empty">No jobs yet. Hit <strong>⚡ Run All</strong> above to start.</div>
     {% endif %}
   </div>
 
@@ -230,15 +280,6 @@
       {% endif %}
     </div>
 
-    <div class="cmd-block">
-      <h3>Commands</h3>
-      <div class="cmd">python run.py all</div>
-      <div class="cmd">python run.py scrape</div>
-      <div class="cmd">python run.py match</div>
-      <div class="cmd">python run.py apply</div>
-      <div class="cmd">python run.py apply --dry-run</div>
-    </div>
-
     <div class="applied-section">
       <h3>Applications Sent ({{ applied_count }})</h3>
       {% if applications %}
@@ -256,5 +297,15 @@
   </div>
 </div>
 
+<script>
+  function submit(action) {
+    document.getElementById('action-input').value = action;
+    document.getElementById('running-badge').classList.add('show');
+    document.getElementById('pipeline-form').submit();
+  }
+  function toggleDry(cb) {
+    document.getElementById('dry-run-input').value = cb.checked ? '1' : '0';
+  }
+</script>
 </body>
 </html>
