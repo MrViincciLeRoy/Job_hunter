@@ -1,15 +1,18 @@
 import json
 import base64
 import os
+import requests as http_requests
 from pathlib import Path
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 
 CREDS_PATH = Path("credentials.json")
 TOKEN_PATH = Path("token.json")
-SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+SCOPES = "https://www.googleapis.com/auth/gmail.send"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
 
 def _redirect_uri(request):
@@ -18,6 +21,15 @@ def _redirect_uri(request):
         return base
     scheme = "https" if request.is_secure() else "http"
     return f"{scheme}://{request.get_host()}/credentials/oauth-callback/"
+
+
+def _load_client_secrets():
+    data = json.loads(CREDS_PATH.read_text())
+    info = data.get("web") or data.get("installed") or {}
+    return {
+        "client_id": info["client_id"],
+        "client_secret": info["client_secret"],
+    }
 
 
 def _creds_status():
@@ -94,26 +106,32 @@ def credentials_view(request):
 
 @require_POST
 def run_gmail_auth(request):
-    """Generate Google OAuth URL and return it — browser redirects user there."""
+    """Build the Google OAuth URL manually — no PKCE, no Flow class."""
     if not CREDS_PATH.exists():
         return JsonResponse({"success": False, "error": "credentials.json not found. Upload it first."})
 
     try:
-        from google_auth_oauthlib.flow import Flow
+        secrets = _load_client_secrets()
         redirect_uri = _redirect_uri(request)
-        flow = Flow.from_client_secrets_file(
-            str(CREDS_PATH),
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-        )
-        auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+
+        params = {
+            "client_id": secrets["client_id"],
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": SCOPES,
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        from urllib.parse import urlencode
+        auth_url = GOOGLE_AUTH_URL + "?" + urlencode(params)
+
         return JsonResponse({"success": True, "auth_url": auth_url, "redirect_uri": redirect_uri})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)})
 
 
 def oauth_callback(request):
-    """Google redirects here after user approves. Exchange code for token."""
+    """Google redirects here. Exchange code for token manually — no PKCE."""
     error = request.GET.get("error")
     code = request.GET.get("code")
 
@@ -130,16 +148,33 @@ def oauth_callback(request):
         return redirect("credentials")
 
     try:
-        from google_auth_oauthlib.flow import Flow
+        secrets = _load_client_secrets()
         redirect_uri = _redirect_uri(request)
-        flow = Flow.from_client_secrets_file(
-            str(CREDS_PATH),
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-        )
-        flow.fetch_token(code=code)
-        creds = flow.credentials
-        TOKEN_PATH.write_text(creds.to_json())
+
+        # Direct POST to Google token endpoint — no PKCE involved
+        resp = http_requests.post(GOOGLE_TOKEN_URL, data={
+            "code": code,
+            "client_id": secrets["client_id"],
+            "client_secret": secrets["client_secret"],
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        })
+        resp.raise_for_status()
+        token_data = resp.json()
+
+        if "error" in token_data:
+            raise ValueError(token_data.get("error_description", token_data["error"]))
+
+        # Build a token.json compatible with google-auth library
+        token_json = {
+            "token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "token_uri": GOOGLE_TOKEN_URL,
+            "client_id": secrets["client_id"],
+            "client_secret": secrets["client_secret"],
+            "scopes": [SCOPES],
+        }
+        TOKEN_PATH.write_text(json.dumps(token_json, indent=2))
         token_b64 = base64.b64encode(TOKEN_PATH.read_bytes()).decode()
 
         return render(request, "credentials.html", {
@@ -147,6 +182,19 @@ def oauth_callback(request):
             "oauth_success": True,
             "token_b64": token_b64,
         })
+
     except Exception as e:
         messages.error(request, f"Token exchange failed: {e}")
         return redirect("credentials")
+
+
+def debug_redirect_uri(request):
+    uri = _redirect_uri(request)
+    return HttpResponse(
+        f"<pre style='font-family:monospace;padding:2rem'>"
+        f"Redirect URI being used:\n\n  {uri}\n\n"
+        f"Host: {request.get_host()}\n"
+        f"Secure: {request.is_secure()}\n"
+        f"OAUTH_REDIRECT_URI env: {os.getenv('OAUTH_REDIRECT_URI', 'NOT SET')}"
+        f"</pre>"
+    )
