@@ -5,6 +5,14 @@ PLATFORMS = [
     ("indeed", "Indeed"),
     ("pnet", "PNet"),
     ("careerjunction", "CareerJunction"),
+    ("careerjunction_it", "CareerJunction IT"),
+    ("careers24", "Careers24"),
+    ("jobmail", "JobMail"),
+    ("gumtree", "Gumtree"),
+    ("dpsa", "DPSA"),
+    ("sayouth", "SAYouth"),
+    ("essa", "ESSA"),
+    ("govza", "Gov.za"),
 ]
 
 

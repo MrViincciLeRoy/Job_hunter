@@ -2,21 +2,27 @@ from django.core.management.base import BaseCommand
 from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
 from apps.scraper.scrapers.pnet import scrape_pnet
 from apps.scraper.scrapers.careerjunction import scrape_careerjunction
+from apps.scraper.scrapers.careerjunction_it import scrape_careerjunction_it
 from apps.scraper.scrapers.careers24 import scrape_careers24
 from apps.scraper.scrapers.jobmail import scrape_jobmail
 from apps.scraper.scrapers.gumtree import scrape_gumtree
+from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_essa, scrape_govza
 from apps.scraper.models import Job
 from apps.cv.models import CV
 
-# Ordered by email likelihood — high-yield platforms first
 SCRAPERS = [
-    ("PNet",           scrape_pnet,          "high"),
-    ("CareerJunction", scrape_careerjunction, "high"),
-    ("Careers24",      scrape_careers24,      "high"),
-    ("JobMail",        scrape_jobmail,        "high"),
-    ("Gumtree",        scrape_gumtree,        "medium"),
-    ("LinkedIn",       scrape_linkedin,       "low"),
-    ("Indeed",         scrape_indeed,         "low"),
+    ("PNet",              scrape_pnet,              "high"),
+    ("CareerJunction",    scrape_careerjunction,    "high"),
+    ("CareerJunction-IT", scrape_careerjunction_it, "high"),
+    ("Careers24",         scrape_careers24,         "high"),
+    ("JobMail",           scrape_jobmail,           "high"),
+    ("DPSA",              scrape_dpsa,              "high"),
+    ("SAYouth",           scrape_sayouth,           "medium"),
+    ("ESSA",              scrape_essa,              "medium"),
+    ("GovZA",             scrape_govza,             "medium"),
+    ("Gumtree",           scrape_gumtree,           "medium"),
+    ("LinkedIn",          scrape_linkedin,          "low"),
+    ("Indeed",            scrape_indeed,            "low"),
 ]
 
 
@@ -26,8 +32,9 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--keywords", type=str, default=None)
         parser.add_argument("--limit", type=int, default=20)
-        parser.add_argument("--email-only", action="store_true",
-                            help="Only run high email-likelihood scrapers")
+        parser.add_argument("--email-only", action="store_true")
+        parser.add_argument("--gov-only", action="store_true", help="Only scrape government job platforms")
+        parser.add_argument("--it-only", action="store_true", help="Only scrape IT-focused platforms")
 
     def handle(self, *args, **options):
         cv = CV.objects.filter(active=True).last()
@@ -42,9 +49,21 @@ class Command(BaseCommand):
 
         limit = options["limit"]
         email_only = options["email_only"]
-        self.stdout.write(f"Searching: '{keywords}' | limit={limit} | email_only={email_only}")
+        gov_only = options["gov_only"]
+        it_only = options["it_only"]
 
-        scrapers = [s for s in SCRAPERS if not email_only or s[2] == "high"]
+        self.stdout.write(f"Searching: '{keywords}' | limit={limit}")
+
+        gov_platforms = {"DPSA", "SAYouth", "ESSA", "GovZA"}
+        it_platforms = {"PNet", "CareerJunction", "CareerJunction-IT", "LinkedIn", "Indeed"}
+
+        scrapers = SCRAPERS
+        if gov_only:
+            scrapers = [s for s in SCRAPERS if s[0] in gov_platforms]
+        elif it_only:
+            scrapers = [s for s in SCRAPERS if s[0] in it_platforms]
+        elif email_only:
+            scrapers = [s for s in SCRAPERS if s[2] == "high"]
 
         all_jobs = []
         for name, fn, tier in scrapers:
