@@ -5,12 +5,19 @@ from pathlib import Path
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 CREDS_PATH = Path("credentials.json")
 TOKEN_PATH = Path("token.json")
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
+
+def _redirect_uri(request):
+    base = os.getenv("OAUTH_REDIRECT_URI", "")
+    if base:
+        return base
+    scheme = "https" if request.is_secure() else "http"
+    return f"{scheme}://{request.get_host()}/credentials/oauth-callback/"
 
 
 def _creds_status():
@@ -43,7 +50,7 @@ def credentials_view(request):
                 if "installed" not in parsed and "web" not in parsed:
                     raise ValueError("Not a valid credentials.json (missing 'installed' or 'web' key)")
                 CREDS_PATH.write_text(content)
-                messages.success(request, "✓ credentials.json saved! Now click 'Run Gmail Auth' to authorize.")
+                messages.success(request, "✓ credentials.json saved! Now click 'Authorize Gmail' below.")
             except (json.JSONDecodeError, ValueError) as e:
                 messages.error(request, f"Invalid JSON: {e}")
             except Exception as e:
@@ -59,7 +66,7 @@ def credentials_view(request):
                 if "installed" not in parsed and "web" not in parsed:
                     raise ValueError("Not a valid credentials.json (missing 'installed' or 'web' key)")
                 CREDS_PATH.write_text(json.dumps(parsed, indent=2))
-                messages.success(request, "✓ credentials.json saved! Now click 'Run Gmail Auth' to authorize.")
+                messages.success(request, "✓ credentials.json saved! Now click 'Authorize Gmail' below.")
             except (json.JSONDecodeError, ValueError) as e:
                 messages.error(request, f"Invalid JSON: {e}")
             except Exception as e:
@@ -87,44 +94,59 @@ def credentials_view(request):
 
 @require_POST
 def run_gmail_auth(request):
-    """Generate an OAuth URL the user can open manually — no browser needed on server."""
+    """Generate Google OAuth URL and return it — browser redirects user there."""
     if not CREDS_PATH.exists():
         return JsonResponse({"success": False, "error": "credentials.json not found. Upload it first."})
 
     try:
         from google_auth_oauthlib.flow import Flow
+        redirect_uri = _redirect_uri(request)
         flow = Flow.from_client_secrets_file(
             str(CREDS_PATH),
             scopes=SCOPES,
-            redirect_uri="urn:ietf:wg:oauth:2.0:oob"
+            redirect_uri=redirect_uri,
         )
-        auth_url, _ = flow.authorization_url(prompt="consent")
-        return JsonResponse({"success": True, "auth_url": auth_url, "oob": True})
+        auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+        return JsonResponse({"success": True, "auth_url": auth_url, "redirect_uri": redirect_uri})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)})
 
 
-@require_POST
-def exchange_code(request):
-    """Exchange the code the user pastes back after authorizing."""
-    if not CREDS_PATH.exists():
-        return JsonResponse({"success": False, "error": "credentials.json not found."})
+def oauth_callback(request):
+    """Google redirects here after user approves. Exchange code for token."""
+    error = request.GET.get("error")
+    code = request.GET.get("code")
 
-    code = request.POST.get("code", "").strip()
+    if error:
+        messages.error(request, f"OAuth error: {error}")
+        return redirect("credentials")
+
     if not code:
-        return JsonResponse({"success": False, "error": "No code provided."})
+        messages.error(request, "No authorization code received from Google.")
+        return redirect("credentials")
+
+    if not CREDS_PATH.exists():
+        messages.error(request, "credentials.json missing — please re-upload it.")
+        return redirect("credentials")
 
     try:
         from google_auth_oauthlib.flow import Flow
+        redirect_uri = _redirect_uri(request)
         flow = Flow.from_client_secrets_file(
             str(CREDS_PATH),
             scopes=SCOPES,
-            redirect_uri="urn:ietf:wg:oauth:2.0:oob"
+            redirect_uri=redirect_uri,
         )
         flow.fetch_token(code=code)
         creds = flow.credentials
         TOKEN_PATH.write_text(creds.to_json())
         token_b64 = base64.b64encode(TOKEN_PATH.read_bytes()).decode()
-        return JsonResponse({"success": True, "token_b64": token_b64})
+
+        return render(request, "credentials.html", {
+            "creds_status": _creds_status(),
+            "oauth_success": True,
+            "token_b64": token_b64,
+        })
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)})
+        messages.error(request, f"Token exchange failed: {e}")
+        return redirect("credentials")
