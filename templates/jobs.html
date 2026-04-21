@@ -50,7 +50,6 @@
   .stat-val.red { color: var(--danger); }
   .stat-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
-  /* Job card */
   .jobs-list { display: flex; flex-direction: column; }
   .job-card {
     display: grid; grid-template-columns: 52px 1fr auto;
@@ -90,7 +89,6 @@
   .empty-state { padding: 3rem 1.5rem; text-align: center; color: var(--muted); }
   .empty-state h3 { font-family: 'Space Mono', monospace; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text); }
 
-  /* Drawer */
   .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
   .drawer-overlay.open { opacity: 1; pointer-events: all; }
   .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 96vw; background: var(--surface); border-left: 1px solid var(--border); z-index: 101; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; overflow: hidden; }
@@ -210,8 +208,7 @@
 
 <div class="jobs-list" id="jobs-list">
 {% for job in jobs %}
-  {% with is_gov=job.platform|lower in "dpsa sayouth essa govza" %}
-  <div class="job-card {% if job.application %}applied{% elif job.apply_email %}has-email{% elif is_gov %}gov-job{% else %}no-email{% endif %}"
+  <div class="job-card {% if job.application %}applied{% elif job.apply_email %}has-email{% elif job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov-job{% else %}no-email{% endif %}"
        data-id="{{ job.pk }}"
        data-email="{% if job.apply_email %}1{% else %}0{% endif %}"
        data-matched="{% if job.match_score >= 60 %}1{% else %}0{% endif %}"
@@ -252,7 +249,6 @@
       </div>
     </div>
   </div>
-  {% endwith %}
 {% empty %}
   <div class="empty-state">
     <h3>No jobs yet</h3>
@@ -410,7 +406,8 @@ function doSpider(jobId) {
   banner.className = 'spider-banner running';
   banner.innerHTML = '<span class="pulse"></span> Fetching job page...';
   fetch(`/job/${jobId}/spider/`, {method:'POST',headers:{'X-CSRFToken':CSRF}})
-    .then(r=>r.json()).then(d=>{
+    .then(r => r.json())
+    .then(d=>{
       if (d.error) { banner.className='spider-banner fail'; banner.textContent='✗ '+d.error; btn.disabled=false; btn.textContent='🕷 Retry Spider'; return; }
       if (d.apply_email) {
         banner.className='spider-banner success'; banner.innerHTML=`✓ Email found: <strong>${d.apply_email}</strong>`;
@@ -425,7 +422,7 @@ function doSpider(jobId) {
       } else {
         banner.className='spider-banner fail'; banner.textContent='✗ No email found'; btn.disabled=false; btn.textContent='🕷 Retry Spider'; showToast('No email found.',false);
       }
-    }).catch(()=>{ banner.className='spider-banner fail'; banner.textContent='✗ Network error'; btn.disabled=false; btn.textContent='🕷 Retry'; });
+    }).catch(err=>{ banner.className='spider-banner fail'; banner.textContent='✗ '+(err.message||'Network error'); btn.disabled=false; btn.textContent='🕷 Retry'; });
 }
 
 function doSpiderInline(jobId, btn) {
@@ -436,29 +433,40 @@ function doSpiderInline(jobId, btn) {
         showToast(`✓ ${d.apply_email}`);
         const card = document.querySelector(`[data-id="${jobId}"]`);
         if (card) { card.dataset.email='1'; card.classList.remove('no-email','gov-job'); card.classList.add('has-email'); applyFilters(); }
-        // Replace spider btn with apply btn
         btn.outerHTML = `<button class="apply-inline-btn" onclick="event.stopPropagation();doApplyInline(${jobId}, this)">✉ Apply</button>`;
       } else { showToast('No email.',false); btn.disabled=false; btn.textContent='🕷'; }
-    }).catch(()=>{ showToast('Error',false); btn.disabled=false; btn.textContent='🕷'; });
+    }).catch(err=>{ showToast(err.message||'Error',false); btn.disabled=false; btn.textContent='🕷'; });
 }
 
 function doApplyInline(jobId, btn) {
   btn.disabled=true; btn.textContent='Sending...';
   fetch(`/job/${jobId}/apply/`,{method:'POST',headers:{'X-CSRFToken':CSRF}})
-    .then(r=>r.json()).then(d=>{
+    .then(r => {
+      if (!r.ok && r.headers.get('content-type')?.includes('text/html')) {
+        throw new Error(`Server error ${r.status} — check Gmail/Groq credentials`);
+      }
+      return r.json();
+    })
+    .then(d=>{
       if (d.error) { showToast(d.error,false); btn.disabled=false; btn.textContent='✉ Apply'; return; }
       showToast('Application sent!');
       btn.outerHTML = `<span style="font-family:Space Mono,monospace;font-size:0.58rem;color:var(--accent)">✓ sent</span>`;
       const card = document.querySelector(`[data-id="${jobId}"]`);
       if (card) { card.dataset.applied='1'; card.classList.remove('has-email'); card.classList.add('applied'); }
-    }).catch(()=>showToast('Network error',false));
+    }).catch(err=>{ showToast(err.message||'Network error',false); btn.disabled=false; btn.textContent='✉ Apply'; });
 }
 
 function doApply(jobId) {
   const btn = document.getElementById('apply-btn');
   btn.disabled=true; btn.textContent='Sending...';
   fetch(`/job/${jobId}/apply/`,{method:'POST',headers:{'X-CSRFToken':CSRF}})
-    .then(r=>r.json()).then(d=>{
+    .then(r => {
+      if (!r.ok && r.headers.get('content-type')?.includes('text/html')) {
+        throw new Error(`Server error ${r.status} — check Gmail/Groq credentials`);
+      }
+      return r.json();
+    })
+    .then(d=>{
       if (d.error) { showToast(d.error,false); btn.disabled=false; btn.textContent='✉ Apply Now'; return; }
       showToast('Application sent!');
       const now=new Date(); const ts=now.toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'})+' · '+now.toTimeString().slice(0,5);
@@ -466,7 +474,7 @@ function doApply(jobId) {
       btn.outerHTML=`<span class="ml-auto" style="font-family:Space Mono,monospace;font-size:0.62rem;color:var(--accent)">✓ APPLIED</span>`;
       if (d.cover_letter) document.querySelector('.drawer-body').insertAdjacentHTML('beforeend',`<div class="d-section"><div class="d-section-title">Cover Letter Sent</div><div class="cover-box">${d.cover_letter}</div></div>`);
       const card=document.querySelector(`[data-id="${jobId}"]`); if(card){card.dataset.applied='1';card.classList.remove('has-email');card.classList.add('applied');}
-    }).catch(()=>showToast('Network error',false));
+    }).catch(err=>{ showToast(err.message||'Network error',false); btn.disabled=false; btn.textContent='✉ Apply Now'; });
 }
 
 setFilter('email');

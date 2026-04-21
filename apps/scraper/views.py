@@ -91,17 +91,25 @@ def apply_single(request, job_id):
     if not pdf_bytes:
         return JsonResponse({"error": "CV file missing — please re-upload at /upload-cv/"}, status=400)
 
-    from apps.mailer.sender import send_application
-    ok, result = send_application(
-        cv.parsed_data,
-        {"title": job.title, "company": job.company,
-         "description": job.description, "apply_email": job.apply_email},
-        pdf_bytes, cv.pdf_filename or "CV.pdf",
-    )
-    if ok:
-        Application.objects.create(job=job, status="sent", cover_letter=result)
-        return JsonResponse({"success": True, "cover_letter": result})
-    return JsonResponse({"error": result}, status=500)
+    try:
+        from apps.mailer.sender import send_application
+        ok, result = send_application(
+            cv.parsed_data,
+            {
+                "title": job.title,
+                "company": job.company,
+                "description": job.description,
+                "apply_email": job.apply_email,
+            },
+            pdf_bytes,
+            cv.pdf_filename or "CV.pdf",
+        )
+        if ok:
+            Application.objects.create(job=job, status="sent", cover_letter=result)
+            return JsonResponse({"success": True, "cover_letter": result})
+        return JsonResponse({"error": result}, status=500)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 def _spider_and_filter(jobs_qs, spider_fn):

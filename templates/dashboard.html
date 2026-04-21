@@ -123,7 +123,6 @@
   .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.2} }
 
-  /* DRAWER */
   .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
   .drawer-overlay.open { opacity: 1; pointer-events: all; }
   .drawer {
@@ -284,7 +283,7 @@
             <div class="job-title">{{ job.title }}</div>
             <div class="job-meta">
               {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
-              <span class="platform {% if job.platform in 'dpsa sayouth essa govza' %}gov{% endif %}">{{ job.platform }}</span>
+              <span class="platform {% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov{% endif %}">{{ job.platform }}</span>
             </div>
           </div>
           <div class="job-actions">
@@ -499,14 +498,20 @@ function doSpider(jobId) {
         banner.className='spider-banner fail'; banner.textContent='✗ No email found on this posting';
         btn.disabled=false; btn.textContent='🕷 Retry Spider'; showToast('No email found on this page.',false);
       }
-    }).catch(()=>{banner.className='spider-banner fail';banner.textContent='✗ Network error';btn.disabled=false;btn.textContent='🕷 Retry Spider';});
+    }).catch(err=>{banner.className='spider-banner fail';banner.textContent='✗ '+(err.message||'Network error');btn.disabled=false;btn.textContent='🕷 Retry Spider';});
 }
 
 function doApply(jobId) {
   const btn = document.getElementById('apply-btn');
   btn.disabled=true; btn.textContent='Sending...';
   fetch(`/job/${jobId}/apply/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
-    .then(r=>r.json()).then(d=>{
+    .then(r => {
+      if (!r.ok && r.headers.get('content-type')?.includes('text/html')) {
+        throw new Error(`Server error ${r.status} — check Gmail/Groq credentials`);
+      }
+      return r.json();
+    })
+    .then(d=>{
       if(d.error){showToast(d.error,false);btn.disabled=false;btn.textContent='✉ Apply Now';return;}
       showToast('Application sent!');
       const now=new Date();
@@ -516,7 +521,7 @@ function doApply(jobId) {
       if(d.cover_letter){document.querySelector('.drawer-body').insertAdjacentHTML('beforeend',`<div class="drawer-section"><div class="drawer-section-title">Cover Letter Sent</div><div class="cover-letter-box">${d.cover_letter}</div></div>`);}
       const actions=document.querySelector(`[data-id="${jobId}"] .job-actions`);
       if(actions&&!actions.querySelector('.applied-tag')){actions.insertAdjacentHTML('afterbegin','<span class="applied-tag">✓ sent</span>');}
-    }).catch(()=>showToast('Network error',false));
+    }).catch(err=>{showToast(err.message||'Network error',false);btn.disabled=false;btn.textContent='✉ Apply Now';});
 }
 
 function copyEmail(email) {
