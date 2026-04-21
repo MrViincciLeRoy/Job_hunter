@@ -1,7 +1,6 @@
 import json
 import base64
 import os
-import threading
 from pathlib import Path
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -88,19 +87,44 @@ def credentials_view(request):
 
 @require_POST
 def run_gmail_auth(request):
-    """Trigger the OAuth flow in a subprocess and return the token."""
+    """Generate an OAuth URL the user can open manually — no browser needed on server."""
     if not CREDS_PATH.exists():
         return JsonResponse({"success": False, "error": "credentials.json not found. Upload it first."})
 
     try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        flow = InstalledAppFlow.from_client_secrets_file(str(CREDS_PATH), SCOPES)
-        creds = flow.run_local_server(port=0)
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_secrets_file(
+            str(CREDS_PATH),
+            scopes=SCOPES,
+            redirect_uri="urn:ietf:wg:oauth:2.0:oob"
+        )
+        auth_url, _ = flow.authorization_url(prompt="consent")
+        return JsonResponse({"success": True, "auth_url": auth_url, "oob": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)})
 
+
+@require_POST
+def exchange_code(request):
+    """Exchange the code the user pastes back after authorizing."""
+    if not CREDS_PATH.exists():
+        return JsonResponse({"success": False, "error": "credentials.json not found."})
+
+    code = request.POST.get("code", "").strip()
+    if not code:
+        return JsonResponse({"success": False, "error": "No code provided."})
+
+    try:
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_secrets_file(
+            str(CREDS_PATH),
+            scopes=SCOPES,
+            redirect_uri="urn:ietf:wg:oauth:2.0:oob"
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
         TOKEN_PATH.write_text(creds.to_json())
         token_b64 = base64.b64encode(TOKEN_PATH.read_bytes()).decode()
-
         return JsonResponse({"success": True, "token_b64": token_b64})
-
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)})
