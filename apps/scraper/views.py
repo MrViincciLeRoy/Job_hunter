@@ -48,13 +48,79 @@ def job_detail(request, job_id):
     })
 
 
+@require_POST
+def spider_job(request, job_id):
+    job = get_object_or_404(Job, pk=job_id)
+    if not job.url:
+        return JsonResponse({"error": "No URL for this job"}, status=400)
+
+    from apps.scraper.scrapers.spider import spider_url
+    result = spider_url(job.url)
+
+    if result["error"]:
+        return JsonResponse({"error": result["error"]}, status=422)
+
+    updated = False
+    if result["emails"] and not job.apply_email:
+        job.apply_email = result["emails"][0]
+        updated = True
+
+    if result["description"] and len(result["description"]) > len(job.description):
+        job.description = result["description"]
+        updated = True
+
+    if updated:
+        job.save()
+
+    app = getattr(job, "application", None)
+    return JsonResponse({
+        "id": job.pk,
+        "apply_email": job.apply_email,
+        "all_emails": result["emails"],
+        "phone": result["phone"],
+        "followed_url": result["followed_url"],
+        "description_updated": result["description"] != "",
+        "applied": app is not None,
+    })
+
+
+@require_POST
+def apply_single(request, job_id):
+    job = get_object_or_404(Job, pk=job_id)
+    cv = CV.objects.filter(active=True).last()
+
+    if not cv:
+        return JsonResponse({"error": "No active CV"}, status=400)
+    if not job.apply_email:
+        return JsonResponse({"error": "No email address for this job"}, status=400)
+    if hasattr(job, "application"):
+        return JsonResponse({"error": "Already applied"}, status=400)
+
+    from apps.mailer.sender import send_application
+    ok, result = send_application(
+        cv.parsed_data,
+        {
+            "title": job.title,
+            "company": job.company,
+            "description": job.description,
+            "apply_email": job.apply_email,
+        },
+        cv.pdf.path,
+    )
+
+    if ok:
+        Application.objects.create(job=job, status="sent", cover_letter=result)
+        return JsonResponse({"success": True, "cover_letter": result})
+    return JsonResponse({"error": result}, status=500)
+
+
 def _run_pipeline(steps, threshold=60, dry_run=False):
-    import django
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "job_hunter.settings")
 
     from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
     from apps.scraper.scrapers.pnet import scrape_pnet
     from apps.scraper.scrapers.careerjunction import scrape_careerjunction
+    from apps.scraper.scrapers.spider import spider_url
     from apps.matcher.matcher import match_job_to_cv
     from apps.mailer.sender import send_application
 
@@ -76,6 +142,19 @@ def _run_pipeline(steps, threshold=60, dry_run=False):
                         defaults={"location": j.get("location", ""), "description": j.get("description", ""),
                                   "url": j.get("url", ""), "apply_email": j.get("apply_email", "")},
                     )
+
+    if "spider" in steps:
+        for job in Job.objects.filter(apply_email="").exclude(url="")[:60]:
+            try:
+                result = spider_url(job.url)
+                if result["emails"]:
+                    job.apply_email = result["emails"][0]
+                    job.save(update_fields=["apply_email"])
+                if result["description"] and len(result["description"]) > len(job.description):
+                    job.description = result["description"]
+                    job.save(update_fields=["description"])
+            except Exception:
+                pass
 
     if "match" in steps:
         cv = CV.objects.filter(active=True).last()
@@ -115,17 +194,19 @@ def trigger_pipeline(request):
     dry_run = request.POST.get("dry_run") == "1"
 
     steps_map = {
-        "all": ["scrape", "match", "apply"],
+        "all": ["scrape", "spider", "match", "apply"],
         "scrape": ["scrape"],
+        "spider": ["spider"],
         "match": ["match"],
         "apply": ["apply"],
     }
-    steps = steps_map.get(action, ["scrape", "match", "apply"])
+    steps = steps_map.get(action, ["scrape", "spider", "match", "apply"])
 
     thread = threading.Thread(target=_run_pipeline, args=(steps,), kwargs={"dry_run": dry_run}, daemon=True)
     thread.start()
 
-    label = {"all": "Full pipeline", "scrape": "Scrape", "match": "Match", "apply": "Apply"}.get(action, action)
+    label = {"all": "Full pipeline", "scrape": "Scrape", "spider": "Spider",
+             "match": "Match", "apply": "Apply"}.get(action, action)
     messages.success(request, f"⚡ {label} started in background. Refresh in ~60s to see results.")
     return redirect("dashboard")
 
@@ -136,6 +217,6 @@ def cron_trigger(request):
     if secret != os.getenv("CRON_SECRET", ""):
         return JsonResponse({"error": "unauthorized"}, status=401)
 
-    thread = threading.Thread(target=_run_pipeline, args=(["scrape", "match", "apply"],), daemon=True)
+    thread = threading.Thread(target=_run_pipeline, args=(["scrape", "spider", "match", "apply"],), daemon=True)
     thread.start()
     return JsonResponse({"status": "pipeline started"})
