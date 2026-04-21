@@ -1,10 +1,7 @@
 import pdfplumber
 import json
 import io
-import os
-from groq import Groq
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+from utils.llm import groq_call
 
 
 def extract_text_from_bytes(pdf_bytes: bytes) -> str:
@@ -14,8 +11,7 @@ def extract_text_from_bytes(pdf_bytes: bytes) -> str:
 
 def parse_cv_bytes(pdf_bytes: bytes) -> dict:
     text = extract_text_from_bytes(pdf_bytes)
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    response = groq_call(
         messages=[{
             "role": "user",
             "content": f"""Extract info from this CV and return ONLY valid JSON:
@@ -37,7 +33,6 @@ CV text:
     return json.loads(response.choices[0].message.content)
 
 
-# backward compat for any code still using file path
 def parse_cv(pdf_path: str) -> dict:
     with open(pdf_path, "rb") as f:
         return parse_cv_bytes(f.read())

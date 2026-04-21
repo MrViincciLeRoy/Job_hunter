@@ -4,15 +4,12 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-from groq import Groq
+from utils.llm import groq_call
 from apps.mailer.gmail_api import get_gmail_service
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def generate_cover_letter(cv_data: dict, job: dict) -> str:
-    r = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    r = groq_call(
         messages=[{
             "role": "user",
             "content": f"""Write a professional job application email body (200 words max).

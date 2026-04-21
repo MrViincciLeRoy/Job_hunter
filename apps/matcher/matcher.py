@@ -1,13 +1,9 @@
 import json
-import os
-from groq import Groq
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+from utils.llm import groq_call
 
 
 def match_job_to_cv(cv_data: dict, job: dict) -> int:
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    response = groq_call(
         messages=[{
             "role": "user",
             "content": f"""Score this CV-to-job match from 0-100. Return ONLY JSON: {{"score": int, "reason": str}}
