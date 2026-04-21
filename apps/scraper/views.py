@@ -15,13 +15,9 @@ def dashboard(request):
     cv = CV.objects.filter(active=True).last()
     jobs = Job.objects.order_by("-match_score", "-scraped_at")
     applications = Application.objects.select_related("job").order_by("-sent_at")
-
     return render(request, "dashboard.html", {
-        "cv": cv,
-        "jobs": jobs,
-        "applications": applications,
-        "total_jobs": jobs.count(),
-        "applied_count": applications.count(),
+        "cv": cv, "jobs": jobs, "applications": applications,
+        "total_jobs": jobs.count(), "applied_count": applications.count(),
         "matched_count": jobs.filter(match_score__gte=60).count(),
         "top_jobs": jobs.filter(match_score__gte=60).exclude(apply_email="")[:5],
     })
@@ -31,14 +27,9 @@ def job_detail(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
     app = getattr(job, "application", None)
     return JsonResponse({
-        "id": job.pk,
-        "title": job.title,
-        "company": job.company,
-        "location": job.location,
-        "platform": job.platform,
-        "url": job.url,
-        "apply_email": job.apply_email,
-        "match_score": job.match_score,
+        "id": job.pk, "title": job.title, "company": job.company,
+        "location": job.location, "platform": job.platform, "url": job.url,
+        "apply_email": job.apply_email, "match_score": job.match_score,
         "description": job.description,
         "scraped_at": job.scraped_at.strftime("%d %b %Y · %H:%M"),
         "applied": app is not None,
@@ -64,23 +55,23 @@ def spider_job(request, job_id):
     if result["emails"] and not job.apply_email:
         job.apply_email = result["emails"][0]
         updated = True
-
     if result["description"] and len(result["description"]) > len(job.description):
         job.description = result["description"]
         updated = True
-
     if updated:
         job.save()
 
+    if not job.apply_email:
+        job.delete()
+        return JsonResponse({"no_email": True, "deleted": True, "all_emails": []})
+
     app = getattr(job, "application", None)
     return JsonResponse({
-        "id": job.pk,
-        "apply_email": job.apply_email,
-        "all_emails": result["emails"],
-        "phone": result["phone"],
+        "id": job.pk, "apply_email": job.apply_email,
+        "all_emails": result["emails"], "phone": result["phone"],
         "followed_url": result["followed_url"],
-        "description_updated": result["description"] != "",
-        "applied": app is not None,
+        "description_updated": bool(result["description"]),
+        "applied": app is not None, "deleted": False,
     })
 
 
@@ -96,22 +87,41 @@ def apply_single(request, job_id):
     if hasattr(job, "application"):
         return JsonResponse({"error": "Already applied"}, status=400)
 
+    pdf_bytes = cv.get_pdf_bytes()
+    if not pdf_bytes:
+        return JsonResponse({"error": "CV file missing — please re-upload at /upload-cv/"}, status=400)
+
     from apps.mailer.sender import send_application
     ok, result = send_application(
         cv.parsed_data,
-        {
-            "title": job.title,
-            "company": job.company,
-            "description": job.description,
-            "apply_email": job.apply_email,
-        },
-        cv.pdf.path,
+        {"title": job.title, "company": job.company,
+         "description": job.description, "apply_email": job.apply_email},
+        pdf_bytes, cv.pdf_filename or "CV.pdf",
     )
-
     if ok:
         Application.objects.create(job=job, status="sent", cover_letter=result)
         return JsonResponse({"success": True, "cover_letter": result})
     return JsonResponse({"error": result}, status=500)
+
+
+def _spider_and_filter(jobs_qs, spider_fn):
+    to_delete = []
+    for job in jobs_qs:
+        try:
+            result = spider_fn(job.url)
+            if result["emails"]:
+                job.apply_email = result["emails"][0]
+                updates = ["apply_email"]
+                if result["description"] and len(result["description"]) > len(job.description):
+                    job.description = result["description"]
+                    updates.append("description")
+                job.save(update_fields=updates)
+            else:
+                to_delete.append(job.pk)
+        except Exception:
+            to_delete.append(job.pk)
+    if to_delete:
+        Job.objects.filter(pk__in=to_delete).delete()
 
 
 def _run_pipeline(steps, threshold=60, dry_run=False):
@@ -136,30 +146,22 @@ def _run_pipeline(steps, threshold=60, dry_run=False):
                 except Exception:
                     pass
             for j in all_jobs:
-                if j.get("title"):
-                    Job.objects.get_or_create(
-                        title=j["title"], company=j.get("company", ""), platform=j["platform"],
-                        defaults={"location": j.get("location", ""), "description": j.get("description", ""),
-                                  "url": j.get("url", ""), "apply_email": j.get("apply_email", "")},
-                    )
+                if not j.get("title"):
+                    continue
+                Job.objects.get_or_create(
+                    title=j["title"], company=j.get("company", ""), platform=j["platform"],
+                    defaults={"location": j.get("location", ""), "description": j.get("description", ""),
+                              "url": j.get("url", ""), "apply_email": j.get("apply_email", "")},
+                )
 
     if "spider" in steps:
-        for job in Job.objects.filter(apply_email="").exclude(url="")[:60]:
-            try:
-                result = spider_url(job.url)
-                if result["emails"]:
-                    job.apply_email = result["emails"][0]
-                    job.save(update_fields=["apply_email"])
-                if result["description"] and len(result["description"]) > len(job.description):
-                    job.description = result["description"]
-                    job.save(update_fields=["description"])
-            except Exception:
-                pass
+        no_email = list(Job.objects.filter(apply_email="").exclude(url="")[:60])
+        _spider_and_filter(no_email, spider_url)
 
     if "match" in steps:
         cv = CV.objects.filter(active=True).last()
         if cv:
-            for job in Job.objects.filter(match_score=0):
+            for job in Job.objects.filter(match_score=0).exclude(apply_email=""):
                 try:
                     score = match_job_to_cv(cv.parsed_data, {"title": job.title, "description": job.description})
                     job.match_score = score
@@ -170,6 +172,9 @@ def _run_pipeline(steps, threshold=60, dry_run=False):
     if "apply" in steps:
         cv = CV.objects.filter(active=True).last()
         if cv:
+            pdf_bytes = cv.get_pdf_bytes()
+            if not pdf_bytes:
+                return
             jobs = (Job.objects.filter(match_score__gte=threshold)
                     .exclude(apply_email="").exclude(application__isnull=False))
             for job in jobs:
@@ -180,7 +185,7 @@ def _run_pipeline(steps, threshold=60, dry_run=False):
                         cv.parsed_data,
                         {"title": job.title, "company": job.company,
                          "description": job.description, "apply_email": job.apply_email},
-                        cv.pdf.path,
+                        pdf_bytes, cv.pdf_filename or "CV.pdf",
                     )
                     if ok:
                         Application.objects.create(job=job, status="sent", cover_letter=result)
@@ -192,19 +197,14 @@ def _run_pipeline(steps, threshold=60, dry_run=False):
 def trigger_pipeline(request):
     action = request.POST.get("action", "all")
     dry_run = request.POST.get("dry_run") == "1"
-
     steps_map = {
         "all": ["scrape", "spider", "match", "apply"],
-        "scrape": ["scrape"],
-        "spider": ["spider"],
-        "match": ["match"],
-        "apply": ["apply"],
+        "scrape": ["scrape"], "spider": ["spider"],
+        "match": ["match"], "apply": ["apply"],
     }
     steps = steps_map.get(action, ["scrape", "spider", "match", "apply"])
-
     thread = threading.Thread(target=_run_pipeline, args=(steps,), kwargs={"dry_run": dry_run}, daemon=True)
     thread.start()
-
     label = {"all": "Full pipeline", "scrape": "Scrape", "spider": "Spider",
              "match": "Match", "apply": "Apply"}.get(action, action)
     messages.success(request, f"⚡ {label} started in background. Refresh in ~60s to see results.")
@@ -216,7 +216,6 @@ def cron_trigger(request):
     secret = request.headers.get("X-Cron-Secret", "")
     if secret != os.getenv("CRON_SECRET", ""):
         return JsonResponse({"error": "unauthorized"}, status=401)
-
     thread = threading.Thread(target=_run_pipeline, args=(["scrape", "spider", "match", "apply"],), daemon=True)
     thread.start()
     return JsonResponse({"status": "pipeline started"})
