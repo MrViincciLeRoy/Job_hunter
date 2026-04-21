@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #00ff88;
+    --accent2: #7c6aff;
+    --danger: #ff4466;
+    --text: #e8e8f0;
+    --muted: #555570;
+    --card: #13131f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.2rem 2rem; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo { font-family: 'Space Mono', monospace; font-size: 1.1rem; color: var(--accent); letter-spacing: -0.02em; }
+  .logo span { color: var(--muted); }
+
+  .upload-btn {
+    background: var(--accent); color: #000; font-family: 'Space Mono', monospace;
+    font-size: 0.75rem; font-weight: 700; padding: 0.5rem 1rem;
+    border: none; cursor: pointer; text-decoration: none; display: inline-block;
+    transition: opacity 0.15s;
+  }
+  .upload-btn:hover { opacity: 0.85; }
+
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--border); border-bottom: 1px solid var(--border);
+  }
+  .stat {
+    background: var(--surface); padding: 1.5rem 2rem;
+    display: flex; flex-direction: column; gap: 0.3rem;
+  }
+  .stat-val { font-family: 'Space Mono', monospace; font-size: 2rem; color: var(--accent); }
+  .stat-val.purple { color: var(--accent2); }
+  .stat-val.red { color: var(--danger); }
+  .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .messages { padding: 1rem 2rem; }
+  .msg { padding: 0.6rem 1rem; margin-bottom: 0.4rem; font-size: 0.85rem; border-left: 3px solid; }
+  .msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
+  .msg.error { border-color: var(--danger); background: rgba(255,68,102,0.05); }
+
+  .main { display: grid; grid-template-columns: 1fr 340px; gap: 0; }
+
+  .jobs-panel { border-right: 1px solid var(--border); }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .panel-header strong { color: var(--text); }
+
+  .job-row {
+    display: grid; grid-template-columns: 48px 1fr auto;
+    align-items: center; gap: 1rem; padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border); transition: background 0.1s;
+  }
+  .job-row:hover { background: var(--card); }
+
+  .score-ring {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; font-weight: 700;
+    border: 2px solid;
+  }
+  .score-ring.high { border-color: var(--accent); color: var(--accent); }
+  .score-ring.mid { border-color: var(--accent2); color: var(--accent2); }
+  .score-ring.low { border-color: var(--muted); color: var(--muted); }
+
+  .job-info { min-width: 0; }
+  .job-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+  .job-meta .platform { 
+    display: inline-block; padding: 0.1rem 0.4rem; 
+    border: 1px solid var(--border); font-family: 'Space Mono', monospace;
+    font-size: 0.6rem; margin-left: 0.4rem; vertical-align: middle;
+  }
+
+  .job-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .no-email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .applied-tag {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--accent);
+    border: 1px solid var(--accent); padding: 0.1rem 0.4rem;
+  }
+  .job-url { color: var(--muted); font-size: 0.7rem; text-decoration: none; }
+  .job-url:hover { color: var(--accent2); }
+
+  .side-panel { padding: 0; }
+
+  .cv-card { padding: 1.5rem; border-bottom: 1px solid var(--border); }
+  .cv-card h3 { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+  .cv-name { font-size: 1rem; font-weight: 600; color: var(--accent); margin-bottom: 0.25rem; }
+  .cv-email { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; }
+  .skills-wrap { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .skill-tag {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem; padding: 0.2rem 0.5rem;
+    border: 1px solid var(--border); color: var(--accent2);
+  }
+  .no-cv { color: var(--muted); font-size: 0.85rem; }
+
+  .applied-section { padding: 1.5rem; }
+  .applied-section h3 { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+  .app-item { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+  .app-item:last-child { border-bottom: none; }
+  .app-title { font-size: 0.85rem; font-weight: 500; }
+  .app-company { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+  .app-date { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--accent); margin-top: 0.25rem; }
+
+  .cmd-block {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 1rem 1.5rem; margin: 1rem 1.5rem;
+  }
+  .cmd-block h3 { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+  .cmd { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--accent2); padding: 0.2rem 0; }
+
+  .empty { padding: 2rem 1.5rem; color: var(--muted); font-size: 0.85rem; }
+
+  @media (max-width: 900px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .main { grid-template-columns: 1fr; }
+    .jobs-panel { border-right: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">job<span>/</span>hunter</div>
+  <a href="/upload-cv/" class="upload-btn">+ Upload CV</a>
+</div>
+
+{% if messages %}
+<div class="messages">
+  {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="stats-row">
+  <div class="stat">
+    <div class="stat-val">{{ total_jobs }}</div>
+    <div class="stat-label">Jobs Found</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val purple">{{ matched_count }}</div>
+    <div class="stat-label">Matched ≥60%</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val">{{ applied_count }}</div>
+    <div class="stat-label">Applied</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val red">{{ total_jobs|add:"-"|add:applied_count }}</div>
+    <div class="stat-label">Pending</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="jobs-panel">
+    <div class="panel-header">
+      <strong>All Jobs</strong>
+      <span>sorted by match score</span>
+    </div>
+
+    {% if jobs %}
+      {% for job in jobs %}
+        {% with score=job.match_score %}
+        <div class="job-row">
+          <div class="score-ring {% if score >= 70 %}high{% elif score >= 50 %}mid{% else %}low{% endif %}">
+            {{ score }}%
+          </div>
+          <div class="job-info">
+            <div class="job-title">{{ job.title }}</div>
+            <div class="job-meta">
+              {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
+              <span class="platform">{{ job.platform }}</span>
+            </div>
+          </div>
+          <div class="job-actions">
+            {% if job.apply_email %}
+              <div class="email-dot" title="{{ job.apply_email }}"></div>
+            {% else %}
+              <div class="no-email-dot" title="No email found"></div>
+            {% endif %}
+            {% if job.application %}
+              <span class="applied-tag">✓ sent</span>
+            {% endif %}
+            {% if job.url %}
+              <a href="{{ job.url }}" target="_blank" class="job-url">↗</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endwith %}
+      {% endfor %}
+    {% else %}
+      <div class="empty">No jobs yet. Run <code>python run.py scrape</code> to start.</div>
+    {% endif %}
+  </div>
+
+  <div class="side-panel">
+    <div class="cv-card">
+      <h3>Active CV</h3>
+      {% if cv and cv.parsed_data %}
+        <div class="cv-name">{{ cv.parsed_data.name }}</div>
+        <div class="cv-email">{{ cv.parsed_data.email }}</div>
+        <div class="skills-wrap">
+          {% for skill in cv.parsed_data.skills %}
+            <span class="skill-tag">{{ skill }}</span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="no-cv">No CV uploaded yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="cmd-block">
+      <h3>Commands</h3>
+      <div class="cmd">python run.py all</div>
+      <div class="cmd">python run.py scrape</div>
+      <div class="cmd">python run.py match</div>
+      <div class="cmd">python run.py apply</div>
+      <div class="cmd">python run.py apply --dry-run</div>
+    </div>
+
+    <div class="applied-section">
+      <h3>Applications Sent ({{ applied_count }})</h3>
+      {% if applications %}
+        {% for app in applications %}
+          <div class="app-item">
+            <div class="app-title">{{ app.job.title }}</div>
+            <div class="app-company">{{ app.job.company }}</div>
+            <div class="app-date">{{ app.sent_at|date:"d M Y · H:i" }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="no-cv">No applications sent yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

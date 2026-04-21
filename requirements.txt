@@ -1,0 +1,7 @@
+Django>=4.2
+python-jobspy
+pdfplumber
+groq
+requests
+beautifulsoup4
+python-dotenv
