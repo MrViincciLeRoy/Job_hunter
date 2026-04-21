@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -24,6 +24,27 @@ def dashboard(request):
         "applied_count": applications.count(),
         "matched_count": jobs.filter(match_score__gte=60).count(),
         "top_jobs": jobs.filter(match_score__gte=60).exclude(apply_email="")[:5],
+    })
+
+
+def job_detail(request, job_id):
+    job = get_object_or_404(Job, pk=job_id)
+    app = getattr(job, "application", None)
+    return JsonResponse({
+        "id": job.pk,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "platform": job.platform,
+        "url": job.url,
+        "apply_email": job.apply_email,
+        "match_score": job.match_score,
+        "description": job.description,
+        "scraped_at": job.scraped_at.strftime("%d %b %Y · %H:%M"),
+        "applied": app is not None,
+        "applied_at": app.sent_at.strftime("%d %b %Y · %H:%M") if app else None,
+        "cover_letter": app.cover_letter if app else None,
+        "status": app.status if app else None,
     })
 
 

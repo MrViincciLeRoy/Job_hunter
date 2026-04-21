@@ -62,7 +62,6 @@
   .msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
   .msg.error { border-color: var(--danger); background: rgba(255,68,102,0.05); }
 
-  /* Action bar */
   .action-bar {
     display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
     padding: 1rem 2rem; border-bottom: 1px solid var(--border);
@@ -95,14 +94,16 @@
     display: grid; grid-template-columns: 48px 1fr auto;
     align-items: center; gap: 1rem; padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--border); transition: background 0.1s;
+    cursor: pointer;
   }
   .job-row:hover { background: var(--card); }
+  .job-row.active { background: rgba(0,255,136,0.04); border-left: 2px solid var(--accent); }
 
   .score-ring {
     width: 40px; height: 40px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Space Mono', monospace; font-size: 0.65rem; font-weight: 700;
-    border: 2px solid;
+    border: 2px solid; flex-shrink: 0;
   }
   .score-ring.high { border-color: var(--accent); color: var(--accent); }
   .score-ring.mid { border-color: var(--accent2); color: var(--accent2); }
@@ -117,16 +118,17 @@
     font-size: 0.6rem; margin-left: 0.4rem; vertical-align: middle;
   }
   .job-actions { display: flex; align-items: center; gap: 0.5rem; }
-  .email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-  .no-email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .no-email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
   .applied-tag {
     font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--accent);
-    border: 1px solid var(--accent); padding: 0.1rem 0.4rem;
+    border: 1px solid var(--accent); padding: 0.1rem 0.4rem; white-space: nowrap;
   }
   .job-url { color: var(--muted); font-size: 0.7rem; text-decoration: none; }
   .job-url:hover { color: var(--accent2); }
 
-  .side-panel { padding: 0; }
+  /* SIDE PANEL */
+  .side-panel { padding: 0; overflow-y: auto; max-height: calc(100vh - 220px); position: sticky; top: 0; }
   .cv-card { padding: 1.5rem; border-bottom: 1px solid var(--border); }
   .cv-card h3 { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
   .cv-name { font-size: 1rem; font-weight: 600; color: var(--accent); margin-bottom: 0.25rem; }
@@ -137,7 +139,6 @@
     border: 1px solid var(--border); color: var(--accent2);
   }
   .no-cv { color: var(--muted); font-size: 0.85rem; }
-
   .applied-section { padding: 1.5rem; }
   .applied-section h3 { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
   .app-item { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
@@ -145,10 +146,8 @@
   .app-title { font-size: 0.85rem; font-weight: 500; }
   .app-company { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
   .app-date { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--accent); margin-top: 0.25rem; }
-
   .empty { padding: 2rem 1.5rem; color: var(--muted); font-size: 0.85rem; }
 
-  /* Running indicator */
   .running-badge {
     display: none; align-items: center; gap: 0.4rem;
     font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent);
@@ -157,10 +156,147 @@
   .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
 
+  /* ─── JOB DETAIL DRAWER ─── */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 100; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .drawer-overlay.open { opacity: 1; pointer-events: all; }
+
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 95vw;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 101; transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .drawer.open { transform: translateX(0); }
+
+  .drawer-header {
+    padding: 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+    flex-shrink: 0;
+  }
+  .drawer-title-block { flex: 1; min-width: 0; }
+  .drawer-job-title { font-size: 1.1rem; font-weight: 600; line-height: 1.3; margin-bottom: 0.3rem; }
+  .drawer-company { font-size: 0.85rem; color: var(--muted); }
+  .drawer-close {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    width: 32px; height: 32px; cursor: pointer; font-size: 1rem; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .drawer-close:hover { border-color: var(--danger); color: var(--danger); }
+
+  .drawer-score-bar {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 1.5rem; flex-shrink: 0;
+  }
+  .big-score {
+    font-family: 'Space Mono', monospace; font-size: 2.5rem; font-weight: 700;
+    line-height: 1;
+  }
+  .big-score.high { color: var(--accent); }
+  .big-score.mid { color: var(--accent2); }
+  .big-score.low { color: var(--muted); }
+  .score-label { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .score-bar-track {
+    flex: 1; height: 4px; background: var(--border); position: relative;
+  }
+  .score-bar-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--accent); transition: width 0.5s ease;
+  }
+  .score-bar-fill.mid { background: var(--accent2); }
+  .score-bar-fill.low { background: var(--muted); }
+
+  .drawer-meta-row {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 0.75rem; flex-shrink: 0;
+  }
+  .meta-chip {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.78rem; color: var(--muted);
+  }
+  .meta-chip .icon { font-size: 0.9rem; }
+  .meta-chip strong { color: var(--text); }
+  .platform-badge {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    padding: 0.2rem 0.5rem; border: 1px solid var(--border); color: var(--accent2);
+  }
+
+  .drawer-status {
+    padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;
+  }
+  .status-pill {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; font-weight: 700;
+    padding: 0.3rem 0.75rem; border-radius: 2px;
+  }
+  .status-pill.applied { background: rgba(0,255,136,0.12); color: var(--accent); border: 1px solid rgba(0,255,136,0.3); }
+  .status-pill.pending { background: rgba(85,85,112,0.2); color: var(--muted); border: 1px solid var(--border); }
+  .status-pill.no-email { background: rgba(255,68,102,0.1); color: var(--danger); border: 1px solid rgba(255,68,102,0.3); }
+  .status-time { font-size: 0.75rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  .drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
+  .drawer-section { margin-bottom: 1.75rem; }
+  .drawer-section-title {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;
+  }
+  .drawer-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .description-text {
+    font-size: 0.85rem; line-height: 1.7; color: #b0b0c8;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  .req-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .req-list li {
+    font-size: 0.82rem; color: #b0b0c8; padding-left: 1rem;
+    position: relative; line-height: 1.5;
+  }
+  .req-list li::before { content: '›'; position: absolute; left: 0; color: var(--accent2); }
+
+  .cover-letter-box {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 1rem; font-size: 0.8rem; color: #b0b0c8;
+    line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+    max-height: 200px; overflow-y: auto;
+  }
+
+  .drawer-actions {
+    padding: 1rem 1.5rem; border-top: 1px solid var(--border);
+    display: flex; gap: 0.75rem; flex-shrink: 0;
+  }
+  .drawer-link {
+    font-family: 'Space Mono', monospace; font-size: 0.7rem; font-weight: 700;
+    padding: 0.6rem 1.2rem; text-decoration: none;
+    border: 1px solid var(--border); color: var(--muted);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .drawer-link:hover { border-color: var(--accent2); color: var(--accent2); }
+  .email-link {
+    font-family: 'Space Mono', monospace; font-size: 0.7rem;
+    padding: 0.6rem 1.2rem; background: rgba(0,255,136,0.1);
+    color: var(--accent); border: 1px solid rgba(0,255,136,0.3);
+    text-decoration: none; transition: background 0.15s;
+  }
+  .email-link:hover { background: rgba(0,255,136,0.2); }
+
+  .drawer-loading {
+    display: flex; align-items: center; justify-content: center;
+    padding: 3rem; color: var(--muted); font-family: 'Space Mono', monospace;
+    font-size: 0.75rem; gap: 0.5rem;
+  }
+
   @media (max-width: 900px) {
     .stats-row { grid-template-columns: repeat(2, 1fr); }
     .main { grid-template-columns: 1fr; }
     .jobs-panel { border-right: none; }
+    .drawer { width: 100vw; }
   }
 </style>
 </head>
@@ -184,20 +320,16 @@
 
 <div class="action-bar">
   <span class="action-bar-label">Run</span>
-
   <form method="POST" action="/trigger/" id="pipeline-form">
     {% csrf_token %}
     <input type="hidden" name="action" id="action-input" value="all">
     <input type="hidden" name="dry_run" id="dry-run-input" value="0">
   </form>
-
   <button class="btn btn-green btn-sm" onclick="submit('all')">⚡ Run All</button>
   <button class="btn btn-outline btn-sm" onclick="submit('scrape')">Scrape</button>
   <button class="btn btn-outline btn-sm" onclick="submit('match')">Match</button>
   <button class="btn btn-purple btn-sm" onclick="submit('apply')">Apply</button>
-
   <div class="divider"></div>
-
   <label class="dry-label">
     <input type="checkbox" id="dry-run-toggle" onchange="toggleDry(this)"> Dry run
   </label>
@@ -226,13 +358,13 @@
   <div class="jobs-panel">
     <div class="panel-header">
       <strong>All Jobs</strong>
-      <span>sorted by match score</span>
+      <span>sorted by match score · click any row for details</span>
     </div>
 
     {% if jobs %}
       {% for job in jobs %}
         {% with score=job.match_score %}
-        <div class="job-row">
+        <div class="job-row" onclick="openDrawer({{ job.pk }}, this)" data-id="{{ job.pk }}">
           <div class="score-ring {% if score >= 70 %}high{% elif score >= 50 %}mid{% else %}low{% endif %}">
             {{ score }}%
           </div>
@@ -253,7 +385,7 @@
               <span class="applied-tag">✓ sent</span>
             {% endif %}
             {% if job.url %}
-              <a href="{{ job.url }}" target="_blank" class="job-url">↗</a>
+              <a href="{{ job.url }}" target="_blank" class="job-url" onclick="event.stopPropagation()">↗</a>
             {% endif %}
           </div>
         </div>
@@ -297,14 +429,150 @@
   </div>
 </div>
 
+<!-- DRAWER -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div id="drawer-content">
+    <div class="drawer-loading">Loading...</div>
+  </div>
+  <div class="drawer-actions" id="drawer-actions" style="display:none">
+    <a href="#" id="drawer-ext-link" class="drawer-link" target="_blank">↗ View Posting</a>
+    <a href="#" id="drawer-email-link" class="email-link">✉ Email</a>
+  </div>
+</div>
+
 <script>
+  let activeRow = null;
+
   function submit(action) {
     document.getElementById('action-input').value = action;
     document.getElementById('running-badge').classList.add('show');
     document.getElementById('pipeline-form').submit();
   }
+
   function toggleDry(cb) {
     document.getElementById('dry-run-input').value = cb.checked ? '1' : '0';
+  }
+
+  function scoreClass(s) {
+    return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low';
+  }
+
+  function openDrawer(jobId, row) {
+    if (activeRow) activeRow.classList.remove('active');
+    activeRow = row;
+    row.classList.add('active');
+
+    document.getElementById('drawer-content').innerHTML = '<div class="drawer-loading"><span class="pulse"></span> Loading...</div>';
+    document.getElementById('drawer-actions').style.display = 'none';
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('drawer').classList.add('open');
+
+    fetch(`/job/${jobId}/`)
+      .then(r => r.json())
+      .then(d => renderDrawer(d))
+      .catch(() => {
+        document.getElementById('drawer-content').innerHTML = '<div class="drawer-loading">Failed to load.</div>';
+      });
+  }
+
+  function closeDrawer() {
+    document.getElementById('overlay').classList.remove('open');
+    document.getElementById('drawer').classList.remove('open');
+    if (activeRow) { activeRow.classList.remove('active'); activeRow = null; }
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+  function parseRequirements(desc) {
+    if (!desc) return [];
+    const lines = desc.split(/\n/).map(l => l.trim()).filter(Boolean);
+    return lines.filter(l =>
+      /require|must|experience|proficien|familiar|knowledge|skill|degree|qualif|certif|proven|ability|years/i.test(l)
+      || /^[-•*·]\s/.test(l)
+    ).slice(0, 12);
+  }
+
+  function renderDrawer(d) {
+    const cls = scoreClass(d.match_score);
+
+    let statusHtml = '';
+    if (d.applied) {
+      statusHtml = `<span class="status-pill applied">✓ Applied</span><span class="status-time">${d.applied_at}</span>`;
+    } else if (!d.apply_email) {
+      statusHtml = `<span class="status-pill no-email">✗ No Email Found</span><span class="status-time">Cannot auto-apply</span>`;
+    } else {
+      statusHtml = `<span class="status-pill pending">Pending</span><span class="status-time">Has email · not yet applied</span>`;
+    }
+
+    const reqs = parseRequirements(d.description);
+    const reqsHtml = reqs.length
+      ? `<div class="drawer-section">
+          <div class="drawer-section-title">Requirements</div>
+          <ul class="req-list">${reqs.map(r => `<li>${r.replace(/^[-•*·]\s*/, '')}</li>`).join('')}</ul>
+        </div>`
+      : '';
+
+    const coverHtml = d.cover_letter
+      ? `<div class="drawer-section">
+          <div class="drawer-section-title">Cover Letter Sent</div>
+          <div class="cover-letter-box">${d.cover_letter}</div>
+        </div>`
+      : '';
+
+    document.getElementById('drawer-content').innerHTML = `
+      <div class="drawer-header">
+        <div class="drawer-title-block">
+          <div class="drawer-job-title">${d.title}</div>
+          <div class="drawer-company">${d.company}${d.location ? ' · ' + d.location : ''}</div>
+        </div>
+        <button class="drawer-close" onclick="closeDrawer()">✕</button>
+      </div>
+
+      <div class="drawer-score-bar">
+        <div>
+          <div class="big-score ${cls}">${d.match_score}<span style="font-size:1rem;color:var(--muted)">%</span></div>
+          <div class="score-label">Match Score</div>
+        </div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill ${cls}" style="width:${d.match_score}%"></div>
+        </div>
+      </div>
+
+      <div class="drawer-meta-row">
+        <span class="platform-badge">${d.platform}</span>
+        <div class="meta-chip"><span class="icon">📍</span><strong>${d.location || 'Location not specified'}</strong></div>
+        <div class="meta-chip"><span class="icon">🕐</span>Scraped ${d.scraped_at}</div>
+        ${d.apply_email ? `<div class="meta-chip"><span class="icon">✉</span><strong>${d.apply_email}</strong></div>` : ''}
+      </div>
+
+      <div class="drawer-status">${statusHtml}</div>
+
+      <div class="drawer-body">
+        ${reqsHtml}
+
+        <div class="drawer-section">
+          <div class="drawer-section-title">Full Description</div>
+          <div class="description-text">${d.description || 'No description available.'}</div>
+        </div>
+
+        ${coverHtml}
+      </div>
+    `;
+
+    const actionsEl = document.getElementById('drawer-actions');
+    const extLink = document.getElementById('drawer-ext-link');
+    const emailLink = document.getElementById('drawer-email-link');
+
+    if (d.url || d.apply_email) {
+      actionsEl.style.display = 'flex';
+      if (d.url) { extLink.href = d.url; extLink.style.display = ''; }
+      else { extLink.style.display = 'none'; }
+      if (d.apply_email) { emailLink.href = `mailto:${d.apply_email}?subject=Application: ${encodeURIComponent(d.title)}`; emailLink.style.display = ''; }
+      else { emailLink.style.display = 'none'; }
+    } else {
+      actionsEl.style.display = 'none';
+    }
   }
 </script>
 </body>
