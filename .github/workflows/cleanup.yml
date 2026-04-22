@@ -1,7 +1,7 @@
 name: Cleanup Unapplied Jobs
 
 on:
-  workflow_dispatch:          # manual trigger only — GitHub UI "Run workflow" button
+  workflow_dispatch:
     inputs:
       platform:
         description: "Limit to one platform slug (leave blank for all)"
@@ -20,21 +20,36 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Run cleanup via Render
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run cleanup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DEBUG: "False"
         run: |
           PLATFORM="${{ github.event.inputs.platform }}"
           DRY_RUN="${{ github.event.inputs.dry_run }}"
 
-          # Build the query string
-          PARAMS="action=cleanup&dry_run=${DRY_RUN}"
-          if [ -n "$PLATFORM" ]; then
-            PARAMS="${PARAMS}&platform=${PLATFORM}"
+          CMD="python manage.py cleanup_jobs"
+
+          if [ "$DRY_RUN" = "no" ]; then
+            CMD="$CMD --confirm"
           fi
 
-          curl -X POST "${{ secrets.RENDER_APP_URL }}/cron/cleanup/" \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "$PARAMS" \
-            --fail \
-            --silent \
-            --show-error
+          if [ -n "$PLATFORM" ]; then
+            CMD="$CMD --platform $PLATFORM"
+          fi
+
+          echo "Running: $CMD"
+          $CMD
