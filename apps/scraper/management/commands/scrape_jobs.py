@@ -1,8 +1,7 @@
 from django.core.management.base import BaseCommand
 from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
 from apps.scraper.scrapers.pnet import scrape_pnet
-from apps.scraper.scrapers.careerjunction import scrape_careerjunction
-from apps.scraper.scrapers.careerjunction_it import scrape_careerjunction_it
+from apps.scraper.scrapers.careerjunction import scrape_careerjunction, scrape_careerjunction_it
 from apps.scraper.scrapers.careers24 import scrape_careers24
 from apps.scraper.scrapers.jobmail import scrape_jobmail
 from apps.scraper.scrapers.gumtree import scrape_gumtree
@@ -33,8 +32,8 @@ class Command(BaseCommand):
         parser.add_argument("--keywords", type=str, default=None)
         parser.add_argument("--limit", type=int, default=20)
         parser.add_argument("--email-only", action="store_true")
-        parser.add_argument("--gov-only", action="store_true", help="Only scrape government job platforms")
-        parser.add_argument("--it-only", action="store_true", help="Only scrape IT-focused platforms")
+        parser.add_argument("--gov-only", action="store_true")
+        parser.add_argument("--it-only", action="store_true")
 
     def handle(self, *args, **options):
         cv = CV.objects.filter(active=True).last()
