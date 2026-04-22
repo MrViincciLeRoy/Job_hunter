@@ -1,21 +1,20 @@
 import re
-import requests
+import asyncio
+import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, unquote
+from .async_http import run_async
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}")
 SKIP_EMAILS = {
     "noreply", "no-reply", "donotreply", "support", "info", "hello",
     "admin", "careers@linkedin", "jobs@indeed", "privacy", "legal",
     "news", "newsletter", "unsubscribe", "webmaster", "postmaster",
 }
-
-# Sites that virtually never expose emails — skip deep spidering
 LOW_EMAIL_DOMAINS = {
     "linkedin.com", "indeed.com", "glassdoor.com", "seek.com",
     "stepstone.com", "monster.com", "reed.co.uk",
@@ -40,7 +39,6 @@ def _clean_emails(emails: list) -> list:
 
 
 def _extract_mailto_emails(html: str) -> list:
-    """Pull emails from mailto: href attributes — catches JS-obfuscated ones too."""
     emails = []
     for match in re.finditer(r'mailto:([^"\'?\s>]+)', html, re.IGNORECASE):
         addr = unquote(match.group(1)).split("?")[0].strip()
@@ -50,7 +48,6 @@ def _extract_mailto_emails(html: str) -> list:
 
 
 def _decode_cloudflare_email(encoded: str) -> str:
-    """Cloudflare encodes emails as hex XOR. Decode it."""
     try:
         r = int(encoded[:2], 16)
         return "".join(chr(int(encoded[i:i+2], 16) ^ r) for i in range(2, len(encoded), 2))
@@ -58,136 +55,131 @@ def _decode_cloudflare_email(encoded: str) -> str:
         return ""
 
 
-def _extract_cloudflare_emails(soup: BeautifulSoup) -> list:
-    emails = []
-    for el in soup.select("[data-cfemail]"):
-        decoded = _decode_cloudflare_email(el.get("data-cfemail", ""))
-        if "@" in decoded:
-            emails.append(decoded)
-    return emails
-
-
-def _find_contact_links(soup: BeautifulSoup, base_url: str) -> list:
-    urls = []
-    keywords = ("contact", "apply", "email us", "reach us", "get in touch", "careers", "vacancy")
-    for a in soup.find_all("a", href=True):
-        text = a.get_text(strip=True).lower()
-        href = a["href"].lower()
-        if any(kw in text or kw in href for kw in keywords):
-            full = urljoin(base_url, a["href"])
-            if urlparse(full).scheme in ("http", "https") and full != base_url:
-                urls.append(full)
-    return list(dict.fromkeys(urls))[:3]  # dedupe, max 3
-
-
-def _scrape_page(url: str, timeout: int = 12) -> dict:
-    """Fetch a page and pull every email signal."""
-    r = requests.get(url, headers=HEADERS, timeout=timeout, allow_redirects=True)
-    r.raise_for_status()
-    html = r.text
+def _parse_page(html: str, url: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(separator=" ", strip=True)
 
-    emails = (
+    cf_emails = [_decode_cloudflare_email(el.get("data-cfemail", ""))
+                 for el in soup.select("[data-cfemail]") if el.get("data-cfemail")]
+
+    emails = _clean_emails(
         EMAIL_RE.findall(text)
         + EMAIL_RE.findall(html)
         + _extract_mailto_emails(html)
-        + _extract_cloudflare_emails(soup)
+        + cf_emails
     )
+
+    phone_m = re.search(r"(\+27|0)[0-9()\s-]{8,14}", text)
+    phone = phone_m.group(0).strip() if phone_m else ""
+
+    description = ""
+    for sel in ["[class*='description']", "[class*='job-detail']", "article", "main", "[class*='vacancy']"]:
+        el = soup.select_one(sel)
+        if el:
+            txt = el.get_text(separator="\n", strip=True)
+            if len(txt) > 100:
+                description = txt[:2500]
+                break
+
+    contact_links = []
+    for a in soup.find_all("a", href=True):
+        t = a.get_text(strip=True).lower()
+        h = a["href"].lower()
+        if any(kw in t or kw in h for kw in ("contact", "apply", "email us", "careers", "vacancy")):
+            full = urljoin(url, a["href"])
+            if urlparse(full).scheme in ("http", "https") and full != url:
+                contact_links.append(full)
+
     return {
-        "emails": _clean_emails(emails),
+        "emails": emails,
+        "phone": phone,
+        "description": description,
+        "contact_links": list(dict.fromkeys(contact_links))[:3],
         "soup": soup,
-        "text": text,
-        "html": html,
     }
 
 
-def spider_url(url: str, timeout: int = 12) -> dict:
-    result = {
-        "emails": [],
-        "phone": "",
-        "description": "",
-        "requirements": "",
-        "raw_url": url,
-        "followed_url": None,
-        "error": None,
-    }
+async def _async_spider(url: str, session: aiohttp.ClientSession, timeout: int = 12) -> dict:
+    result = {"emails": [], "phone": "", "description": "", "followed_url": None, "error": None, "raw_url": url}
 
     if not url or not url.startswith("http"):
         result["error"] = "Invalid URL"
         return result
 
-    # Skip sites that never expose emails to avoid wasting time
     if _is_low_email_domain(url):
         result["error"] = "Low-email-likelihood domain — skipped"
         return result
 
     try:
-        page = _scrape_page(url, timeout)
-        result["emails"] = page["emails"]
-
-        # Phone (SA format)
-        phone_m = re.search(r"(\+27|0)[0-9()\s-]{8,14}", page["text"])
-        if phone_m:
-            result["phone"] = phone_m.group(0).strip()
-
-        # Description
-        for sel in [
-            "[class*='description']", "[class*='job-detail']", "[class*='content']",
-            "article", "main", ".posting-requirements", "[class*='vacancy']",
-        ]:
-            el = page["soup"].select_one(sel)
-            if el:
-                txt = el.get_text(separator="\n", strip=True)
-                if len(txt) > 100:
-                    result["description"] = txt[:2500]
-                    break
-
-        # Requirements block
-        req_m = re.search(
-            r"(require|must have|minimum|qualification|experience|skills needed)",
-            page["text"], re.IGNORECASE,
-        )
-        if req_m:
-            start = max(0, req_m.start() - 50)
-            result["requirements"] = page["text"][start:start + 1500]
-
-        # Follow contact/apply pages if no email found yet
-        if not result["emails"]:
-            for contact_url in _find_contact_links(page["soup"], url):
-                result["followed_url"] = contact_url
-                try:
-                    contact_page = _scrape_page(contact_url, timeout)
-                    if contact_page["emails"]:
-                        result["emails"] = contact_page["emails"]
-                        break
-                except Exception:
-                    pass
-
-    except requests.exceptions.Timeout:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+            r.raise_for_status()
+            html = await r.text(errors="replace")
+    except asyncio.TimeoutError:
         result["error"] = "Timeout"
-    except requests.exceptions.HTTPError as e:
-        result["error"] = f"HTTP {e.response.status_code}"
+        return result
+    except aiohttp.ClientResponseError as e:
+        result["error"] = f"HTTP {e.status}"
+        return result
     except Exception as e:
         result["error"] = str(e)[:120]
+        return result
+
+    parsed = _parse_page(html, url)
+    result["emails"] = parsed["emails"]
+    result["phone"] = parsed["phone"]
+    result["description"] = parsed["description"]
+
+    if not result["emails"] and parsed["contact_links"]:
+        for contact_url in parsed["contact_links"]:
+            try:
+                async with session.get(contact_url, timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+                    r.raise_for_status()
+                    chtml = await r.text(errors="replace")
+                    cparsed = _parse_page(chtml, contact_url)
+                    if cparsed["emails"]:
+                        result["emails"] = cparsed["emails"]
+                        result["followed_url"] = contact_url
+                        break
+            except Exception:
+                pass
 
     return result
 
 
+async def _spider_many_async(urls: list[str], timeout: int = 12, max_concurrent: int = 15) -> dict[str, dict]:
+    sem = asyncio.Semaphore(max_concurrent)
+    connector = aiohttp.TCPConnector(limit=max_concurrent, ssl=False)
+    results = {}
+
+    async def _bounded(url):
+        async with sem:
+            results[url] = await _async_spider(url, session, timeout)
+
+    async with aiohttp.ClientSession(headers=HEADERS, connector=connector) as session:
+        await asyncio.gather(*[_bounded(u) for u in urls])
+
+    return results
+
+
+def spider_url(url: str, timeout: int = 12) -> dict:
+    return run_async(_async_spider_single(url, timeout))
+
+
+async def _async_spider_single(url: str, timeout: int) -> dict:
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(headers=HEADERS, connector=connector) as session:
+        return await _async_spider(url, session, timeout)
+
+
+def spider_many(urls: list[str], timeout: int = 12, max_concurrent: int = 15) -> dict[str, dict]:
+    return run_async(_spider_many_async(urls, timeout, max_concurrent))
+
+
 def email_likelihood_score(platform: str, url: str) -> int:
-    """
-    Rank how likely a job is to yield an email.
-    Used to prioritize spider order — higher = spider first.
-    """
     if _is_low_email_domain(url):
         return 0
     scores = {
-        "pnet": 80,
-        "careerjunction": 75,
-        "careers24": 70,
-        "jobmail": 65,
-        "gumtree": 60,
-        "indeed": 20,
-        "linkedin": 5,
+        "pnet": 80, "careerjunction": 75, "careers24": 70,
+        "jobmail": 65, "gumtree": 60, "indeed": 20, "linkedin": 5,
     }
     return scores.get(platform.lower(), 40)
