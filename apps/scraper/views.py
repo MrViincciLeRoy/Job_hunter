@@ -218,6 +218,48 @@ def trigger_pipeline(request):
     messages.success(request, f"⚡ {label} started in background. Refresh in ~60s to see results.")
     return redirect("dashboard")
 
+# ── Add this view to apps/scraper/views.py ───────────────────────────────────
+# Also add to job_hunter/urls.py:
+#   from apps.scraper.views import cron_cleanup
+#   path("cron/cleanup/", cron_cleanup, name="cron_cleanup"),
+
+@csrf_exempt
+def cron_cleanup(request):
+    """
+    Called by the GitHub Actions cleanup workflow.
+    POST body params:
+      dry_run  : "yes" | "no"   (default: "yes" — safe by default)
+      platform : optional slug  (e.g. "pnet")
+    """
+    secret = request.headers.get("X-Cron-Secret", "")
+    if secret != os.getenv("CRON_SECRET", ""):
+        return JsonResponse({"error": "unauthorized"}, status=401)
+
+    dry_run  = request.POST.get("dry_run", "yes") != "no"
+    platform = request.POST.get("platform", "").strip() or None
+
+    applied_job_ids = set(Application.objects.values_list("job_id", flat=True))
+    qs = Job.objects.exclude(pk__in=applied_job_ids)
+    if platform:
+        qs = qs.filter(platform__iexact=platform)
+
+    count = qs.count()
+
+    if dry_run:
+        return JsonResponse({
+            "status":    "dry_run",
+            "would_delete": count,
+            "applied_kept": Job.objects.filter(pk__in=applied_job_ids).count(),
+            "platform_filter": platform,
+        })
+
+    deleted, _ = qs.delete()
+    return JsonResponse({
+        "status":  "deleted",
+        "deleted": deleted,
+        "applied_kept": Job.objects.filter(pk__in=applied_job_ids).count(),
+        "platform_filter": platform,
+    })
 
 @csrf_exempt
 def cron_trigger(request):

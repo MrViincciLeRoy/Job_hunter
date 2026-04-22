@@ -1,0 +1,40 @@
+name: Cleanup Unapplied Jobs
+
+on:
+  workflow_dispatch:          # manual trigger only — GitHub UI "Run workflow" button
+    inputs:
+      platform:
+        description: "Limit to one platform slug (leave blank for all)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run? (yes = preview only, no = actually delete)"
+        required: true
+        default: "yes"
+        type: choice
+        options:
+          - "yes"
+          - "no"
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run cleanup via Render
+        run: |
+          PLATFORM="${{ github.event.inputs.platform }}"
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+
+          # Build the query string
+          PARAMS="action=cleanup&dry_run=${DRY_RUN}"
+          if [ -n "$PLATFORM" ]; then
+            PARAMS="${PARAMS}&platform=${PLATFORM}"
+          fi
+
+          curl -X POST "${{ secrets.RENDER_APP_URL }}/cron/cleanup/" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "$PARAMS" \
+            --fail \
+            --silent \
+            --show-error
