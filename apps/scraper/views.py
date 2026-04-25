@@ -135,12 +135,21 @@ def _spider_and_filter(jobs_qs, spider_fn):
 def _run_pipeline(steps, threshold=60, dry_run=False):
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "job_hunter.settings")
 
-    from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
     from apps.scraper.scrapers.pnet import scrape_pnet
-    from apps.scraper.scrapers.careerjunction import scrape_careerjunction
+    from apps.scraper.scrapers.careerjunction import scrape_careerjunction, scrape_careerjunction_it
+    from apps.scraper.scrapers.careers24 import scrape_careers24
+    from apps.scraper.scrapers.jobmail import scrape_jobmail
+    from apps.scraper.scrapers.gumtree import scrape_gumtree
+    from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_essa, scrape_govza
     from apps.scraper.scrapers.spider import spider_url
     from apps.matcher.matcher import match_job_to_cv
     from apps.mailer.sender import send_application
+
+    SCRAPER_FNS = [
+        scrape_dpsa, scrape_sayouth, scrape_essa, scrape_govza,
+        scrape_pnet, scrape_careerjunction, scrape_careerjunction_it,
+        scrape_careers24, scrape_jobmail, scrape_gumtree,
+    ]
 
     if "scrape" in steps:
         cv = CV.objects.filter(active=True).last()
@@ -148,7 +157,7 @@ def _run_pipeline(steps, threshold=60, dry_run=False):
             skills = cv.parsed_data.get("skills", [])
             keywords = " ".join(skills[:3]) if skills else "developer"
             all_jobs = []
-            for fn in [scrape_linkedin, scrape_indeed, scrape_pnet, scrape_careerjunction]:
+            for fn in SCRAPER_FNS:
                 try:
                     all_jobs += fn(keywords, limit=20)
                 except Exception:
@@ -218,24 +227,14 @@ def trigger_pipeline(request):
     messages.success(request, f"⚡ {label} started in background. Refresh in ~60s to see results.")
     return redirect("dashboard")
 
-# ── Add this view to apps/scraper/views.py ───────────────────────────────────
-# Also add to job_hunter/urls.py:
-#   from apps.scraper.views import cron_cleanup
-#   path("cron/cleanup/", cron_cleanup, name="cron_cleanup"),
 
 @csrf_exempt
 def cron_cleanup(request):
-    """
-    Called by the GitHub Actions cleanup workflow.
-    POST body params:
-      dry_run  : "yes" | "no"   (default: "yes" — safe by default)
-      platform : optional slug  (e.g. "pnet")
-    """
     secret = request.headers.get("X-Cron-Secret", "")
     if secret != os.getenv("CRON_SECRET", ""):
         return JsonResponse({"error": "unauthorized"}, status=401)
 
-    dry_run  = request.POST.get("dry_run", "yes") != "no"
+    dry_run = request.POST.get("dry_run", "yes") != "no"
     platform = request.POST.get("platform", "").strip() or None
 
     applied_job_ids = set(Application.objects.values_list("job_id", flat=True))
@@ -247,7 +246,7 @@ def cron_cleanup(request):
 
     if dry_run:
         return JsonResponse({
-            "status":    "dry_run",
+            "status": "dry_run",
             "would_delete": count,
             "applied_kept": Job.objects.filter(pk__in=applied_job_ids).count(),
             "platform_filter": platform,
@@ -255,11 +254,12 @@ def cron_cleanup(request):
 
     deleted, _ = qs.delete()
     return JsonResponse({
-        "status":  "deleted",
+        "status": "deleted",
         "deleted": deleted,
         "applied_kept": Job.objects.filter(pk__in=applied_job_ids).count(),
         "platform_filter": platform,
     })
+
 
 @csrf_exempt
 def cron_trigger(request):
