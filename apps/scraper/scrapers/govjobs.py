@@ -1,4 +1,4 @@
-from apps.scraper.scrapers.dpsa import scrape_dpsa  # noqa: F401 — re-export for backwards compat
+from apps.scraper.scrapers.dpsa import scrape_dpsa  # noqa: F401
 
 import re
 import requests
@@ -25,6 +25,7 @@ def _find_email(text):
 def scrape_sayouth(keywords=None, limit=30):
     base = "https://sayouth.mobi"
     jobs = []
+    # Always fetch the main jobs page; keyword search rarely works on this site
     urls = [f"{base}/Jobs"]
     if keywords:
         urls.insert(0, f"{base}/Jobs?search={keywords.replace(' ', '+')}")
@@ -57,9 +58,8 @@ def scrape_sayouth(keywords=None, limit=30):
         except Exception as e:
             print(f"[SAYouth] Error: {e}")
 
-    if keywords:
-        kws = keywords.lower().split()
-        jobs = [j for j in jobs if any(kw in j["title"].lower() or kw in j["description"].lower() for kw in kws)]
+    # No keyword filter — return all found jobs, let matcher score them
+    print(f"[SAYouth] Returning {min(len(jobs), limit)} jobs")
     return jobs[:limit]
 
 
@@ -98,6 +98,8 @@ def scrape_essa(keywords=None, limit=30):
         except Exception as e:
             print(f"[ESSA] Error: {e}")
 
+    # No keyword filter — return all found jobs
+    print(f"[ESSA] Returning {min(len(jobs), limit)} jobs")
     return jobs[:limit]
 
 
@@ -127,14 +129,13 @@ def scrape_govza(keywords=None, limit=30):
     except Exception as e:
         print(f"[GovZA] Error: {e}")
 
-    if keywords:
-        kws = keywords.lower().split()
-        jobs = [j for j in jobs if any(kw in j["title"].lower() or kw in j["description"].lower() for kw in kws)]
-
+    # Deduplicate, no keyword filter
     seen, out = set(), []
     for j in jobs:
         key = j["title"].lower()[:50]
         if key not in seen:
             seen.add(key)
             out.append(j)
+
+    print(f"[GovZA] Returning {min(len(out), limit)} jobs")
     return out[:limit]

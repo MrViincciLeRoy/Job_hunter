@@ -23,7 +23,6 @@ def _find_email(text):
 
 
 def _get_latest_circular():
-    """Try multiple strategies to find the latest DPSA circular."""
     try:
         r = requests.get(PSVC_URL, headers=HEADERS, timeout=30)
         r.raise_for_status()
@@ -41,7 +40,6 @@ def _get_latest_circular():
                 num, year = int(m.group(1)), int(m.group(2))
                 full = href if href.startswith('http') else BASE_URL + href
                 candidates.append((year, num, full))
-                print(f'[DPSA] Found circular link: {full}')
 
         if candidates:
             candidates.sort(reverse=True)
@@ -52,11 +50,9 @@ def _get_latest_circular():
     except Exception as e:
         print(f'[DPSA] Error fetching circular list: {e}')
 
-    # Fallback: guess current circular number based on current year/week
     import datetime
     now = datetime.datetime.now()
     year = now.year
-    # Roughly 1 circular per week, ~15 by April
     approx_num = max(1, (now.month * 4) + (now.day // 7))
     fallback_url = f'{BASE_URL}/newsroom/psvc/circular-{approx_num}-of-{year}/'
     print(f'[DPSA] Using fallback circular: {approx_num} of {year}')
@@ -64,7 +60,6 @@ def _get_latest_circular():
 
 
 def _get_pdf_url(circular_page_url, circ_num, circ_year):
-    """Try multiple PDF URL patterns."""
     try:
         r = requests.get(circular_page_url, headers=HEADERS, timeout=30)
         r.raise_for_status()
@@ -79,7 +74,6 @@ def _get_pdf_url(circular_page_url, circ_num, circ_year):
     except Exception as e:
         print(f'[DPSA] Error fetching circular page: {e}')
 
-    # Try multiple common URL patterns
     padded = str(circ_num).zfill(2)
     candidates = [
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/PSV%20CIRCULAR%20{padded}%20of%20{circ_year}.pdf',
@@ -88,7 +82,6 @@ def _get_pdf_url(circular_page_url, circ_num, circ_year):
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/CIRCULAR%20{padded}%20OF%20{circ_year}.pdf',
     ]
     for url in candidates:
-        print(f'[DPSA] Trying PDF URL: {url}')
         try:
             head = requests.head(url, headers=HEADERS, timeout=10, allow_redirects=True)
             if head.status_code == 200:
@@ -165,7 +158,6 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
             field_data.get('DUTIES', ''),
         ]))
 
-        # Build structured how_to_apply
         how_to_apply_parts = []
         if applications:
             how_to_apply_parts.append(f'Applications: {applications}')
@@ -220,13 +212,7 @@ def scrape_dpsa(keywords=None, limit=50):
         traceback.print_exc()
         return []
 
-    if keywords:
-        kws = keywords.lower().split()
-        jobs = [j for j in jobs if any(
-            kw in j['title'].lower() or kw in j['description'].lower() or kw in j['company'].lower()
-            for kw in kws
-        )]
-
+    # Deduplicate by post ref
     seen, out = set(), []
     for j in jobs:
         key = j['_post_ref']
@@ -234,4 +220,5 @@ def scrape_dpsa(keywords=None, limit=50):
             seen.add(key)
             out.append(j)
 
+    print(f'[DPSA] Returning {min(len(out), limit)} jobs (no keyword filter — let matcher score them)')
     return out[:limit]
