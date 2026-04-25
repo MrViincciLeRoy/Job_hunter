@@ -1,4 +1,3 @@
-{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jobs — Job Hunter</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/drawer.css' %}">
 <style>
   :root {
     --bg: #0a0a0f; --surface: #111118; --border: #1e1e2e;
@@ -95,12 +93,182 @@
   .empty-state { padding: 3rem 1.5rem; text-align: center; color: var(--muted); }
   .empty-state h3 { font-family: 'Space Mono', monospace; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text); }
 
+  /* Drawer styles */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .drawer-overlay.open { opacity: 1; pointer-events: all; }
+
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 540px; max-width: 95vw;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 101; transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .drawer.open { transform: translateX(0); }
+
+  .drawer-header {
+    padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 1rem; flex-shrink: 0;
+  }
+  .drawer-title-block { flex: 1; min-width: 0; }
+  .drawer-job-title { font-size: 1.05rem; font-weight: 600; line-height: 1.3; margin-bottom: 0.25rem; }
+  .drawer-company { font-size: 0.82rem; color: var(--muted); }
+  .drawer-close {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    width: 30px; height: 30px; cursor: pointer; font-size: 0.9rem;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .drawer-close:hover { border-color: var(--danger); color: var(--danger); }
+
+  .drawer-score-bar {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 1.5rem; flex-shrink: 0;
+  }
+  .big-score { font-family: 'Space Mono', monospace; font-size: 2.2rem; font-weight: 700; line-height: 1; }
+  .big-score.high { color: var(--accent); }
+  .big-score.mid  { color: var(--accent2); }
+  .big-score.low  { color: var(--muted); }
+  .score-unit { font-size: 1rem; color: var(--muted); }
+  .score-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .score-bar-track { flex: 1; height: 3px; background: var(--border); position: relative; }
+  .score-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; transition: width 0.5s ease; }
+  .score-bar-fill.high { background: var(--accent); }
+  .score-bar-fill.mid  { background: var(--accent2); }
+  .score-bar-fill.low  { background: var(--muted); }
+
+  .drawer-meta-row {
+    padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; flex-shrink: 0;
+  }
+  .meta-chip { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--muted); }
+  .meta-chip strong { color: var(--text); }
+  .platform-badge {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    padding: 0.2rem 0.5rem; border: 1px solid var(--border); color: var(--accent2);
+  }
+  .platform-badge.gov { border-color: rgba(255,159,67,0.4); color: var(--warn); }
+
+  .drawer-status-bar {
+    padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; flex-shrink: 0;
+  }
+  .status-pill {
+    font-family: 'Space Mono', monospace; font-size: 0.62rem;
+    font-weight: 700; padding: 0.3rem 0.75rem;
+  }
+  .status-pill.applied  { background: rgba(0,255,136,0.12); color: var(--accent);  border: 1px solid rgba(0,255,136,0.3); }
+  .status-pill.pending  { background: rgba(85,85,112,0.2);  color: var(--muted);   border: 1px solid var(--border); }
+  .status-pill.no-email { background: rgba(255,68,102,0.1); color: var(--danger);  border: 1px solid rgba(255,68,102,0.3); }
+  .status-time { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); }
+  .gov-warn-chip { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--warn); }
+
+  .spider-banner {
+    padding: 0.6rem 1.5rem; border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    display: none; align-items: center; gap: 0.5rem; flex-shrink: 0;
+  }
+  .spider-banner.running { display: flex; color: var(--warn); }
+  .spider-banner.success { display: flex; color: var(--accent); }
+  .spider-banner.fail    { display: flex; color: var(--danger); }
+
+  .drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
+
+  .drawer-section { margin-bottom: 1.75rem; }
+  .drawer-section-title {
+    font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .drawer-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .info-grid { display: flex; flex-direction: column; gap: 0.55rem; }
+  .info-row  { display: flex; gap: 0.75rem; align-items: baseline; }
+  .info-label {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--muted); min-width: 120px; flex-shrink: 0;
+  }
+  .info-val { font-size: 0.82rem; color: var(--text); line-height: 1.5; }
+
+  .description-text {
+    font-size: 0.83rem; line-height: 1.7; color: #b0b0c8;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .req-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .req-list li {
+    font-size: 0.8rem; color: #b0b0c8; padding-left: 1rem;
+    position: relative; line-height: 1.5;
+  }
+  .req-list li::before { content: '›'; position: absolute; left: 0; color: var(--accent2); }
+
+  .cover-letter-box {
+    background: var(--card, #13131f); border: 1px solid var(--border);
+    padding: 1rem; font-size: 0.78rem; color: #b0b0c8;
+    line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+    max-height: 180px; overflow-y: auto;
+  }
+
+  .email-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .email-chip {
+    font-family: 'Space Mono', monospace; font-size: 0.62rem;
+    padding: 0.25rem 0.6rem; border: 1px solid rgba(0,255,136,0.3);
+    color: var(--accent); background: rgba(0,255,136,0.05); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .email-chip:hover { background: rgba(0,255,136,0.15); }
+
+  .gov-notice {
+    background: rgba(255,159,67,0.08); border: 1px solid rgba(255,159,67,0.25);
+    padding: 0.75rem 1rem; font-size: 0.78rem; color: var(--warn);
+    line-height: 1.5; margin-bottom: 1rem;
+  }
+  .gov-notice strong {
+    display: block; font-family: 'Space Mono', monospace;
+    font-size: 0.65rem; margin-bottom: 0.3rem;
+  }
+
+  .drawer-actions {
+    padding: 1rem 1.5rem; border-top: 1px solid var(--border);
+    display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; flex-shrink: 0;
+  }
+  .drawer-link {
+    font-family: 'Space Mono', monospace; font-size: 0.68rem; font-weight: 700;
+    padding: 0.55rem 1rem; text-decoration: none; border: 1px solid var(--border);
+    color: var(--muted); transition: border-color 0.15s, color 0.15s;
+  }
+  .drawer-link:hover { border-color: var(--accent2); color: var(--accent2); }
+  .apply-btn-wrap { margin-left: auto; }
+  .applied-done-label { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
+
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
+    font-family: 'Space Mono', monospace; font-size: 0.7rem;
+    padding: 0.75rem 1.25rem; border: 1px solid; max-width: 320px;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); pointer-events: all; }
+  .toast.ok  { background: rgba(0,255,136,0.1); border-color: rgba(0,255,136,0.4); color: var(--accent); }
+  .toast.err { background: rgba(255,68,102,0.1); border-color: rgba(255,68,102,0.4); color: var(--danger); }
+
+  .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor; animation: pulse 1s infinite; display: inline-block;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
   @media (max-width: 680px) {
     .stats-strip { flex-wrap: wrap; }
     .stat { flex: 1 1 45%; }
     .search-input { width: 130px; }
     .job-card { grid-template-columns: 44px 1fr; }
     .job-right { display: none; }
+    .drawer { width: 100vw; }
   }
 </style>
 </head>
@@ -151,7 +319,6 @@
 
 <div class="jobs-list" id="jobs-list">
 {% for job in jobs %}
-  {% with is_gov=job.platform|lower %}
   <div class="job-card {% if job.application %}applied{% elif job.apply_email %}has-email{% elif job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov-job{% else %}no-email{% endif %}"
        data-id="{{ job.pk }}"
        data-email="{% if job.apply_email %}1{% else %}0{% endif %}"
@@ -193,7 +360,6 @@
       </div>
     </div>
   </div>
-  {% endwith %}
 {% empty %}
   <div class="empty-state">
     <h3>No jobs yet</h3>
@@ -202,7 +368,6 @@
 {% endfor %}
 </div>
 
-<!-- Drawer markup -->
 <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div id="drawer-inner"></div>
@@ -211,11 +376,248 @@
 
 <script>
   const CSRF = '{{ csrf_token }}';
+  const GOV_PLATFORMS = ['dpsa', 'sayouth', 'essa', 'govza'];
+
+  function scoreClass(s) { return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low'; }
+
+  function showToast(msg, ok = true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (ok ? 'ok' : 'err');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  function parseRequirements(desc) {
+    if (!desc) return [];
+    return desc.split('\n').map(l => l.trim()).filter(l =>
+      l.length > 10 && (
+        /require|must|experience|proficien|familiar|knowledge|skill|degree|qualif|certif|proven|ability|years/i.test(l)
+        || /^[-•*·]\s/.test(l)
+      )
+    ).slice(0, 10);
+  }
+
+  function copyEmail(email) {
+    navigator.clipboard.writeText(email).then(() => showToast(`Copied: ${email}`));
+  }
+
+  function closeDrawer() {
+    document.getElementById('overlay').classList.remove('open');
+    document.getElementById('drawer').classList.remove('open');
+    if (window._activeDrawerRow) {
+      window._activeDrawerRow.classList.remove('active');
+      window._activeDrawerRow = null;
+    }
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+  function openDrawer(jobId, row) {
+    if (window._activeDrawerRow) window._activeDrawerRow.classList.remove('active');
+    window._activeDrawerRow = row;
+    row.classList.add('active');
+
+    document.getElementById('drawer-inner').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;padding:3rem;
+        color:var(--muted);font-family:'Space Mono',monospace;font-size:0.75rem;gap:0.5rem">
+        <span class="pulse" style="background:var(--muted)"></span> Loading...
+      </div>`;
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('drawer').classList.add('open');
+
+    fetch(`/job/${jobId}/`)
+      .then(r => r.json())
+      .then(d => renderDrawer(d))
+      .catch(() => {
+        document.getElementById('drawer-inner').innerHTML =
+          '<div style="padding:2rem;color:var(--danger);font-family:Space Mono,monospace;font-size:0.75rem">Failed to load.</div>';
+      });
+  }
+
+  function renderDrawer(d) {
+    const cls = scoreClass(d.match_score);
+    const isGov = GOV_PLATFORMS.includes(d.platform);
+
+    let statusHtml = '';
+    if (d.applied) {
+      statusHtml = `<span class="status-pill applied">✓ Applied</span><span class="status-time">${d.applied_at}</span>`;
+    } else if (!d.apply_email) {
+      statusHtml = `<span class="status-pill no-email">✗ No email</span><span class="status-time">Cannot auto-apply</span>`;
+    } else {
+      statusHtml = `<span class="status-pill pending">Pending</span><span class="status-time">Has email · not yet applied</span>`;
+    }
+    if (isGov && !d.apply_email) statusHtml += `<span class="gov-warn-chip">⚠ May require Z83 form</span>`;
+
+    const rows = [
+      d.salary       ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
+      d.job_type     ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
+      d.how_to_apply ? `<div class="info-row"><span class="info-label">📨 How to Apply</span><span class="info-val">${d.how_to_apply}</span></div>` : '',
+    ].filter(Boolean).join('');
+
+    const infoSection = rows ? `<div class="drawer-section"><div class="drawer-section-title">Job Info</div><div class="info-grid">${rows}</div></div>` : '';
+
+    const reqs = parseRequirements(d.description);
+    const reqsHtml = reqs.length ? `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Requirements</div>
+        <ul class="req-list">${reqs.map(r => `<li>${r.replace(/^[-•*·]\s*/, '')}</li>`).join('')}</ul>
+      </div>` : '';
+
+    const coverHtml = d.cover_letter ? `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Cover Letter Sent</div>
+        <div class="cover-letter-box">${d.cover_letter}</div>
+      </div>` : '';
+
+    const govNotice = isGov ? `
+      <div class="gov-notice">
+        <strong>🏛 Government Position</strong>
+        Most SA government positions require a Z83 application form. Visit the posting link to confirm requirements.
+      </div>` : '';
+
+    const spiderBtn = (!d.applied && d.url && !d.apply_email)
+      ? `<button class="btn btn-orange btn-sm" id="spider-btn" onclick="doSpider(${d.id})">🕷 Spider for Email</button>` : '';
+
+    const applyBtn = (!d.applied && d.apply_email)
+      ? `<div class="apply-btn-wrap"><button class="btn btn-green" id="apply-btn" onclick="doApply(${d.id})">✉ Apply Now</button></div>`
+      : d.applied ? `<div class="apply-btn-wrap"><span class="applied-done-label">✓ APPLIED</span></div>` : '';
+
+    const emailChip = d.apply_email ? `<div class="meta-chip">✉ <strong>${d.apply_email}</strong></div>` : '';
+
+    document.getElementById('drawer-inner').innerHTML = `
+      <div class="drawer-header">
+        <div class="drawer-title-block">
+          <div class="drawer-job-title">${d.title}</div>
+          <div class="drawer-company">${d.company}${d.location ? ' · ' + d.location : ''}</div>
+        </div>
+        <button class="drawer-close" onclick="closeDrawer()">✕</button>
+      </div>
+      <div class="drawer-score-bar">
+        <div>
+          <div class="big-score ${cls}">${d.match_score}<span class="score-unit">%</span></div>
+          <div class="score-label">Match Score</div>
+        </div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill ${cls}" style="width:${d.match_score}%"></div>
+        </div>
+      </div>
+      <div class="drawer-meta-row">
+        <span class="platform-badge ${isGov ? 'gov' : ''}">${d.platform}</span>
+        <div class="meta-chip">📍 <strong>${d.location || 'Not specified'}</strong></div>
+        <div class="meta-chip">🕐 ${d.scraped_at}</div>
+        ${emailChip}
+      </div>
+      <div class="drawer-status-bar">${statusHtml}</div>
+      <div class="spider-banner" id="spider-banner"></div>
+      <div class="drawer-body">
+        ${govNotice}
+        <div id="email-chips-section"></div>
+        ${infoSection}
+        ${reqsHtml}
+        <div class="drawer-section">
+          <div class="drawer-section-title">Full Description</div>
+          <div class="description-text">${d.description || 'No description available.'}</div>
+        </div>
+        ${coverHtml}
+      </div>
+      <div class="drawer-actions">
+        ${spiderBtn}
+        ${d.url ? `<a href="${d.url}" target="_blank" class="drawer-link">↗ View Posting</a>` : ''}
+        ${applyBtn}
+      </div>
+    `;
+  }
+
+  function doSpider(jobId) {
+    const btn = document.getElementById('spider-btn');
+    const banner = document.getElementById('spider-banner');
+    btn.disabled = true; btn.textContent = '🕷 Spidering...';
+    banner.className = 'spider-banner running';
+    banner.innerHTML = '<span class="pulse"></span> Fetching job page...';
+
+    fetch(`/job/${jobId}/spider/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) {
+          banner.className = 'spider-banner fail'; banner.textContent = '✗ ' + d.error;
+          btn.disabled = false; btn.textContent = '🕷 Retry Spider'; return;
+        }
+        if (d.apply_email) {
+          banner.className = 'spider-banner success';
+          banner.innerHTML = `✓ Email found: <strong>${d.apply_email}</strong>`;
+          showToast(`Email found: ${d.apply_email}`);
+          btn.outerHTML = `<div class="apply-btn-wrap"><button class="btn btn-green" id="apply-btn" onclick="doApply(${jobId})">✉ Apply Now</button></div>`;
+          document.querySelector('.drawer-status-bar').innerHTML =
+            `<span class="status-pill pending">Pending</span><span class="status-time">Email found · ready to apply</span>`;
+          const card = document.querySelector(`[data-id="${jobId}"]`);
+          if (card) { card.dataset.email = '1'; card.classList.remove('no-email','gov-job'); card.classList.add('has-email'); applyFilters(); }
+        } else {
+          banner.className = 'spider-banner fail'; banner.textContent = '✗ No email found';
+          btn.disabled = false; btn.textContent = '🕷 Retry Spider';
+          showToast('No email found.', false);
+        }
+      })
+      .catch(err => {
+        banner.className = 'spider-banner fail'; banner.textContent = '✗ ' + (err.message || 'Network error');
+        btn.disabled = false; btn.textContent = '🕷 Retry Spider';
+      });
+  }
+
+  function doApply(jobId) {
+    const btn = document.getElementById('apply-btn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+
+    fetch(`/job/${jobId}/apply/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+      .then(r => { if (!r.ok && r.headers.get('content-type')?.includes('text/html')) throw new Error(`Server error ${r.status}`); return r.json(); })
+      .then(d => {
+        if (d.error) { showToast(d.error, false); btn.disabled = false; btn.textContent = '✉ Apply Now'; return; }
+        showToast('Application sent!');
+        const now = new Date();
+        const ts = now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) + ' · ' + now.toTimeString().slice(0, 5);
+        document.querySelector('.drawer-status-bar').innerHTML = `<span class="status-pill applied">✓ Applied</span><span class="status-time">${ts}</span>`;
+        btn.outerHTML = `<div class="apply-btn-wrap"><span class="applied-done-label">✓ APPLIED</span></div>`;
+        const card = document.querySelector(`[data-id="${jobId}"]`);
+        if (card) { card.dataset.applied = '1'; card.classList.remove('has-email'); card.classList.add('applied'); applyFilters(); }
+      })
+      .catch(err => { showToast(err.message || 'Network error', false); btn.disabled = false; btn.textContent = '✉ Apply Now'; });
+  }
+
+  function doSpiderInline(jobId, btn) {
+    btn.disabled = true; btn.textContent = '...';
+    fetch(`/job/${jobId}/spider/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.apply_email) {
+          showToast(`✓ ${d.apply_email}`);
+          const card = document.querySelector(`[data-id="${jobId}"]`);
+          if (card) { card.dataset.email = '1'; card.classList.remove('no-email','gov-job'); card.classList.add('has-email'); applyFilters(); }
+          btn.outerHTML = `<button class="apply-inline-btn" onclick="event.stopPropagation();doApplyInline(${jobId}, this)">✉ Apply</button>`;
+        } else {
+          showToast('No email.', false); btn.disabled = false; btn.textContent = '🕷';
+        }
+      })
+      .catch(err => { showToast(err.message || 'Error', false); btn.disabled = false; btn.textContent = '🕷'; });
+  }
+
+  function doApplyInline(jobId, btn) {
+    btn.disabled = true; btn.textContent = 'Sending...';
+    fetch(`/job/${jobId}/apply/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+      .then(r => { if (!r.ok && r.headers.get('content-type')?.includes('text/html')) throw new Error(`Server error ${r.status}`); return r.json(); })
+      .then(d => {
+        if (d.error) { showToast(d.error, false); btn.disabled = false; btn.textContent = '✉ Apply'; return; }
+        showToast('Application sent!');
+        btn.outerHTML = `<span style="font-family:'Space Mono',monospace;font-size:0.58rem;color:var(--accent)">✓ sent</span>`;
+        const card = document.querySelector(`[data-id="${jobId}"]`);
+        if (card) { card.dataset.applied = '1'; card.classList.remove('has-email'); card.classList.add('applied'); applyFilters(); }
+      })
+      .catch(err => { showToast(err.message || 'Network error', false); btn.disabled = false; btn.textContent = '✉ Apply'; });
+  }
 
   function setFilter(f) {
     const map = { email: 'tab-email', all: 'tab-all', matched: 'tab-matched', applied: 'tab-applied', gov: 'tab-gov', noemail: 'tab-noemail' };
     const cls = { email: 'active', matched: 'active-purple', noemail: 'active-orange', all: 'active', applied: 'active', gov: 'active-gov' };
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active', 'active-purple', 'active-orange', 'active-gov'));
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active','active-purple','active-orange','active-gov'));
     document.getElementById(map[f]).classList.add(cls[f] || 'active');
     window._currentFilter = f;
     applyFilters();
@@ -244,6 +646,5 @@
   window._currentFilter = 'email';
   applyFilters();
 </script>
-<script src="{% static 'js/drawer.js' %}"></script>
 </body>
 </html>
