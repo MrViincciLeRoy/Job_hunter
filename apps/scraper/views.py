@@ -11,7 +11,7 @@ from apps.scraper.models import Job
 from apps.cv.models import CV
 from apps.mailer.models import Application
 
-GITHUB_REPO = os.getenv("GITHUB_REPO", "")        # e.g. yourname/job-hunter
+GITHUB_REPO = os.getenv("GITHUB_REPO", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_WORKFLOW = "scrape.yml"
 
@@ -39,8 +39,11 @@ def dashboard(request):
     jobs = Job.objects.order_by("-match_score", "-scraped_at")
     applications = Application.objects.select_related("job").order_by("-sent_at")
     return render(request, "dashboard.html", {
-        "cv": cv, "jobs": jobs, "applications": applications,
-        "total_jobs": jobs.count(), "applied_count": applications.count(),
+        "cv": cv,
+        "jobs": jobs,
+        "applications": applications,
+        "total_jobs": jobs.count(),
+        "applied_count": applications.count(),
         "matched_count": jobs.filter(match_score__gte=60).count(),
         "top_jobs": jobs.filter(match_score__gte=60).exclude(apply_email="")[:5],
     })
@@ -50,10 +53,18 @@ def job_detail(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
     app = getattr(job, "application", None)
     return JsonResponse({
-        "id": job.pk, "title": job.title, "company": job.company,
-        "location": job.location, "platform": job.platform, "url": job.url,
-        "apply_email": job.apply_email, "match_score": job.match_score,
+        "id": job.pk,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "platform": job.platform,
+        "url": job.url,
+        "apply_email": job.apply_email,
+        "match_score": job.match_score,
         "description": job.description,
+        "salary": getattr(job, "salary", "") or "",
+        "job_type": getattr(job, "job_type", "") or "",
+        "how_to_apply": getattr(job, "how_to_apply", "") or "",
         "scraped_at": job.scraped_at.strftime("%d %b %Y · %H:%M"),
         "applied": app is not None,
         "applied_at": app.sent_at.strftime("%d %b %Y · %H:%M") if app else None,
@@ -90,11 +101,14 @@ def spider_job(request, job_id):
 
     app = getattr(job, "application", None)
     return JsonResponse({
-        "id": job.pk, "apply_email": job.apply_email,
-        "all_emails": result["emails"], "phone": result["phone"],
+        "id": job.pk,
+        "apply_email": job.apply_email,
+        "all_emails": result["emails"],
+        "phone": result["phone"],
         "followed_url": result["followed_url"],
         "description_updated": bool(result["description"]),
-        "applied": app is not None, "deleted": False,
+        "applied": app is not None,
+        "deleted": False,
     })
 
 
@@ -143,17 +157,25 @@ def _run_apply(threshold=60, dry_run=False):
     pdf_bytes = cv.get_pdf_bytes()
     if not pdf_bytes:
         return
-    jobs = (Job.objects.filter(match_score__gte=threshold)
-            .exclude(apply_email="").exclude(application__isnull=False))
+    jobs = (
+        Job.objects.filter(match_score__gte=threshold)
+        .exclude(apply_email="")
+        .exclude(application__isnull=False)
+    )
     for job in jobs:
         if dry_run:
             continue
         try:
             ok, result = send_application(
                 cv.parsed_data,
-                {"title": job.title, "company": job.company,
-                 "description": job.description, "apply_email": job.apply_email},
-                pdf_bytes, cv.pdf_filename or "CV.pdf",
+                {
+                    "title": job.title,
+                    "company": job.company,
+                    "description": job.description,
+                    "apply_email": job.apply_email,
+                },
+                pdf_bytes,
+                cv.pdf_filename or "CV.pdf",
             )
             if ok:
                 Application.objects.create(job=job, status="sent", cover_letter=result)
@@ -166,22 +188,24 @@ def trigger_pipeline(request):
     action = request.POST.get("action", "all")
     dry_run = request.POST.get("dry_run") == "1"
 
-    # Apply runs locally on Render (fast — just sending emails)
     if action == "apply":
         thread = threading.Thread(target=_run_apply, kwargs={"dry_run": dry_run}, daemon=True)
         thread.start()
         messages.success(request, "✉ Apply started — sending emails now.")
         return redirect("dashboard")
 
-    # Scrape / spider / match / all → delegate to GitHub Actions
     step = action if action in ("scrape", "spider", "match") else "all"
     ok, error = _trigger_github_workflow(step)
 
-    label = {"all": "Scrape + Spider + Match", "scrape": "Scrape",
-             "spider": "Spider", "match": "Match"}.get(step, step)
+    label = {
+        "all": "Scrape + Spider + Match",
+        "scrape": "Scrape",
+        "spider": "Spider",
+        "match": "Match",
+    }.get(step, step)
 
     if ok:
-        messages.success(request, f"⚡ {label} triggered on GitHub Actions — results will appear in ~5 min.")
+        messages.success(request, f"⚡ {label} triggered on GitHub Actions — results in ~5 min.")
     else:
         messages.error(request, f"GitHub dispatch failed: {error}")
 
