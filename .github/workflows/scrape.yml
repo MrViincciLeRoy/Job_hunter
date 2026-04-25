@@ -1,0 +1,54 @@
+name: Scrape + Match Jobs
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 5 AM UTC = 7 AM SAST
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "Which step to run"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - scrape
+          - spider
+          - match
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DEBUG: "False"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Migrate
+        run: python manage.py migrate --run-syncdb
+
+      - name: Scrape jobs
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'scrape' || github.event_name == 'schedule' }}
+        run: python manage.py scrape_jobs --limit 30 --workers 4
+        timeout-minutes: 20
+
+      - name: Spider for emails
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'spider' || github.event_name == 'schedule' }}
+        run: python manage.py spider_jobs --limit 60 --concurrent 10
+        timeout-minutes: 15
+
+      - name: Match jobs to CV
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'match' || github.event_name == 'schedule' }}
+        run: python manage.py match_jobs --limit 50
+        timeout-minutes: 15
