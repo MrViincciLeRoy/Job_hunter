@@ -9,16 +9,11 @@ from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_es
 from apps.scraper.models import Job
 from apps.cv.models import CV
 
-# Jobspy (LinkedIn/Indeed) intentionally excluded from default run.
-# Pass --include-jobspy to add them as a last resort.
-
 SCRAPERS_PRIMARY = [
-    # Gov sites — highest email yield, first priority
     ("DPSA",              scrape_dpsa,              "gov"),
     ("SAYouth",           scrape_sayouth,           "gov"),
     ("ESSA",              scrape_essa,              "gov"),
     ("GovZA",             scrape_govza,             "gov"),
-    # SA job boards — high email yield
     ("PNet",              scrape_pnet,              "high"),
     ("CareerJunction",    scrape_careerjunction,    "high"),
     ("CareerJunction-IT", scrape_careerjunction_it, "high"),
@@ -27,7 +22,6 @@ SCRAPERS_PRIMARY = [
     ("Gumtree",           scrape_gumtree,           "medium"),
 ]
 
-# Only loaded when --include-jobspy is passed
 SCRAPERS_JOBSPY = []
 try:
     from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
@@ -43,21 +37,16 @@ IT_PLATFORMS  = {"PNet", "CareerJunction", "CareerJunction-IT"}
 
 
 class Command(BaseCommand):
-    help = "Scrape jobs from SA/gov platforms in parallel (jobspy disabled by default)"
+    help = "Scrape jobs from SA/gov platforms in parallel"
 
     def add_arguments(self, parser):
         parser.add_argument("--keywords",       type=str, default=None)
         parser.add_argument("--limit",          type=int, default=20)
-        parser.add_argument("--email-only",     action="store_true",
-                            help="Only run high-email-yield scrapers")
-        parser.add_argument("--gov-only",       action="store_true",
-                            help="Only run government job scrapers")
-        parser.add_argument("--it-only",        action="store_true",
-                            help="Only run IT-focused scrapers")
-        parser.add_argument("--include-jobspy", action="store_true",
-                            help="Also run LinkedIn and Indeed via jobspy (slow, low email yield)")
-        parser.add_argument("--workers",        type=int, default=4,
-                            help="Max parallel scrapers (default: 4)")
+        parser.add_argument("--email-only",     action="store_true")
+        parser.add_argument("--gov-only",       action="store_true")
+        parser.add_argument("--it-only",        action="store_true")
+        parser.add_argument("--include-jobspy", action="store_true")
+        parser.add_argument("--workers",        type=int, default=4)
 
     def handle(self, *args, **options):
         cv = CV.objects.filter(active=True).last()
@@ -73,13 +62,10 @@ class Command(BaseCommand):
         limit   = options["limit"]
         workers = options["workers"]
 
-        # Build scraper list
         scrapers = list(SCRAPERS_PRIMARY)
         if options["include_jobspy"] and SCRAPERS_JOBSPY:
             scrapers += SCRAPERS_JOBSPY
-            self.stdout.write(self.style.WARNING("⚠  jobspy (LinkedIn/Indeed) included — low email yield, may be slow"))
 
-        # Apply filters
         if options["gov_only"]:
             scrapers = [s for s in scrapers if s[0] in GOV_PLATFORMS]
         elif options["it_only"]:
@@ -118,20 +104,33 @@ class Command(BaseCommand):
         for j in all_jobs:
             if not j.get("title"):
                 continue
-            _, new = Job.objects.get_or_create(
+            obj, new = Job.objects.get_or_create(
                 title=j["title"],
                 company=j.get("company", ""),
                 platform=j["platform"],
                 defaults={
-                    "location":    j.get("location", ""),
-                    "description": j.get("description", ""),
-                    "url":         j.get("url", ""),
-                    "apply_email": j.get("apply_email", ""),
+                    "location":      j.get("location", ""),
+                    "description":   j.get("description", ""),
+                    "url":           j.get("url", ""),
+                    "apply_email":   j.get("apply_email", ""),
+                    "salary":        j.get("salary", ""),
+                    "job_type":      j.get("job_type", ""),
+                    "how_to_apply":  j.get("how_to_apply", ""),
                 },
             )
             if new:
                 created += 1
             else:
+                # Update fields that might be missing on existing records
+                updated = False
+                if not obj.salary and j.get("salary"):
+                    obj.salary = j["salary"]; updated = True
+                if not obj.job_type and j.get("job_type"):
+                    obj.job_type = j["job_type"]; updated = True
+                if not obj.how_to_apply and j.get("how_to_apply"):
+                    obj.how_to_apply = j["how_to_apply"]; updated = True
+                if updated:
+                    obj.save(update_fields=["salary", "job_type", "how_to_apply"])
                 skipped += 1
 
         self.stdout.write(self.style.SUCCESS(

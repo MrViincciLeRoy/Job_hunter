@@ -26,6 +26,9 @@ class Job(models.Model):
     apply_email = models.CharField(max_length=255, blank=True)
     match_score = models.IntegerField(default=0)
     scraped_at = models.DateTimeField(auto_now_add=True)
+    salary = models.CharField(max_length=255, blank=True)
+    job_type = models.CharField(max_length=100, blank=True)
+    how_to_apply = models.TextField(blank=True)
 
     class Meta:
         unique_together = ["title", "company", "platform"]

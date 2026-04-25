@@ -11,14 +11,24 @@ HEADERS = {
     'Accept-Language': 'en-ZA,en;q=0.9',
 }
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
-SKIP_EMAILS = {'noreply', 'no-reply', 'donotreply', 'support@careers24', 'info@careers24'}
+
+# Block any email whose domain matches these platform domains
+SKIP_DOMAINS = {
+    'careers24.com', 'pnet.co.za', 'careerjunction.co.za', 'jobmail.co.za',
+    'gumtree.co.za', 'linkedin.com', 'indeed.com', 'glassdoor.com',
+}
+SKIP_PREFIXES = {'noreply', 'no-reply', 'donotreply', 'privacy', 'legal', 'support', 'info', 'admin', 'webmaster'}
 
 
 def _find_email(text):
     for m in EMAIL_RE.finditer(text):
         e = m.group(0).lower()
-        if not any(s in e for s in SKIP_EMAILS):
-            return m.group(0)
+        local, domain = e.split('@', 1)
+        if domain in SKIP_DOMAINS:
+            continue
+        if local in SKIP_PREFIXES:
+            continue
+        return m.group(0)
     return ''
 
 
@@ -96,6 +106,14 @@ def _scrape_detail(url):
     loc_el = soup.select_one('a[href*="/jobs/lc-"]')
     location = _clean(loc_el.get_text()) if loc_el else 'South Africa'
 
+    # Extract salary
+    salary_m = re.search(r'(?:Salary|Remuneration|Package)[:\s]*([^\n]{3,80})', text, re.I)
+    salary = _clean(salary_m.group(1)) if salary_m else 'Market Related'
+
+    # Extract job type
+    job_type_m = re.search(r'(?:Job Type|Contract Type|Employment Type)[:\s]*([^\n]{3,50})', text, re.I)
+    job_type = _clean(job_type_m.group(1)) if job_type_m else ''
+
     duties_m = re.search(
         r'(?:Duties\s+and\s+Responsibilities|Duties|Responsibilities)[:\s]*\n+(.+?)(?:\n{2,}|Minimum\s+Requirements|Requirements|Skills|Salary|$)',
         text, re.DOTALL | re.I
@@ -112,14 +130,21 @@ def _scrape_detail(url):
         desc_el = soup.select_one('[class*="description"], article, main')
         description = _clean(desc_el.get_text('\n')) if desc_el else ''
 
+    # How to apply — look for apply instructions in text
+    apply_m = re.search(r'(?:How to Apply|To Apply|Application Process|Send.*?CV|Apply.*?via)[:\s]*([^\n]{10,200})', text, re.I)
+    how_to_apply = _clean(apply_m.group(1)) if apply_m else ''
+
     return {
         'title': title,
         'company': company,
         'location': location,
-        'description': description[:800],
+        'description': description[:1200],
         'url': url,
         'apply_email': _find_email(text),
         'platform': 'careers24',
+        'salary': salary,
+        'job_type': job_type,
+        'how_to_apply': how_to_apply,
     }
 
 
