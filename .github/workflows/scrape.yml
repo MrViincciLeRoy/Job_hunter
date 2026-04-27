@@ -2,7 +2,7 @@ name: Scrape + Match Jobs
 
 on:
   schedule:
-    - cron: '0 5 * * *'   # 5 AM UTC = 7 AM SAST
+    - cron: '0 5 * * *'
   workflow_dispatch:
     inputs:
       step:
@@ -22,6 +22,8 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      HF_API_KEY: ${{ secrets.HF_API_KEY }}
+      HF_MODEL: ${{ secrets.HF_MODEL }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       DEBUG: "False"
 
