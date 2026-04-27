@@ -5,20 +5,20 @@ import json
 import requests
 from groq import Groq, RateLimitError
 
-# --- Groq (scraping, CV parsing, cover letters) ---
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
-# --- HF (matching only) ---
 HF_API_KEY = os.getenv("HF_API_KEY")
-HF_MODEL = os.getenv("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")
-HF_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
+HF_MODELS = [
+    "HuggingFaceH4/zephyr-7b-beta",
+    "mistralai/Mistral-7B-Instruct-v0.1",
+    "tiiuae/falcon-7b-instruct",
+]
 
 MIN_DELAY = 2.0
 MAX_DELAY = 5.0
 
 
-# --- Shared response wrapper ---
 class _Message:
     def __init__(self, content):
         self.content = content
@@ -32,20 +32,6 @@ class _Response:
         self.choices = [_Choice(content)]
 
 
-# --- HF helpers ---
-def _build_prompt(messages):
-    parts = []
-    for m in messages:
-        role, content = m["role"], m["content"]
-        if role == "system":
-            parts.append(f"<s>[INST] <<SYS>>\n{content}\n<</SYS>>\n")
-        elif role == "user":
-            parts.append(f"{content} [/INST]")
-        elif role == "assistant":
-            parts.append(f"{content} </s><s>[INST] ")
-    return "".join(parts)
-
-
 def _extract_json(text):
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -54,7 +40,6 @@ def _extract_json(text):
     return text
 
 
-# --- Groq call (CV parsing, cover letters, spider) ---
 def groq_call(messages, model=GROQ_MODEL, response_format=None, retries=4):
     time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
     for attempt in range(retries):
@@ -75,15 +60,15 @@ def groq_call(messages, model=GROQ_MODEL, response_format=None, retries=4):
     raise RuntimeError("Groq call failed after all retries")
 
 
-# --- HF call (matching only) ---
-def hf_call(messages, response_format=None, retries=4):
+def hf_call(messages, response_format=None, retries=3):
     time.sleep(random.uniform(1.5, 3.0))
 
-    prompt = _build_prompt(messages)
+    user_content = next((m["content"] for m in messages if m["role"] == "user"), "")
     if response_format and response_format.get("type") == "json_object":
-        prompt += "\n\nRespond with valid JSON only. No explanation, no markdown."
+        prompt = f"<|user|>\n{user_content}\nRespond with valid JSON only. No explanation.\n<|assistant|>"
+    else:
+        prompt = f"<|user|>\n{user_content}\n<|assistant|>"
 
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
     payload = {
         "inputs": prompt,
         "parameters": {
@@ -92,43 +77,52 @@ def hf_call(messages, response_format=None, retries=4):
             "return_full_text": False,
         }
     }
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-    for attempt in range(retries):
-        try:
-            r = requests.post(HF_URL, headers=headers, json=payload, timeout=60)
+    for model in HF_MODELS:
+        url = f"https://api-inference.huggingface.co/models/{model}"
+        print(f"[HF] Trying {model}")
+        for attempt in range(retries):
+            try:
+                r = requests.post(url, headers=headers, json=payload, timeout=60)
 
-            if r.status_code == 503:
-                wait = 20 + (attempt * 10)
-                print(f"[HF] Model loading, waiting {wait}s...")
-                time.sleep(wait)
-                continue
+                if r.status_code == 404:
+                    print(f"[HF] {model} not found, trying next model...")
+                    break
 
-            if r.status_code == 429:
-                wait = (2 ** attempt) * 10
-                print(f"[HF] Rate limited, waiting {wait}s...")
-                time.sleep(wait)
-                continue
+                if r.status_code == 503:
+                    wait = 20 + (attempt * 10)
+                    print(f"[HF] {model} loading, waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
 
-            r.raise_for_status()
-            result = r.json()
+                if r.status_code == 429:
+                    wait = (2 ** attempt) * 10
+                    print(f"[HF] Rate limited on {model}, waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
 
-            text = result[0].get("generated_text", "") if isinstance(result, list) else result.get("generated_text", "")
+                r.raise_for_status()
+                result = r.json()
+                text = result[0].get("generated_text", "") if isinstance(result, list) else result.get("generated_text", "")
 
-            if response_format and response_format.get("type") == "json_object":
-                text = _extract_json(text)
-                json.loads(text)  # validate
+                if response_format and response_format.get("type") == "json_object":
+                    text = _extract_json(text)
+                    json.loads(text)
 
-            return _Response(text)
+                print(f"[HF] Success with {model}")
+                return _Response(text)
 
-        except json.JSONDecodeError:
-            print(f"[HF] Bad JSON on attempt {attempt+1}, retrying...")
-            if attempt == retries - 1:
-                return _Response('{"score": 0, "reason": "parse error"}')
+            except json.JSONDecodeError:
+                print(f"[HF] Bad JSON from {model} attempt {attempt+1}, retrying...")
+                if attempt == retries - 1:
+                    break
 
-        except Exception as e:
-            print(f"[HF] Error: {e}. Attempt {attempt+1}/{retries}")
-            if attempt == retries - 1:
-                raise
-            time.sleep(10)
+            except Exception as e:
+                print(f"[HF] Error on {model}: {e}. Attempt {attempt+1}/{retries}")
+                if attempt == retries - 1:
+                    break
+                time.sleep(10)
 
-    raise RuntimeError("HF call failed after all retries")
+    print("[HF] All models failed, returning default score")
+    return _Response('{"score": 0, "reason": "all models failed"}')
