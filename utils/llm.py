@@ -9,10 +9,11 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 HF_API_KEY = os.getenv("HF_API_KEY")
+HF_ROUTER_URL = "https://router.huggingface.co/hf-inference/v1/chat/completions"
 HF_MODELS = [
-    "HuggingFaceH4/zephyr-7b-beta",
-    "mistralai/Mistral-7B-Instruct-v0.1",
-    "tiiuae/falcon-7b-instruct",
+    "Qwen/Qwen2.5-72B-Instruct",
+    "google/gemma-2-2b-it",
+    "mistralai/Mistral-7B-Instruct-v0.3",
 ]
 
 MIN_DELAY = 2.0
@@ -63,31 +64,38 @@ def groq_call(messages, model=GROQ_MODEL, response_format=None, retries=4):
 def hf_call(messages, response_format=None, retries=3):
     time.sleep(random.uniform(1.5, 3.0))
 
-    user_content = next((m["content"] for m in messages if m["role"] == "user"), "")
-    if response_format and response_format.get("type") == "json_object":
-        prompt = f"<|user|>\n{user_content}\nRespond with valid JSON only. No explanation.\n<|assistant|>"
-    else:
-        prompt = f"<|user|>\n{user_content}\n<|assistant|>"
+    if not HF_API_KEY:
+        print("[HF] No HF_API_KEY set")
+        return _Response('{"score": 0, "reason": "no api key"}')
 
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 256,
-            "temperature": 0.2,
-            "return_full_text": False,
-        }
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json",
     }
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+
+    # Inject JSON instruction into last user message if needed
+    msgs = list(messages)
+    if response_format and response_format.get("type") == "json_object":
+        msgs[-1] = {
+            **msgs[-1],
+            "content": msgs[-1]["content"] + "\n\nRespond with valid JSON only. No explanation or markdown.",
+        }
 
     for model in HF_MODELS:
-        url = f"https://api-inference.huggingface.co/models/{model}"
+        payload = {
+            "model": model,
+            "messages": msgs,
+            "max_tokens": 256,
+            "temperature": 0.2,
+        }
         print(f"[HF] Trying {model}")
+
         for attempt in range(retries):
             try:
-                r = requests.post(url, headers=headers, json=payload, timeout=60)
+                r = requests.post(HF_ROUTER_URL, headers=headers, json=payload, timeout=60)
 
-                if r.status_code == 404:
-                    print(f"[HF] {model} not found, trying next model...")
+                if r.status_code in (404, 422):
+                    print(f"[HF] {model} not available ({r.status_code}), trying next model...")
                     break
 
                 if r.status_code == 503:
@@ -104,17 +112,17 @@ def hf_call(messages, response_format=None, retries=3):
 
                 r.raise_for_status()
                 result = r.json()
-                text = result[0].get("generated_text", "") if isinstance(result, list) else result.get("generated_text", "")
+                text = result["choices"][0]["message"]["content"]
 
                 if response_format and response_format.get("type") == "json_object":
                     text = _extract_json(text)
-                    json.loads(text)
+                    json.loads(text)  # validate — raises if bad JSON
 
                 print(f"[HF] Success with {model}")
                 return _Response(text)
 
             except json.JSONDecodeError:
-                print(f"[HF] Bad JSON from {model} attempt {attempt+1}, retrying...")
+                print(f"[HF] Bad JSON from {model} attempt {attempt+1}/{retries}, retrying...")
                 if attempt == retries - 1:
                     break
 
