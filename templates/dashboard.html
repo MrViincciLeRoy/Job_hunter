@@ -138,7 +138,6 @@
   }
   .drawer.open { transform: translateX(0); }
 
-  /* drawer-inner must be flex column filling full drawer height */
   #drawer-inner {
     display: flex; flex-direction: column; height: 100%; overflow: hidden;
   }
@@ -210,10 +209,8 @@
   .spider-banner.success { display: flex; color: var(--accent); }
   .spider-banner.fail    { display: flex; color: var(--danger); }
 
-  /* SCROLLABLE body — key fix */
   .drawer-body {
     flex: 1; overflow-y: auto; padding: 1.5rem;
-    /* ensure it actually scrolls and doesn't push actions off screen */
     min-height: 0;
   }
 
@@ -264,7 +261,6 @@
   }
   .gov-notice strong { display: block; font-family: 'Space Mono', monospace; font-size: 0.65rem; margin-bottom: 0.3rem; }
 
-  /* PINNED actions at bottom of drawer */
   .drawer-actions {
     padding: 1rem 1.5rem; border-top: 1px solid var(--border);
     display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
@@ -497,7 +493,6 @@
     window._activeDrawerRow = row;
     row.classList.add('active');
 
-    // Reset drawer-inner flex layout and show loading
     const inner = document.getElementById('drawer-inner');
     inner.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
     inner.innerHTML = `
@@ -529,12 +524,17 @@
     } else {
       statusHtml = `<span class="status-pill pending">Pending</span><span class="status-time">Has email · not yet applied</span>`;
     }
-    if (isGov && !d.apply_email) statusHtml += `<span class="gov-warn-chip">⚠ May require Z83 form</span>`;
+    if (isGov && d.docs_required) {
+      statusHtml += `<span class="gov-warn-chip">📋 ${d.docs_required.split(',')[0]}</span>`;
+    } else if (isGov && !d.apply_email) {
+      statusHtml += `<span class="gov-warn-chip">⚠ May require Z83 form</span>`;
+    }
 
     const rows = [
-      d.salary      ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
-      d.job_type    ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
+      d.salary       ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
+      d.job_type     ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
       d.how_to_apply ? `<div class="info-row"><span class="info-label">📨 How to Apply</span><span class="info-val">${d.how_to_apply}</span></div>` : '',
+      d.docs_required ? `<div class="info-row"><span class="info-label" style="color:var(--warn)">📋 Docs Required</span><span class="info-val" style="color:var(--warn)">${d.docs_required}</span></div>` : '',
     ].filter(Boolean).join('');
 
     const infoSection = rows ? `
@@ -560,9 +560,11 @@
 
     const govNotice = isGov ? `
       <div class="gov-notice">
-        <strong>🏛 Government Position</strong>
-        Most SA government positions require a Z83 application form.
-        Visit the posting link to confirm requirements.
+        <strong>🏛 Government Position${d.job_type ? ' · ' + d.job_type.toUpperCase() : ''}</strong>
+        ${d.docs_required
+          ? `Required documents: <strong>${d.docs_required}</strong>`
+          : 'Most SA government positions require a Z83 application form. Visit the posting link to confirm requirements.'
+        }
       </div>` : '';
 
     const spiderBtn = (!d.applied && d.url && !d.apply_email)
@@ -579,7 +581,6 @@
       ? `<div class="meta-chip">✉ <strong>${d.apply_email}</strong></div>`
       : '';
 
-    // Render into drawer-inner keeping flex column structure so body scrolls and actions pin
     document.getElementById('drawer-inner').innerHTML = `
       <div class="drawer-header" style="flex-shrink:0">
         <div class="drawer-title-block">

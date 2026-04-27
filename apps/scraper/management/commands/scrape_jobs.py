@@ -35,6 +35,10 @@ except ImportError:
 GOV_PLATFORMS = {"DPSA", "SAYouth", "ESSA", "GovZA"}
 IT_PLATFORMS  = {"PNet", "CareerJunction", "CareerJunction-IT"}
 
+# For non-DPSA gov scrapers that support keyword search, append these when no explicit keywords given
+GOV_KEYWORD_SCRAPERS = {"SAYouth", "ESSA", "GovZA"}
+GOV_PRIORITY_TERMS = "internship learnership entry level graduate IT"
+
 
 def _t(value, max_len):
     return (value or "")[:max_len]
@@ -59,6 +63,7 @@ class Command(BaseCommand):
             return
 
         keywords = options.get("keywords")
+        user_set_keywords = bool(keywords)
         if not keywords:
             skills = cv.parsed_data.get("skills", [])
             keywords = " ".join(skills[:3]) if skills else "developer"
@@ -84,8 +89,12 @@ class Command(BaseCommand):
         all_jobs = []
 
         def _run_scraper(name, fn, tier):
+            # Gov keyword scrapers also get priority terms injected when no explicit keywords
+            kw = keywords
+            if name in GOV_KEYWORD_SCRAPERS and not user_set_keywords:
+                kw = f"{keywords} {GOV_PRIORITY_TERMS}"
             try:
-                results = fn(keywords, limit=limit)
+                results = fn(kw, limit=limit)
                 email_count = sum(1 for j in results if j.get("apply_email"))
                 self.stdout.write(
                     f"  [{tier.upper()}] {name}: {len(results)} jobs, {email_count} with email"
@@ -109,8 +118,8 @@ class Command(BaseCommand):
             if not j.get("title"):
                 continue
 
-            title   = _t(j["title"], 255)
-            company = _t(j.get("company"), 255)
+            title    = _t(j["title"], 255)
+            company  = _t(j.get("company"), 255)
             platform = _t(j["platform"], 50)
 
             if not title:
@@ -122,13 +131,14 @@ class Command(BaseCommand):
                     company=company,
                     platform=platform,
                     defaults={
-                        "location":     _t(j.get("location"), 255),
-                        "description":  j.get("description", ""),
-                        "url":          j.get("url", ""),
-                        "apply_email":  _t(j.get("apply_email"), 255),
-                        "salary":       _t(j.get("salary"), 255),
-                        "job_type":     _t(j.get("job_type"), 100),
-                        "how_to_apply": j.get("how_to_apply", ""),
+                        "location":      _t(j.get("location"), 255),
+                        "description":   j.get("description", ""),
+                        "url":           j.get("url", ""),
+                        "apply_email":   _t(j.get("apply_email"), 255),
+                        "salary":        _t(j.get("salary"), 255),
+                        "job_type":      _t(j.get("job_type"), 100),
+                        "how_to_apply":  j.get("how_to_apply", ""),
+                        "docs_required": j.get("docs_required", ""),
                     },
                 )
             except Exception as e:
@@ -145,8 +155,10 @@ class Command(BaseCommand):
                     obj.job_type = _t(j["job_type"], 100); updated = True
                 if not obj.how_to_apply and j.get("how_to_apply"):
                     obj.how_to_apply = j["how_to_apply"]; updated = True
+                if not obj.docs_required and j.get("docs_required"):
+                    obj.docs_required = j["docs_required"]; updated = True
                 if updated:
-                    obj.save(update_fields=["salary", "job_type", "how_to_apply"])
+                    obj.save(update_fields=["salary", "job_type", "how_to_apply", "docs_required"])
                 skipped += 1
 
         self.stdout.write(self.style.SUCCESS(

@@ -13,6 +13,14 @@ HEADERS = {
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}")
 SKIP_EMAILS = {"noreply", "no-reply", "donotreply", "webmaster", "admin", "privacy", "legal", "info@dpsa"}
 
+GOV_JOB_TYPES = [
+    ('internship',  ['internship', ' intern ']),
+    ('learnership', ['learnership']),
+    ('scholarship', ['scholarship', 'bursary']),
+    ('graduate',    ['graduate programme', 'graduate program']),
+    ('entry level', ['entry level', 'entry-level']),
+]
+
 
 def _find_email(text):
     for m in EMAIL_RE.finditer(text):
@@ -22,10 +30,35 @@ def _find_email(text):
     return ""
 
 
+def _detect_job_type(title, text=''):
+    combined = (title + ' ' + text).lower()
+    for jtype, terms in GOV_JOB_TYPES:
+        if any(t in combined for t in terms):
+            return jtype
+    return ''
+
+
+def _extract_docs(text):
+    t = text.lower()
+    docs = []
+    if 'z83' in t:
+        docs.append('Z83 form')
+    if 'certified cop' in t:
+        docs.append('Certified copies of qualifications & ID')
+    if 'curriculum vitae' in t or re.search(r'\bcv\b', t):
+        docs.append('CV')
+    if 'driver' in t and 'licen' in t:
+        docs.append("Driver's licence")
+    if 'medical certificate' in t:
+        docs.append('Medical certificate')
+    if 'police clearance' in t:
+        docs.append('Police clearance')
+    return ', '.join(docs) if docs else ''
+
+
 def scrape_sayouth(keywords=None, limit=30):
     base = "https://sayouth.mobi"
     jobs = []
-    # Always fetch the main jobs page; keyword search rarely works on this site
     urls = [f"{base}/Jobs"]
     if keywords:
         urls.insert(0, f"{base}/Jobs?search={keywords.replace(' ', '+')}")
@@ -52,13 +85,14 @@ def scrape_sayouth(keywords=None, limit=30):
                     "title": title, "company": company, "location": location,
                     "description": text[:600], "url": job_url,
                     "apply_email": _find_email(text), "platform": "sayouth",
+                    "job_type": _detect_job_type(title, text),
+                    "docs_required": _extract_docs(text),
                 })
             if jobs:
                 break
         except Exception as e:
             print(f"[SAYouth] Error: {e}")
 
-    # No keyword filter — return all found jobs, let matcher score them
     print(f"[SAYouth] Returning {min(len(jobs), limit)} jobs")
     return jobs[:limit]
 
@@ -92,13 +126,14 @@ def scrape_essa(keywords=None, limit=30):
                     "title": title, "company": company, "location": location,
                     "description": text[:600], "url": job_url,
                     "apply_email": _find_email(text), "platform": "essa",
+                    "job_type": _detect_job_type(title, text),
+                    "docs_required": _extract_docs(text),
                 })
             if jobs:
                 break
         except Exception as e:
             print(f"[ESSA] Error: {e}")
 
-    # No keyword filter — return all found jobs
     print(f"[ESSA] Returning {min(len(jobs), limit)} jobs")
     return jobs[:limit]
 
@@ -125,11 +160,12 @@ def scrape_govza(keywords=None, limit=30):
                     "title": title, "company": "South African Government",
                     "location": "South Africa", "description": text[:600],
                     "url": job_url, "apply_email": _find_email(text), "platform": "govza",
+                    "job_type": _detect_job_type(title, text),
+                    "docs_required": _extract_docs(text),
                 })
     except Exception as e:
         print(f"[GovZA] Error: {e}")
 
-    # Deduplicate, no keyword filter
     seen, out = set(), []
     for j in jobs:
         key = j["title"].lower()[:50]

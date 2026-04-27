@@ -65,6 +65,7 @@ def job_detail(request, job_id):
         "salary": getattr(job, "salary", "") or "",
         "job_type": getattr(job, "job_type", "") or "",
         "how_to_apply": getattr(job, "how_to_apply", "") or "",
+        "docs_required": getattr(job, "docs_required", "") or "",
         "scraped_at": job.scraped_at.strftime("%d %b %Y · %H:%M"),
         "applied": app is not None,
         "applied_at": app.sent_at.strftime("%d %b %Y · %H:%M") if app else None,

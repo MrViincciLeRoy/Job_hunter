@@ -13,6 +13,14 @@ HEADERS = {
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
 SKIP_EMAILS = {'noreply', 'no-reply', 'donotreply', 'webmaster', 'admin', 'info@dpsa', 'privacy'}
 
+GOV_JOB_TYPES = [
+    ('internship',  ['internship', ' intern ']),
+    ('learnership', ['learnership', 'learner ']),
+    ('scholarship', ['scholarship', 'bursary']),
+    ('graduate',    ['graduate programme', 'graduate program', 'graduate development']),
+    ('entry level', ['entry level', 'entry-level']),
+]
+
 
 def _find_email(text):
     for m in EMAIL_RE.finditer(text):
@@ -20,6 +28,42 @@ def _find_email(text):
         if not any(s in e for s in SKIP_EMAILS):
             return m.group(0)
     return ''
+
+
+def _detect_gov_job_type(title, description='', salary=''):
+    text = (title + ' ' + description + ' ' + salary).lower()
+    for jtype, terms in GOV_JOB_TYPES:
+        if any(t in text for t in terms):
+            return jtype
+    m = re.search(r'salary level\s+0*([1-7])\b', salary.lower())
+    if m:
+        return 'entry level'
+    return 'Government / Permanent'
+
+
+def _extract_docs_required(field_data):
+    note = field_data.get('NOTE', '')
+    applications = field_data.get('APPLICATIONS', '')
+    requirements = field_data.get('REQUIREMENTS', '')
+    combined = (note + ' ' + applications + ' ' + requirements).lower()
+
+    docs = []
+    if 'z83' in combined:
+        docs.append('Z83 application form')
+    if 'certified cop' in combined:
+        docs.append('Certified copies of qualifications & ID')
+    if 'curriculum vitae' in combined or re.search(r'\bcv\b', combined):
+        docs.append('Curriculum Vitae')
+    if 'driver' in combined and 'licen' in combined:
+        docs.append("Driver's licence")
+    if 'medical certificate' in combined:
+        docs.append('Medical certificate')
+    if 'police clearance' in combined:
+        docs.append('Police clearance certificate')
+    if 'security clearance' in combined or 'top secret' in combined:
+        docs.append('Security clearance')
+
+    return ', '.join(docs) if docs else ''
 
 
 def _get_latest_circular():
@@ -179,8 +223,9 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
             'apply_email': email,
             'platform': 'dpsa',
             'salary': salary,
-            'job_type': 'Government / Permanent',
+            'job_type': _detect_gov_job_type(title, description, salary),
             'how_to_apply': how_to_apply,
+            'docs_required': _extract_docs_required(field_data),
             '_ref_no': ref_no,
             '_post_ref': f'POST {post_ref}',
             '_circular': f'{circ_num} of {circ_year}',
@@ -212,7 +257,6 @@ def scrape_dpsa(keywords=None, limit=50):
         traceback.print_exc()
         return []
 
-    # Deduplicate by post ref
     seen, out = set(), []
     for j in jobs:
         key = j['_post_ref']
@@ -220,5 +264,5 @@ def scrape_dpsa(keywords=None, limit=50):
             seen.add(key)
             out.append(j)
 
-    print(f'[DPSA] Returning {min(len(out), limit)} jobs (no keyword filter — let matcher score them)')
+    print(f'[DPSA] Returning {min(len(out), limit)} jobs')
     return out[:limit]

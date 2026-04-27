@@ -29,6 +29,7 @@ class Job(models.Model):
     salary = models.CharField(max_length=255, blank=True)
     job_type = models.CharField(max_length=100, blank=True)
     how_to_apply = models.TextField(blank=True)
+    docs_required = models.TextField(blank=True)
 
     class Meta:
         unique_together = ["title", "company", "platform"]
