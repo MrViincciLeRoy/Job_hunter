@@ -36,6 +36,10 @@ GOV_PLATFORMS = {"DPSA", "SAYouth", "ESSA", "GovZA"}
 IT_PLATFORMS  = {"PNet", "CareerJunction", "CareerJunction-IT"}
 
 
+def _t(value, max_len):
+    return (value or "")[:max_len]
+
+
 class Command(BaseCommand):
     help = "Scrape jobs from SA/gov platforms in parallel"
 
@@ -104,29 +108,41 @@ class Command(BaseCommand):
         for j in all_jobs:
             if not j.get("title"):
                 continue
-            obj, new = Job.objects.get_or_create(
-                title=j["title"],
-                company=j.get("company", ""),
-                platform=j["platform"],
-                defaults={
-                    "location":      j.get("location", ""),
-                    "description":   j.get("description", ""),
-                    "url":           j.get("url", ""),
-                    "apply_email":   j.get("apply_email", ""),
-                    "salary":        j.get("salary", ""),
-                    "job_type":      j.get("job_type", ""),
-                    "how_to_apply":  j.get("how_to_apply", ""),
-                },
-            )
+
+            title   = _t(j["title"], 255)
+            company = _t(j.get("company"), 255)
+            platform = _t(j["platform"], 50)
+
+            if not title:
+                continue
+
+            try:
+                obj, new = Job.objects.get_or_create(
+                    title=title,
+                    company=company,
+                    platform=platform,
+                    defaults={
+                        "location":     _t(j.get("location"), 255),
+                        "description":  j.get("description", ""),
+                        "url":          j.get("url", ""),
+                        "apply_email":  _t(j.get("apply_email"), 255),
+                        "salary":       _t(j.get("salary"), 255),
+                        "job_type":     _t(j.get("job_type"), 100),
+                        "how_to_apply": j.get("how_to_apply", ""),
+                    },
+                )
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"  DB error saving '{title}': {e}"))
+                continue
+
             if new:
                 created += 1
             else:
-                # Update fields that might be missing on existing records
                 updated = False
                 if not obj.salary and j.get("salary"):
-                    obj.salary = j["salary"]; updated = True
+                    obj.salary = _t(j["salary"], 255); updated = True
                 if not obj.job_type and j.get("job_type"):
-                    obj.job_type = j["job_type"]; updated = True
+                    obj.job_type = _t(j["job_type"], 100); updated = True
                 if not obj.how_to_apply and j.get("how_to_apply"):
                     obj.how_to_apply = j["how_to_apply"]; updated = True
                 if updated:
