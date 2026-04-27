@@ -120,7 +120,7 @@
   .running-badge { display: none; align-items: center; gap: 0.4rem; font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
   .running-badge.show { display: flex; }
 
-  /* Drawer styles */
+  /* ===================== DRAWER ===================== */
   .drawer-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s;
@@ -133,9 +133,15 @@
     background: var(--surface); border-left: 1px solid var(--border);
     z-index: 101; transform: translateX(100%);
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    display: flex; flex-direction: column; overflow: hidden;
+    display: flex; flex-direction: column;
+    overflow: hidden; height: 100vh;
   }
   .drawer.open { transform: translateX(0); }
+
+  /* drawer-inner must be flex column filling full drawer height */
+  #drawer-inner {
+    display: flex; flex-direction: column; height: 100%; overflow: hidden;
+  }
 
   .drawer-header {
     padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
@@ -204,7 +210,12 @@
   .spider-banner.success { display: flex; color: var(--accent); }
   .spider-banner.fail    { display: flex; color: var(--danger); }
 
-  .drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
+  /* SCROLLABLE body — key fix */
+  .drawer-body {
+    flex: 1; overflow-y: auto; padding: 1.5rem;
+    /* ensure it actually scrolls and doesn't push actions off screen */
+    min-height: 0;
+  }
 
   .drawer-section { margin-bottom: 1.75rem; }
   .drawer-section-title {
@@ -227,10 +238,7 @@
     white-space: pre-wrap; word-break: break-word;
   }
   .req-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-  .req-list li {
-    font-size: 0.8rem; color: #b0b0c8; padding-left: 1rem;
-    position: relative; line-height: 1.5;
-  }
+  .req-list li { font-size: 0.8rem; color: #b0b0c8; padding-left: 1rem; position: relative; line-height: 1.5; }
   .req-list li::before { content: '›'; position: absolute; left: 0; color: var(--accent2); }
 
   .cover-letter-box {
@@ -254,14 +262,13 @@
     padding: 0.75rem 1rem; font-size: 0.78rem; color: var(--warn);
     line-height: 1.5; margin-bottom: 1rem;
   }
-  .gov-notice strong {
-    display: block; font-family: 'Space Mono', monospace;
-    font-size: 0.65rem; margin-bottom: 0.3rem;
-  }
+  .gov-notice strong { display: block; font-family: 'Space Mono', monospace; font-size: 0.65rem; margin-bottom: 0.3rem; }
 
+  /* PINNED actions at bottom of drawer */
   .drawer-actions {
     padding: 1rem 1.5rem; border-top: 1px solid var(--border);
-    display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; flex-shrink: 0;
+    display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+    flex-shrink: 0; background: var(--surface);
   }
   .drawer-link {
     font-family: 'Space Mono', monospace; font-size: 0.68rem; font-weight: 700;
@@ -270,9 +277,7 @@
   }
   .drawer-link:hover { border-color: var(--accent2); color: var(--accent2); }
   .apply-btn-wrap { margin-left: auto; }
-  .applied-done-label {
-    font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent);
-  }
+  .applied-done-label { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
 
   .toast {
     position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
@@ -285,10 +290,7 @@
   .toast.ok  { background: rgba(0,255,136,0.1); border-color: rgba(0,255,136,0.4); color: var(--accent); }
   .toast.err { background: rgba(255,68,102,0.1); border-color: rgba(255,68,102,0.4); color: var(--danger); }
 
-  .pulse {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: currentColor; animation: pulse 1s infinite; display: inline-block;
-  }
+  .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1s infinite; display: inline-block; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
   @media (max-width: 900px) {
@@ -451,9 +453,7 @@
 
   const GOV_PLATFORMS = ['dpsa', 'sayouth', 'essa', 'govza'];
 
-  function scoreClass(s) {
-    return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low';
-  }
+  function scoreClass(s) { return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low'; }
 
   function showToast(msg, ok = true) {
     const t = document.getElementById('toast');
@@ -497,11 +497,15 @@
     window._activeDrawerRow = row;
     row.classList.add('active');
 
-    document.getElementById('drawer-inner').innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;padding:3rem;
+    // Reset drawer-inner flex layout and show loading
+    const inner = document.getElementById('drawer-inner');
+    inner.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
+    inner.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;flex:1;
         color:var(--muted);font-family:'Space Mono',monospace;font-size:0.75rem;gap:0.5rem">
         <span class="pulse" style="background:var(--muted)"></span> Loading...
       </div>`;
+
     document.getElementById('overlay').classList.add('open');
     document.getElementById('drawer').classList.add('open');
 
@@ -509,8 +513,7 @@
       .then(r => r.json())
       .then(d => renderDrawer(d))
       .catch(() => {
-        document.getElementById('drawer-inner').innerHTML =
-          '<div style="padding:2rem;color:var(--danger);font-family:Space Mono,monospace;font-size:0.75rem">Failed to load.</div>';
+        inner.innerHTML = '<div style="padding:2rem;color:var(--danger);font-family:Space Mono,monospace;font-size:0.75rem">Failed to load.</div>';
       });
   }
 
@@ -526,9 +529,7 @@
     } else {
       statusHtml = `<span class="status-pill pending">Pending</span><span class="status-time">Has email · not yet applied</span>`;
     }
-    if (isGov && !d.apply_email) {
-      statusHtml += `<span class="gov-warn-chip">⚠ May require Z83 form</span>`;
-    }
+    if (isGov && !d.apply_email) statusHtml += `<span class="gov-warn-chip">⚠ May require Z83 form</span>`;
 
     const rows = [
       d.salary      ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
@@ -578,8 +579,9 @@
       ? `<div class="meta-chip">✉ <strong>${d.apply_email}</strong></div>`
       : '';
 
+    // Render into drawer-inner keeping flex column structure so body scrolls and actions pin
     document.getElementById('drawer-inner').innerHTML = `
-      <div class="drawer-header">
+      <div class="drawer-header" style="flex-shrink:0">
         <div class="drawer-title-block">
           <div class="drawer-job-title">${d.title}</div>
           <div class="drawer-company">${d.company}${d.location ? ' · ' + d.location : ''}</div>
@@ -587,7 +589,7 @@
         <button class="drawer-close" onclick="closeDrawer()">✕</button>
       </div>
 
-      <div class="drawer-score-bar">
+      <div class="drawer-score-bar" style="flex-shrink:0">
         <div>
           <div class="big-score ${cls}">${d.match_score}<span class="score-unit">%</span></div>
           <div class="score-label">Match Score</div>
@@ -597,15 +599,15 @@
         </div>
       </div>
 
-      <div class="drawer-meta-row">
+      <div class="drawer-meta-row" style="flex-shrink:0">
         <span class="platform-badge ${isGov ? 'gov' : ''}">${d.platform}</span>
         <div class="meta-chip">📍 <strong>${d.location || 'Not specified'}</strong></div>
         <div class="meta-chip">🕐 ${d.scraped_at}</div>
         ${emailChip}
       </div>
 
-      <div class="drawer-status-bar">${statusHtml}</div>
-      <div class="spider-banner" id="spider-banner"></div>
+      <div class="drawer-status-bar" style="flex-shrink:0">${statusHtml}</div>
+      <div class="spider-banner" id="spider-banner" style="flex-shrink:0"></div>
 
       <div class="drawer-body">
         ${govNotice}
@@ -649,6 +651,7 @@
           banner.className = 'spider-banner success';
           banner.innerHTML = `✓ Email found: <strong>${d.apply_email}</strong>${d.followed_url ? ' (via contact page)' : ''}`;
           showToast(`Email found: ${d.apply_email}`);
+
           if (d.all_emails && d.all_emails.length > 1) {
             document.getElementById('email-chips-section').innerHTML = `
               <div class="drawer-section">
@@ -658,9 +661,11 @@
                 </div>
               </div>`;
           }
+
           btn.outerHTML = `<div class="apply-btn-wrap"><button class="btn btn-green" id="apply-btn" onclick="doApply(${jobId})">✉ Apply Now</button></div>`;
           document.querySelector('.drawer-status-bar').innerHTML =
             `<span class="status-pill pending">Pending</span><span class="status-time">Email found · ready to apply</span>`;
+
           const dot = document.querySelector(`[data-id="${jobId}"] .no-email-dot`);
           if (dot) { dot.className = 'email-dot'; dot.title = d.apply_email; }
         } else {
