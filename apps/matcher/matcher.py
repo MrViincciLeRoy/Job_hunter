@@ -1,9 +1,9 @@
 import json
-from utils.llm import groq_call
+from utils.llm import hf_call
 
 
 def match_job_to_cv(cv_data: dict, job: dict) -> int:
-    response = groq_call(
+    response = hf_call(
         messages=[{
             "role": "user",
             "content": f"""Score this CV-to-job match from 0-100. Return ONLY JSON: {{"score": int, "reason": str}}
