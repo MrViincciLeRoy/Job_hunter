@@ -29,12 +29,19 @@
   .btn-purple { background: var(--accent2); color: #fff; }
   .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.62rem; }
 
+  /* ── Filter bar ── */
   .filter-bar {
-    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-    padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border);
-    background: var(--card); position: sticky; top: 0; z-index: 10;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    position: sticky; top: 0; z-index: 10;
   }
-  .filter-tab { font-family: 'Space Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 0.35rem 0.8rem; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+
+  /* Row 1: status tabs + search + spider */
+  .filter-row-1 {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border);
+  }
+  .filter-tab { font-family: 'Space Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 0.35rem 0.8rem; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
   .filter-tab:hover { border-color: var(--accent); color: var(--accent); }
   .filter-tab.active         { background: var(--accent);  color: #000; border-color: var(--accent); }
   .filter-tab.active-purple  { background: var(--accent2); color: #fff; border-color: var(--accent2); }
@@ -44,6 +51,67 @@
   .spacer { flex: 1; }
   .search-input { font-family: 'Space Mono', monospace; font-size: 0.68rem; padding: 0.4rem 0.75rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); outline: none; width: 200px; }
   .search-input:focus { border-color: var(--accent2); }
+
+  /* Row 2: platform chips */
+  .filter-row-2 {
+    display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+    padding: 0.55rem 1.5rem; border-bottom: 1px solid var(--border);
+  }
+  .filter-row-label {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; margin-right: 0.2rem;
+  }
+  .platform-chip {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem; font-weight: 700;
+    padding: 0.22rem 0.6rem; border: 1px solid var(--border);
+    color: var(--muted); background: transparent; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap; user-select: none;
+  }
+  .platform-chip:hover { border-color: var(--accent2); color: var(--accent2); }
+  .platform-chip.active { border-color: var(--accent2); color: var(--accent2); background: rgba(124,106,255,0.1); }
+  .platform-chip.active-all { border-color: var(--accent); color: var(--accent); background: rgba(0,255,136,0.07); }
+  .platform-chip.gov { border-color: rgba(255,159,67,0.35); color: rgba(255,159,67,0.7); }
+  .platform-chip.gov.active { border-color: var(--warn); color: var(--warn); background: rgba(255,159,67,0.1); }
+
+  /* Row 3: job type dropdown + clear */
+  .filter-row-3 {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    padding: 0.55rem 1.5rem;
+  }
+  .type-select-wrap { position: relative; display: inline-flex; align-items: center; }
+  .type-select {
+    font-family: 'Space Mono', monospace; font-size: 0.62rem; font-weight: 700;
+    padding: 0.35rem 2rem 0.35rem 0.75rem;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); cursor: pointer; outline: none;
+    appearance: none; -webkit-appearance: none;
+    transition: border-color 0.15s;
+    min-width: 170px;
+  }
+  .type-select:focus { border-color: var(--accent2); }
+  .type-select-arrow {
+    position: absolute; right: 0.6rem; pointer-events: none;
+    font-size: 0.55rem; color: var(--muted);
+  }
+  .active-filters-row {
+    display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; flex: 1;
+  }
+  .active-filter-pill {
+    font-family: 'Space Mono', monospace; font-size: 0.57rem; font-weight: 700;
+    padding: 0.2rem 0.55rem; border: 1px solid rgba(124,106,255,0.4);
+    color: var(--accent2); background: rgba(124,106,255,0.08);
+    display: flex; align-items: center; gap: 0.3rem;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .active-filter-pill:hover { background: rgba(124,106,255,0.18); }
+  .active-filter-pill .pill-x { font-size: 0.6rem; opacity: 0.7; }
+  .clear-all-btn {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem;
+    color: var(--danger); border: 1px solid rgba(255,68,102,0.3);
+    background: transparent; padding: 0.22rem 0.6rem; cursor: pointer;
+    transition: background 0.15s; white-space: nowrap;
+  }
+  .clear-all-btn:hover { background: rgba(255,68,102,0.08); }
 
   .stats-strip { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
   .stat { padding: 1rem 1.5rem; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
@@ -81,6 +149,7 @@
   .tag.platform-tag { border-color: rgba(124,106,255,0.4);  color: var(--accent2); }
   .tag.gov-tag      { border-color: rgba(255,159,67,0.4);   color: var(--warn);    background: rgba(255,159,67,0.05); }
   .tag.applied-tag  { border-color: rgba(0,255,136,0.6);    color: var(--accent);  background: rgba(0,255,136,0.1); }
+  .tag.jobtype-tag  { border-color: rgba(124,106,255,0.3);  color: var(--accent2); background: rgba(124,106,255,0.05); }
 
   .job-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex-shrink: 0; }
   .job-time  { font-family: 'Space Mono', monospace; font-size: 0.55rem; color: var(--muted); white-space: nowrap; }
@@ -90,57 +159,41 @@
   .apply-inline-btn:hover { opacity: 0.8; }
   .apply-inline-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  .results-count {
+    padding: 0.5rem 1.5rem; font-family: 'Space Mono', monospace;
+    font-size: 0.6rem; color: var(--muted); border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .results-count span { color: var(--accent); }
+
   .empty-state { padding: 3rem 1.5rem; text-align: center; color: var(--muted); }
   .empty-state h3 { font-family: 'Space Mono', monospace; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text); }
 
-  /* ===================== DRAWER ===================== */
-  .drawer-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-    z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s;
-  }
+  /* ── Drawer ── */
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
   .drawer-overlay.open { opacity: 1; pointer-events: all; }
-
-  .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0;
-    width: 540px; max-width: 95vw; height: 100vh;
-    background: var(--surface); border-left: 1px solid var(--border);
-    z-index: 101; transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    display: flex; flex-direction: column; overflow: hidden;
-  }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 540px; max-width: 95vw; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); z-index: 101; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; overflow: hidden; }
   .drawer.open { transform: translateX(0); }
-
-  /* drawer-inner must flex column fill full height */
-  #drawer-inner {
-    display: flex; flex-direction: column; height: 100%; overflow: hidden;
-  }
-
+  #drawer-inner { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
   .drawer-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-shrink: 0; }
   .drawer-title-block { flex: 1; min-width: 0; }
   .drawer-job-title { font-size: 1.05rem; font-weight: 600; line-height: 1.3; margin-bottom: 0.25rem; }
   .drawer-company { font-size: 0.82rem; color: var(--muted); }
   .drawer-close { background: none; border: 1px solid var(--border); color: var(--muted); width: 30px; height: 30px; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, color 0.15s; }
   .drawer-close:hover { border-color: var(--danger); color: var(--danger); }
-
   .drawer-score-bar { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1.5rem; flex-shrink: 0; }
   .big-score { font-family: 'Space Mono', monospace; font-size: 2.2rem; font-weight: 700; line-height: 1; }
-  .big-score.high { color: var(--accent); }
-  .big-score.mid  { color: var(--accent2); }
-  .big-score.low  { color: var(--muted); }
+  .big-score.high { color: var(--accent); } .big-score.mid { color: var(--accent2); } .big-score.low { color: var(--muted); }
   .score-unit { font-size: 1rem; color: var(--muted); }
   .score-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.06em; }
   .score-bar-track { flex: 1; height: 3px; background: var(--border); position: relative; }
   .score-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; transition: width 0.5s ease; }
-  .score-bar-fill.high { background: var(--accent); }
-  .score-bar-fill.mid  { background: var(--accent2); }
-  .score-bar-fill.low  { background: var(--muted); }
-
+  .score-bar-fill.high { background: var(--accent); } .score-bar-fill.mid { background: var(--accent2); } .score-bar-fill.low { background: var(--muted); }
   .drawer-meta-row { padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; flex-shrink: 0; }
   .meta-chip { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--muted); }
   .meta-chip strong { color: var(--text); }
   .platform-badge { font-family: 'Space Mono', monospace; font-size: 0.6rem; padding: 0.2rem 0.5rem; border: 1px solid var(--border); color: var(--accent2); }
   .platform-badge.gov { border-color: rgba(255,159,67,0.4); color: var(--warn); }
-
   .drawer-status-bar { padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; flex-shrink: 0; }
   .status-pill { font-family: 'Space Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 0.3rem 0.75rem; }
   .status-pill.applied  { background: rgba(0,255,136,0.12); color: var(--accent);  border: 1px solid rgba(0,255,136,0.3); }
@@ -148,47 +201,27 @@
   .status-pill.no-email { background: rgba(255,68,102,0.1); color: var(--danger);  border: 1px solid rgba(255,68,102,0.3); }
   .status-time { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); }
   .gov-warn-chip { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--warn); }
-
   .spider-banner { padding: 0.6rem 1.5rem; border-bottom: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 0.65rem; display: none; align-items: center; gap: 0.5rem; flex-shrink: 0; }
-  .spider-banner.running { display: flex; color: var(--warn); }
-  .spider-banner.success { display: flex; color: var(--accent); }
-  .spider-banner.fail    { display: flex; color: var(--danger); }
-
-  /* SCROLLABLE body — key fix */
-  .drawer-body {
-    flex: 1; overflow-y: auto; padding: 1.5rem;
-    min-height: 0; /* critical for flex scroll to work */
-  }
-
+  .spider-banner.running { display: flex; color: var(--warn); } .spider-banner.success { display: flex; color: var(--accent); } .spider-banner.fail { display: flex; color: var(--danger); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; min-height: 0; }
   .drawer-section { margin-bottom: 1.75rem; }
   .drawer-section-title { font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
   .drawer-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
   .info-grid { display: flex; flex-direction: column; gap: 0.55rem; }
   .info-row  { display: flex; gap: 0.75rem; align-items: baseline; }
   .info-label { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); min-width: 120px; flex-shrink: 0; }
   .info-val { font-size: 0.82rem; color: var(--text); line-height: 1.5; }
-
   .description-text { font-size: 0.83rem; line-height: 1.7; color: #b0b0c8; white-space: pre-wrap; word-break: break-word; }
   .req-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
   .req-list li { font-size: 0.8rem; color: #b0b0c8; padding-left: 1rem; position: relative; line-height: 1.5; }
   .req-list li::before { content: '›'; position: absolute; left: 0; color: var(--accent2); }
-
   .cover-letter-box { background: var(--card, #13131f); border: 1px solid var(--border); padding: 1rem; font-size: 0.78rem; color: #b0b0c8; line-height: 1.7; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow-y: auto; }
-
   .email-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
   .email-chip { font-family: 'Space Mono', monospace; font-size: 0.62rem; padding: 0.25rem 0.6rem; border: 1px solid rgba(0,255,136,0.3); color: var(--accent); background: rgba(0,255,136,0.05); cursor: pointer; transition: background 0.15s; }
   .email-chip:hover { background: rgba(0,255,136,0.15); }
-
   .gov-notice { background: rgba(255,159,67,0.08); border: 1px solid rgba(255,159,67,0.25); padding: 0.75rem 1rem; font-size: 0.78rem; color: var(--warn); line-height: 1.5; margin-bottom: 1rem; }
   .gov-notice strong { display: block; font-family: 'Space Mono', monospace; font-size: 0.65rem; margin-bottom: 0.3rem; }
-
-  /* PINNED actions at bottom of drawer */
-  .drawer-actions {
-    padding: 1rem 1.5rem; border-top: 1px solid var(--border);
-    display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
-    flex-shrink: 0; background: var(--surface);
-  }
+  .drawer-actions { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; flex-shrink: 0; background: var(--surface); }
   .drawer-link { font-family: 'Space Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.55rem 1rem; text-decoration: none; border: 1px solid var(--border); color: var(--muted); transition: border-color 0.15s, color 0.15s; }
   .drawer-link:hover { border-color: var(--accent2); color: var(--accent2); }
   .apply-btn-wrap { margin-left: auto; }
@@ -198,9 +231,28 @@
   .toast.show { opacity: 1; transform: translateY(0); pointer-events: all; }
   .toast.ok  { background: rgba(0,255,136,0.1); border-color: rgba(0,255,136,0.4); color: var(--accent); }
   .toast.err { background: rgba(255,68,102,0.1); border-color: rgba(255,68,102,0.4); color: var(--danger); }
-
   .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1s infinite; display: inline-block; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  /* ── Pagination ── */
+  .pagination-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.3rem; padding: 1.5rem; border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .page-btn {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; font-weight: 700;
+    padding: 0.45rem 0.75rem; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .page-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .page-btn.current { background: var(--accent2); color: #fff; border-color: var(--accent2); cursor: default; }
+  .page-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+  .page-btn.nav { padding: 0.45rem 1rem; }
+  .page-ellipsis { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); padding: 0 0.25rem; }
+  .pagination-info { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); margin-left: 1rem; }
 
   @media (max-width: 680px) {
     .stats-strip { flex-wrap: wrap; }
@@ -242,19 +294,77 @@
 </div>
 
 <div class="filter-bar">
-  <button class="filter-tab active"  id="tab-email"   onclick="setFilter('email')">● Has Email <span class="filter-count">({{ email_count }})</span></button>
-  <button class="filter-tab"         id="tab-all"     onclick="setFilter('all')">All <span class="filter-count">({{ total_jobs }})</span></button>
-  <button class="filter-tab"         id="tab-matched" onclick="setFilter('matched')">≥60% Match <span class="filter-count">({{ matched_count }})</span></button>
-  <button class="filter-tab"         id="tab-applied" onclick="setFilter('applied')">Applied <span class="filter-count">({{ applied_count }})</span></button>
-  <button class="filter-tab"         id="tab-gov"     onclick="setFilter('gov')">🏛 Gov Matched</button>
-  <button class="filter-tab"         id="tab-noemail" onclick="setFilter('noemail')">No Email <span class="filter-count">({{ no_email_count }})</span></button>
-  <div class="spacer"></div>
-  <input class="search-input" type="text" id="search" placeholder="Search jobs..." oninput="applyFilters()">
-  <form method="POST" action="/trigger/" style="display:inline;">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="spider">
-    <button type="submit" class="btn btn-orange btn-sm">🕷 Spider All</button>
-  </form>
+  <!-- Row 1: status tabs + search + spider -->
+  <div class="filter-row-1">
+    <button class="filter-tab active"  id="tab-email"   onclick="setFilter('email')">● Has Email <span class="filter-count">({{ email_count }})</span></button>
+    <button class="filter-tab"         id="tab-all"     onclick="setFilter('all')">All <span class="filter-count">({{ total_jobs }})</span></button>
+    <button class="filter-tab"         id="tab-matched" onclick="setFilter('matched')">≥60% Match <span class="filter-count">({{ matched_count }})</span></button>
+    <button class="filter-tab"         id="tab-applied" onclick="setFilter('applied')">Applied <span class="filter-count">({{ applied_count }})</span></button>
+    <button class="filter-tab"         id="tab-gov"     onclick="setFilter('gov')">🏛 Gov Matched</button>
+    <button class="filter-tab"         id="tab-noemail" onclick="setFilter('noemail')">No Email <span class="filter-count">({{ no_email_count }})</span></button>
+    <div class="spacer"></div>
+    <input class="search-input" type="text" id="search" placeholder="Search jobs..." oninput="applyFilters()">
+    <form method="POST" action="/trigger/" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="spider">
+      <button type="submit" class="btn btn-orange btn-sm">🕷 Spider All</button>
+    </form>
+  </div>
+
+  <!-- Row 2: platform chips -->
+  <div class="filter-row-2">
+    <span class="filter-row-label">Platform:</span>
+    <span class="platform-chip active-all" data-platform="all" onclick="togglePlatform(this)">All</span>
+    <span class="platform-chip" data-platform="pnet" onclick="togglePlatform(this)">PNet</span>
+    <span class="platform-chip" data-platform="careerjunction" onclick="togglePlatform(this)">CareerJunction</span>
+    <span class="platform-chip" data-platform="careerjunction_it" onclick="togglePlatform(this)">CJ–IT</span>
+    <span class="platform-chip" data-platform="careers24" onclick="togglePlatform(this)">Careers24</span>
+    <span class="platform-chip" data-platform="jobmail" onclick="togglePlatform(this)">JobMail</span>
+    <span class="platform-chip" data-platform="gumtree" onclick="togglePlatform(this)">Gumtree</span>
+    <span class="platform-chip gov" data-platform="dpsa" onclick="togglePlatform(this)">🏛 DPSA</span>
+    <span class="platform-chip gov" data-platform="sayouth" onclick="togglePlatform(this)">🏛 SAYouth</span>
+    <span class="platform-chip gov" data-platform="essa" onclick="togglePlatform(this)">🏛 ESSA</span>
+    <span class="platform-chip gov" data-platform="govza" onclick="togglePlatform(this)">🏛 Gov.za</span>
+    <span class="platform-chip" data-platform="linkedin" onclick="togglePlatform(this)">LinkedIn</span>
+    <span class="platform-chip" data-platform="indeed" onclick="togglePlatform(this)">Indeed</span>
+  </div>
+
+  <!-- Row 3: job type dropdown + active filter pills -->
+  <div class="filter-row-3">
+    <span class="filter-row-label">Type:</span>
+    <div class="type-select-wrap">
+      <select class="type-select" id="type-select" onchange="onTypeSelect(this.value)">
+        <option value="">All Job Types</option>
+        <optgroup label="Opportunities">
+          <option value="internship">🎓 Internship</option>
+          <option value="learnership">📋 Learnership</option>
+          <option value="bursary">🏆 Bursary / Scholarship</option>
+          <option value="graduate">🎯 Graduate Programme</option>
+        </optgroup>
+        <optgroup label="Employment">
+          <option value="entry level">📌 Entry Level</option>
+          <option value="permanent">🏛 Permanent</option>
+          <option value="contract">📝 Contract</option>
+          <option value="temporary">⏱ Temporary</option>
+          <option value="part-time">🕐 Part-time</option>
+          <option value="full-time">⚡ Full-time</option>
+        </optgroup>
+        <optgroup label="Government">
+          <option value="government">🏛 Government / General</option>
+          <option value="government / permanent">🏛 Government Permanent</option>
+        </optgroup>
+      </select>
+      <span class="type-select-arrow">▾</span>
+    </div>
+
+    <div class="active-filters-row" id="active-filters-row"></div>
+
+    <button class="clear-all-btn" id="clear-all-btn" onclick="clearAllFilters()" style="display:none">✕ Clear all</button>
+  </div>
+</div>
+
+<div class="results-count" id="results-count">
+  Showing <span id="visible-count">—</span> jobs
 </div>
 
 <div class="jobs-list" id="jobs-list">
@@ -267,7 +377,9 @@
        data-gov="{% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}1{% else %}0{% endif %}"
        data-gov-matched="{% if job.match_score >= 50 and job.platform == 'dpsa' or job.match_score >= 50 and job.platform == 'sayouth' or job.match_score >= 50 and job.platform == 'essa' or job.match_score >= 50 and job.platform == 'govza' %}1{% else %}0{% endif %}"
        data-score="{{ job.match_score }}"
-       data-search="{{ job.title|lower }} {{ job.company|lower }} {{ job.platform|lower }}"
+       data-platform="{{ job.platform|lower }}"
+       data-jobtype="{{ job.job_type|lower }}"
+       data-search="{{ job.title|lower }} {{ job.company|lower }} {{ job.platform|lower }} {{ job.job_type|lower }}"
        onclick="openDrawer({{ job.pk }}, this)">
     <div class="score-ring {% if job.match_score >= 70 %}high{% elif job.match_score >= 50 %}mid{% else %}low{% endif %}">
       {{ job.match_score }}%
@@ -281,6 +393,7 @@
         {% else %}
           <span class="tag platform-tag">{{ job.platform }}</span>
         {% endif %}
+        {% if job.job_type %}<span class="tag jobtype-tag">{{ job.job_type }}</span>{% endif %}
         {% if job.apply_email %}<span class="tag email-tag">✉ {{ job.apply_email }}</span>{% endif %}
         {% if job.application %}<span class="tag applied-tag">✓ applied</span>{% endif %}
       </div>
@@ -310,6 +423,18 @@
 {% endfor %}
 </div>
 
+{% if jobs.paginator.num_pages > 1 %}
+<div class="pagination-bar" id="pagination-bar"
+     data-current="{{ jobs.number }}"
+     data-total="{{ jobs.paginator.num_pages }}"
+     data-count="{{ jobs.paginator.count }}"
+     data-has-prev="{% if jobs.has_previous %}1{% else %}0{% endif %}"
+     data-has-next="{% if jobs.has_next %}1{% else %}0{% endif %}"
+     data-prev="{{ jobs.previous_page_number|default:1 }}"
+     data-next="{{ jobs.next_page_number|default:jobs.paginator.num_pages }}">
+</div>
+{% endif %}
+
 <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div id="drawer-inner"></div>
@@ -320,6 +445,136 @@
   const CSRF = '{{ csrf_token }}';
   const GOV_PLATFORMS = ['dpsa', 'sayouth', 'essa', 'govza'];
 
+  // ── Filter state ─────────────────────────────────────────────────────────
+  const state = {
+    tab:      'email',
+    platforms: [],   // empty = all
+    jobType:  '',    // empty = all
+  };
+
+  // ── Status tab ───────────────────────────────────────────────────────────
+  function setFilter(f) {
+    const map = { email:'tab-email', all:'tab-all', matched:'tab-matched', applied:'tab-applied', gov:'tab-gov', noemail:'tab-noemail' };
+    const cls = { email:'active', matched:'active-purple', noemail:'active-orange', all:'active', applied:'active', gov:'active-gov' };
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active','active-purple','active-orange','active-gov'));
+    document.getElementById(map[f]).classList.add(cls[f] || 'active');
+    state.tab = f;
+    applyFilters();
+  }
+
+  // ── Platform chip ────────────────────────────────────────────────────────
+  const allPlatChip = document.querySelector('.platform-chip[data-platform="all"]');
+  const platChips   = document.querySelectorAll('.platform-chip:not([data-platform="all"])');
+
+  function togglePlatform(el) {
+    const plat = el.dataset.platform;
+    if (plat === 'all') {
+      platChips.forEach(c => c.classList.remove('active'));
+      allPlatChip.classList.add('active-all');
+      state.platforms = [];
+    } else {
+      allPlatChip.classList.remove('active-all');
+      el.classList.toggle('active');
+      state.platforms = Array.from(platChips)
+        .filter(c => c.classList.contains('active'))
+        .map(c => c.dataset.platform);
+      if (!state.platforms.length) allPlatChip.classList.add('active-all');
+    }
+    syncFilterPills();
+    applyFilters();
+  }
+
+  // ── Job type dropdown ─────────────────────────────────────────────────────
+  function onTypeSelect(val) {
+    state.jobType = val;
+    syncFilterPills();
+    applyFilters();
+  }
+
+  // ── Active filter pills ──────────────────────────────────────────────────
+  function syncFilterPills() {
+    const row = document.getElementById('active-filters-row');
+    const clearBtn = document.getElementById('clear-all-btn');
+    row.innerHTML = '';
+
+    state.platforms.forEach(p => {
+      const pill = document.createElement('span');
+      pill.className = 'active-filter-pill';
+      pill.innerHTML = `${p} <span class="pill-x">✕</span>`;
+      pill.onclick = () => {
+        const chip = document.querySelector(`.platform-chip[data-platform="${p}"]`);
+        if (chip) togglePlatform(chip);
+      };
+      row.appendChild(pill);
+    });
+
+    if (state.jobType) {
+      const label = document.querySelector(`#type-select option[value="${state.jobType}"]`)?.text || state.jobType;
+      const pill = document.createElement('span');
+      pill.className = 'active-filter-pill';
+      pill.innerHTML = `${label} <span class="pill-x">✕</span>`;
+      pill.onclick = () => { document.getElementById('type-select').value = ''; onTypeSelect(''); };
+      row.appendChild(pill);
+    }
+
+    const hasFilters = state.platforms.length || state.jobType;
+    clearBtn.style.display = hasFilters ? 'inline-flex' : 'none';
+  }
+
+  function clearAllFilters() {
+    // reset platforms
+    platChips.forEach(c => c.classList.remove('active'));
+    allPlatChip.classList.add('active-all');
+    state.platforms = [];
+    // reset job type
+    document.getElementById('type-select').value = '';
+    state.jobType = '';
+    syncFilterPills();
+    applyFilters();
+  }
+
+  // ── Main filter logic ─────────────────────────────────────────────────────
+  function applyFilters() {
+    const q    = document.getElementById('search').value.toLowerCase();
+    const tab  = state.tab;
+    const plats = state.platforms;
+    const jtype = state.jobType.toLowerCase();
+
+    let visible = 0;
+    document.querySelectorAll('.job-card').forEach(card => {
+      const e    = card.dataset.email      === '1';
+      const m    = card.dataset.matched    === '1';
+      const a    = card.dataset.applied    === '1';
+      const g    = card.dataset.gov        === '1';
+      const gm   = card.dataset.govMatched === '1';
+      const plat = (card.dataset.platform  || '').toLowerCase();
+      const jt   = (card.dataset.jobtype   || '').toLowerCase();
+      const s    = card.dataset.search     || '';
+
+      const tabPass =
+        tab === 'all'     ? true :
+        tab === 'email'   ? (e && !a) || a :
+        tab === 'matched' ? m :
+        tab === 'applied' ? a :
+        tab === 'gov'     ? (g && gm) :
+        tab === 'noemail' ? !e : true;
+
+      const platPass = !plats.length || plats.includes(plat);
+
+      const typePass = !jtype || jt.includes(jtype);
+
+      const searchPass = !q || s.includes(q);
+
+      const show = tabPass && platPass && typePass && searchPass;
+      card.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+
+    const countEl = document.getElementById('visible-count');
+    if (countEl) countEl.textContent = visible;
+  }
+
+  // ── Drawer ────────────────────────────────────────────────────────────────
   function scoreClass(s) { return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low'; }
 
   function showToast(msg, ok = true) {
@@ -574,39 +829,72 @@
       .catch(err => { showToast(err.message || 'Network error', false); btn.disabled = false; btn.textContent = '✉ Apply'; });
   }
 
-  function setFilter(f) {
-    const map = { email: 'tab-email', all: 'tab-all', matched: 'tab-matched', applied: 'tab-applied', gov: 'tab-gov', noemail: 'tab-noemail' };
-    const cls = { email: 'active', matched: 'active-purple', noemail: 'active-orange', all: 'active', applied: 'active', gov: 'active-gov' };
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active','active-purple','active-orange','active-gov'));
-    document.getElementById(map[f]).classList.add(cls[f] || 'active');
-    window._currentFilter = f;
-    applyFilters();
+  // ── Pagination ────────────────────────────────────────────────────────────
+  function goPage(p) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('page', p);
+    window.location.search = params.toString();
   }
 
-  function applyFilters() {
-    const f = window._currentFilter || 'email';
-    const q = document.getElementById('search').value.toLowerCase();
-    document.querySelectorAll('.job-card').forEach(card => {
-      const e  = card.dataset.email      === '1';
-      const m  = card.dataset.matched    === '1';
-      const a  = card.dataset.applied    === '1';
-      const g  = card.dataset.gov        === '1';
-      const gm = card.dataset.govMatched === '1';  // gov + score >= 50
-      const s  = card.dataset.search     || '';
+  function buildPagination() {
+    const bar = document.getElementById('pagination-bar');
+    if (!bar) return;
 
-      const filterPass =
-        f === 'all'     ? true :
-        f === 'email'   ? (e && !a) || a :
-        f === 'matched' ? m :
-        f === 'applied' ? a :
-        f === 'gov'     ? (g && gm) :   // only gov jobs that scored >= 50 against your CV
-        f === 'noemail' ? !e : true;
+    const current  = parseInt(bar.dataset.current);
+    const total    = parseInt(bar.dataset.total);
+    const count    = parseInt(bar.dataset.count);
+    const hasPrev  = bar.dataset.hasPrev === '1';
+    const hasNext  = bar.dataset.hasNext === '1';
+    const prevPage = parseInt(bar.dataset.prev);
+    const nextPage = parseInt(bar.dataset.next);
 
-      card.classList.toggle('hidden', !(filterPass && (!q || s.includes(q))));
-    });
+    let html = '';
+
+    // First / Prev
+    html += `<button class="page-btn nav${!hasPrev ? ' disabled' : ''}" onclick="goPage(1)">« First</button>`;
+    html += `<button class="page-btn nav${!hasPrev ? ' disabled' : ''}" onclick="goPage(${prevPage})">‹ Prev</button>`;
+
+    // Page number buttons with ellipsis
+    const pages = new Set([1, total]);
+    for (let i = Math.max(1, current - 2); i <= Math.min(total, current + 2); i++) pages.add(i);
+    const sorted = [...pages].sort((a, b) => a - b);
+
+    let last = 0;
+    for (const p of sorted) {
+      if (last && p - last > 1) html += `<span class="page-ellipsis">…</span>`;
+      if (p === current) {
+        html += `<span class="page-btn current">${p}</span>`;
+      } else {
+        html += `<button class="page-btn" onclick="goPage(${p})">${p}</button>`;
+      }
+      last = p;
+    }
+
+    // Next / Last
+    html += `<button class="page-btn nav${!hasNext ? ' disabled' : ''}" onclick="goPage(${nextPage})">Next ›</button>`;
+    html += `<button class="page-btn nav${!hasNext ? ' disabled' : ''}" onclick="goPage(${total})">Last »</button>`;
+
+    // Info + page size
+    html += `
+      <span class="pagination-info">Page ${current} of ${total} · ${count} total</span>
+      <select class="type-select" style="min-width:auto;margin-left:1rem;padding:0.35rem 1.75rem 0.35rem 0.6rem;"
+              onchange="changePageSize(this.value)" title="Jobs per page">
+        ${[25,50,100,200].map(n => `<option value="${n}"${n==50?' selected':''}>${n} / page</option>`).join('')}
+      </select>`;
+
+    bar.innerHTML = html;
   }
 
-  window._currentFilter = 'email';
+  function changePageSize(size) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('page_size', size);
+    params.set('page', 1);
+    window.location.search = params.toString();
+  }
+
+  buildPagination();
+
+  // init
   applyFilters();
 </script>
 </body>
