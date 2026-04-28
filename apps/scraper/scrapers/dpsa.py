@@ -2,12 +2,17 @@ import re
 import io
 import requests
 from bs4 import BeautifulSoup
+from utils.scraper_utils import job_record, parse_salary_range
 
 BASE_URL = 'https://www.dpsa.gov.za'
 PSVC_URL = f'{BASE_URL}/newsroom/psvc/'
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-ZA,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Cache-Control': 'max-age=0',
 }
 
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
@@ -66,7 +71,8 @@ def _extract_docs_required(field_data):
     return ', '.join(docs) if docs else ''
 
 
-def _get_latest_circular():
+def _get_all_circulars(max_circulars=5):
+    """Return a list of (url, num, year) for the most recent circulars — not just the latest one."""
     try:
         r = requests.get(PSVC_URL, headers=HEADERS, timeout=30)
         r.raise_for_status()
@@ -74,6 +80,7 @@ def _get_latest_circular():
 
         pattern = re.compile(r'(?:circular[-\s]?(\d+)[-\s]?of[-\s]?(\d{4}))', re.IGNORECASE)
         candidates = []
+        seen = set()
 
         for a in soup.find_all('a', href=True):
             href = a['href']
@@ -82,25 +89,25 @@ def _get_latest_circular():
                 m = pattern.search(a.get_text())
             if m:
                 num, year = int(m.group(1)), int(m.group(2))
-                full = href if href.startswith('http') else BASE_URL + href
-                candidates.append((year, num, full))
+                key = (num, year)
+                if key not in seen:
+                    seen.add(key)
+                    full = href if href.startswith('http') else BASE_URL + href
+                    candidates.append((year, num, full))
 
-        if candidates:
-            candidates.sort(reverse=True)
-            year, num, url = candidates[0]
-            print(f'[DPSA] Latest circular: {num} of {year} at {url}')
-            return url, num, year
+        candidates.sort(reverse=True)
+        result = [(url, num, year) for year, num, url in candidates[:max_circulars]]
+        print(f'[DPSA] Found {len(result)} circulars to process')
+        return result
 
     except Exception as e:
         print(f'[DPSA] Error fetching circular list: {e}')
-
-    import datetime
-    now = datetime.datetime.now()
-    year = now.year
-    approx_num = max(1, (now.month * 4) + (now.day // 7))
-    fallback_url = f'{BASE_URL}/newsroom/psvc/circular-{approx_num}-of-{year}/'
-    print(f'[DPSA] Using fallback circular: {approx_num} of {year}')
-    return fallback_url, approx_num, year
+        import datetime
+        now = datetime.datetime.now()
+        year = now.year
+        approx_num = max(1, (now.month * 4) + (now.day // 7))
+        fallback_url = f'{BASE_URL}/newsroom/psvc/circular-{approx_num}-of-{year}/'
+        return [(fallback_url, approx_num, year)]
 
 
 def _get_pdf_url(circular_page_url, circ_num, circ_year):
@@ -151,6 +158,7 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
             text = page.extract_text()
             if text:
                 pages.append(text)
+
     full_text = '\n'.join(pages)
     print(f'[DPSA] Extracted {len(full_text)} chars from PDF')
 
@@ -193,14 +201,18 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
         enquiries = field_data.get('ENQUIRIES', '')
         applications = field_data.get('APPLICATIONS', '')
         closing_date = field_data.get('CLOSING DATE', '')
-        salary = field_data.get('SALARY', '')
+        salary_raw = field_data.get('SALARY', '')
         centre = field_data.get('CENTRE', 'South Africa')
+        requirements_text = field_data.get('REQUIREMENTS', '')
+        duties_text = field_data.get('DUTIES', '')
         email = _find_email(enquiries) or _find_email(applications) or _find_email(block)
 
-        description = ' | '.join(filter(None, [
-            field_data.get('REQUIREMENTS', ''),
-            field_data.get('DUTIES', ''),
-        ]))
+        # Build requirements and duties as lists (split on bullet/newline patterns)
+        def _split_field(text):
+            if not text:
+                return []
+            lines = re.split(r'(?:\n|;|•|–)\s*', text)
+            return [l.strip() for l in lines if len(l.strip()) > 8][:15]
 
         how_to_apply_parts = []
         if applications:
@@ -209,60 +221,78 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
             how_to_apply_parts.append(f'Enquiries: {enquiries}')
         if closing_date:
             how_to_apply_parts.append(f'Closing Date: {closing_date}')
-        how_to_apply = ' | '.join(how_to_apply_parts)
+
+        description = ' | '.join(filter(None, [requirements_text, duties_text]))
 
         if not title or len(title) < 4:
             continue
 
-        jobs.append({
+        # ── Option 5 schema via job_record() ──────────────────────────────────
+        jobs.append(job_record({
             'title': title,
             'company': department,
             'location': centre,
-            'description': description[:1200],
-            'url': f'{BASE_URL}/newsroom/psvc/circular-{circ_num}-of-{circ_year}',
+            'salary': salary_raw,
+            'job_type': _detect_gov_job_type(title, description, salary_raw),
+            'closing_date': closing_date,
             'apply_email': email,
-            'platform': 'dpsa',
-            'salary': salary,
-            'job_type': _detect_gov_job_type(title, description, salary),
-            'how_to_apply': how_to_apply,
+            'requirements': _split_field(requirements_text),
+            'duties': _split_field(duties_text),
+            'how_to_apply': ' | '.join(how_to_apply_parts),
             'docs_required': _extract_docs_required(field_data),
+            'url': f'{BASE_URL}/newsroom/psvc/circular-{circ_num}-of-{circ_year}',
+            'platform': 'dpsa',
+            'description': description[:2000],
+            'raw_text': block[:3000],
+            # DPSA-specific extras stored so scrape_jobs can use them
             '_ref_no': ref_no,
             '_post_ref': f'POST {post_ref}',
             '_circular': f'{circ_num} of {circ_year}',
             '_closing_date': closing_date,
-        })
+        }))
 
     return jobs
 
 
-def scrape_dpsa(keywords=None, limit=50):
-    try:
-        circular_url, circ_num, circ_year = _get_latest_circular()
-        if not circular_url:
-            print('[DPSA] No circulars found')
-            return []
+def scrape_dpsa(keywords=None, limit=500):
+    """
+    Scrape ALL available DPSA circulars (up to 5 most recent).
+    No artificial limit — returns everything found, deduped by POST ref.
+    `limit` is a safety cap; default 500 is effectively uncapped for normal circulars.
+    """
+    all_jobs = []
+    seen_posts = set()
 
-        pdf_url = _get_pdf_url(circular_url, circ_num, circ_year)
-        print(f'[DPSA] Downloading PDF: {pdf_url}')
-        r = requests.get(pdf_url, headers=HEADERS, timeout=60)
-        r.raise_for_status()
-        print(f'[DPSA] PDF downloaded: {len(r.content)} bytes')
+    circulars = _get_all_circulars(max_circulars=5)
 
-        jobs = _parse_pdf_jobs(r.content, circ_num, circ_year)
-        print(f'[DPSA] Parsed {len(jobs)} jobs from Circular {circ_num} of {circ_year}')
+    for circular_url, circ_num, circ_year in circulars:
+        try:
+            pdf_url = _get_pdf_url(circular_url, circ_num, circ_year)
+            print(f'[DPSA] Downloading PDF for circular {circ_num}/{circ_year}: {pdf_url}')
+            r = requests.get(pdf_url, headers=HEADERS, timeout=90)
+            r.raise_for_status()
+            print(f'[DPSA] PDF downloaded: {len(r.content):,} bytes')
 
-    except Exception as e:
-        print(f'[DPSA] Error: {e}')
-        import traceback
-        traceback.print_exc()
-        return []
+            jobs = _parse_pdf_jobs(r.content, circ_num, circ_year)
+            print(f'[DPSA] Parsed {len(jobs)} jobs from circular {circ_num}/{circ_year}')
 
-    seen, out = set(), []
-    for j in jobs:
-        key = j['_post_ref']
-        if key not in seen:
-            seen.add(key)
-            out.append(j)
+            for j in jobs:
+                key = j.get('_post_ref', j['title'])
+                if key not in seen_posts:
+                    seen_posts.add(key)
+                    # Apply keyword filter if specified
+                    if keywords:
+                        kws = keywords.lower().split()
+                        text = (j['title'] + ' ' + j['description']).lower()
+                        if not any(kw in text for kw in kws):
+                            continue
+                    all_jobs.append(j)
 
-    print(f'[DPSA] Returning {min(len(out), limit)} jobs')
-    return out[:limit]
+        except Exception as e:
+            print(f'[DPSA] Error processing circular {circ_num}/{circ_year}: {e}')
+            import traceback
+            traceback.print_exc()
+            continue
+
+    print(f'[DPSA] Total unique jobs across all circulars: {len(all_jobs)} → returning up to {limit}')
+    return all_jobs[:limit]
