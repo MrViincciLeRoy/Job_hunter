@@ -24,16 +24,20 @@ def jobs_list(request):
 
     paginator = Paginator(jobs_qs, page_size)
     page = request.GET.get("page", 1)
-    jobs = paginator.get_page(page)
+    jobs = paginator.get_page(page)  # get_page() clamps out-of-range values safely
+
+    current = jobs.number
+    total   = paginator.num_pages
 
     return render(request, "jobs.html", {
-        "jobs": jobs,
-        "applied_ids": applied_ids,
-        "email_count": Job.objects.exclude(apply_email="").count(),
+        "jobs":           jobs,
+        "applied_ids":    applied_ids,
+        "email_count":    Job.objects.exclude(apply_email="").count(),
         "no_email_count": Job.objects.filter(apply_email="").count(),
-        "matched_count": Job.objects.filter(match_score__gte=60).count(),
-        "applied_count": len(applied_ids),
-        "total_jobs": Job.objects.count(),
-        "page_obj": jobs,
-        "page_size": page_size,
+        "matched_count":  Job.objects.filter(match_score__gte=60).count(),
+        "applied_count":  len(applied_ids),
+        "total_jobs":     Job.objects.count(),
+        "page_size":      page_size,
+        "prev_page":      current - 1 if current > 1 else 1,
+        "next_page":      current + 1 if current < total else total,
     })

@@ -430,8 +430,8 @@
      data-count="{{ jobs.paginator.count }}"
      data-has-prev="{% if jobs.has_previous %}1{% else %}0{% endif %}"
      data-has-next="{% if jobs.has_next %}1{% else %}0{% endif %}"
-     data-prev="{{ jobs.previous_page_number|default:1 }}"
-     data-next="{{ jobs.next_page_number|default:jobs.paginator.num_pages }}">
+     data-prev="{{ prev_page }}"
+     data-next="{{ next_page }}">
 </div>
 {% endif %}
 
