@@ -30,10 +30,11 @@ JOB_TYPE_PRIORITY = {
 }
 
 GOV_JOB_TYPES = [
-    ('internship',  ['internship programme', 'internship program', ' intern ', 'intern programme']),
-    ('learnership', ['learnership', 'learner ']),
-    ('bursary',     ['bursary', 'bursary officer', 'bursary programme']),
-    ('scholarship', ['scholarship']),
+    # Check longest/most-specific terms first to avoid false matches
+    ('internship',  ['internship programme', 'internship program', 'internship (', 'internship:', 'internship\n', 'internship ']),
+    ('learnership', ['learnership programme', 'learnership program', 'learnership (', 'learnership:', 'learnership\n', 'learnership ']),
+    ('bursary',     ['bursary programme', 'bursary program', 'bursary (', 'bursary:', 'bursary\n', 'bursary ']),
+    ('scholarship', ['scholarship programme', 'scholarship']),
     ('graduate',    ['graduate programme', 'graduate program', 'graduate development']),
     ('entry level', ['entry level', 'entry-level']),
 ]
