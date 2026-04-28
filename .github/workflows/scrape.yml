@@ -44,7 +44,7 @@ jobs:
 
       - name: Scrape jobs
         if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'scrape' || github.event_name == 'schedule' }}
-        run: python manage.py scrape_jobs --limit 700 --workers 8
+        run: python manage.py scrape_jobs --max-jobs 700 --max-pages 5 --email-only --force-color --workers 8
         timeout-minutes: 60
 
       - name: Spider for emails
