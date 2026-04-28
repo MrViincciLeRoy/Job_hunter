@@ -242,7 +242,7 @@ class Command(BaseCommand):
 
         # ── Run scrapers ──────────────────────────────────────────────────────
         def _run_scraper(name, fn, tier, slug):
-            kw = keywords
+            kw = None
             if slug in {"sayouth", "essa", "govza"} and not user_set_keywords:
                 kw = f"{keywords} {GOV_PRIORITY_KW}"
 
