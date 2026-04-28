@@ -4,22 +4,78 @@ on:
   workflow_dispatch:
     inputs:
       step:
-        description: "Pipeline step to run"
+        description: "Pipeline step"
         required: false
         default: "all"
         type: choice
-        options:
-          - all
-          - scrape
-          - spider
-          - match
+        options: [all, scrape, spider, match]
       job_types:
-        description: "Job types to include (space-separated). Options: internship learnership bursary scholarship graduate entry_level low_barrier permanent all"
+        description: "Job types (space-separated): internship learnership bursary scholarship graduate entry_level low_barrier permanent all"
         required: false
         default: "all"
         type: string
+      keywords:
+        description: "Search keywords (blank = use CV skills)"
+        required: false
+        default: ""
+        type: string
+      max_jobs:
+        description: "Max jobs per scraper (0 = unlimited)"
+        required: false
+        default: "0"
+        type: string
+      workers:
+        description: "Parallel worker threads"
+        required: false
+        default: "4"
+        type: string
+      scrapers:
+        description: "Limit to specific scrapers (space-separated): pnet careerjunction careers24 jobmail gumtree dpsa sayouth essa govza"
+        required: false
+        default: ""
+        type: string
+      gov_only:
+        description: "Government sources only?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      it_only:
+        description: "IT platforms only?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      email_only:
+        description: "Email-yielding platforms only?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      no_skip:
+        description: "Re-scrape already-seen URLs?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      spider_limit:
+        description: "Spider: max URLs to process"
+        required: false
+        default: "100"
+        type: string
+      spider_concurrent:
+        description: "Spider: concurrent async requests"
+        required: false
+        default: "15"
+        type: string
+      match_limit:
+        description: "Match: max jobs to score per run"
+        required: false
+        default: "25"
+        type: string
+
   schedule:
-    - cron: "0 6 * * 1"   # every Monday 06:00 UTC
+    - cron: "0 6 * * 1"
 
 jobs:
   pipeline:
@@ -46,33 +102,50 @@ jobs:
       - name: Run migrations
         run: python manage.py migrate --noinput
 
-      # ── Resolve job_types arg ──────────────────────────────────────────────
-      # When triggered by schedule, default to 'all'.
-      # When triggered manually, use whatever was passed in.
       - name: Set job_types env
         run: |
           JOB_TYPES="${{ github.event.inputs.job_types }}"
-          if [ -z "$JOB_TYPES" ]; then
-            JOB_TYPES="all"
-          fi
+          if [ -z "$JOB_TYPES" ]; then JOB_TYPES="all"; fi
           echo "JOB_TYPES=$JOB_TYPES" >> $GITHUB_ENV
 
-      # ── Scrape ────────────────────────────────────────────────────────────
       - name: Scrape jobs
         if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'scrape' || github.event.inputs.step == '' }}
         run: |
-          if [ "$JOB_TYPES" = "all" ]; then
-            python manage.py scrape_jobs --workers 4 --limit 100
-          else
-            python manage.py scrape_jobs --workers 4 --types $JOB_TYPES
+          CMD="python manage.py scrape_jobs"
+          CMD="$CMD --workers ${{ github.event.inputs.workers || '4' }}"
+
+          JOB_TYPES="${{ github.event.inputs.job_types || 'all' }}"
+          if [ "$JOB_TYPES" != "all" ] && [ -n "$JOB_TYPES" ]; then
+            CMD="$CMD --types $JOB_TYPES"
           fi
 
-      # ── Spider ────────────────────────────────────────────────────────────
+          KW="${{ github.event.inputs.keywords }}"
+          if [ -n "$KW" ]; then CMD="$CMD --keywords \"$KW\""; fi
+
+          MAX_JOBS="${{ github.event.inputs.max_jobs || '0' }}"
+          if [ "$MAX_JOBS" != "0" ]; then CMD="$CMD --max-jobs $MAX_JOBS"; fi
+
+          SCRAPERS="${{ github.event.inputs.scrapers }}"
+          if [ -n "$SCRAPERS" ]; then CMD="$CMD --scrapers $SCRAPERS"; fi
+
+          if [ "${{ github.event.inputs.gov_only }}" = "yes" ];   then CMD="$CMD --gov-only"; fi
+          if [ "${{ github.event.inputs.it_only }}" = "yes" ];    then CMD="$CMD --it-only"; fi
+          if [ "${{ github.event.inputs.email_only }}" = "yes" ]; then CMD="$CMD --email-only"; fi
+          if [ "${{ github.event.inputs.no_skip }}" = "yes" ];    then CMD="$CMD --no-skip"; fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
       - name: Spider for emails
         if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'spider' || github.event.inputs.step == '' }}
-        run: python manage.py spider_jobs --limit 100 --concurrent 15
+        run: |
+          python manage.py spider_jobs \
+            --limit ${{ github.event.inputs.spider_limit || '100' }} \
+            --concurrent ${{ github.event.inputs.spider_concurrent || '15' }}
 
-      # ── Match ─────────────────────────────────────────────────────────────
       - name: Match CV to jobs
         if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'match' || github.event.inputs.step == '' }}
-        run: pip install -r requirements-heavy.txt && python manage.py match_jobs --limit 2000
+        run: |
+          pip install -r requirements-heavy.txt
+          python manage.py match_jobs \
+            --limit ${{ github.event.inputs.match_limit || '25' }}
