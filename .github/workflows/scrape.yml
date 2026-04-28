@@ -75,4 +75,4 @@ jobs:
       # ── Match ─────────────────────────────────────────────────────────────
       - name: Match CV to jobs
         if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'match' || github.event.inputs.step == '' }}
-        run: python manage.py match_jobs
+        run: pip install -r requirements-heavy.txt && python manage.py match_jobs
