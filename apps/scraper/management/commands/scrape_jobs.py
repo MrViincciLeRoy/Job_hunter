@@ -2,13 +2,18 @@
 scrape_jobs — bulk scraper command, no artificial limits.
 
 Usage:
-  python manage.py scrape_jobs                        # uses CV skills as keywords, all pages
-  python manage.py scrape_jobs --keywords "IT admin"  # specific search
-  python manage.py scrape_jobs --max-jobs 500         # safety brake per scraper (default: unlimited)
-  python manage.py scrape_jobs --max-pages 50         # max pages per scraper (default: unlimited)
-  python manage.py scrape_jobs --gov-only             # gov platforms only
-  python manage.py scrape_jobs --workers 6            # parallel scraper threads
-  python manage.py scrape_jobs --scrapers pnet careerjunction  # specific scrapers only
+  python manage.py scrape_jobs
+  python manage.py scrape_jobs --types internship learnership bursary
+  python manage.py scrape_jobs --types internship learnership bursary entry_level low_barrier
+  python manage.py scrape_jobs --keywords "IT admin"
+  python manage.py scrape_jobs --max-jobs 500
+  python manage.py scrape_jobs --gov-only
+  python manage.py scrape_jobs --workers 6
+  python manage.py scrape_jobs --scrapers pnet careerjunction
+
+Available --types values:
+  internship, learnership, bursary, scholarship, graduate,
+  entry_level, low_barrier, permanent, all (default)
 """
 
 from django.core.management.base import BaseCommand
@@ -22,9 +27,33 @@ from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_es
 from apps.scraper.models import Job
 from apps.cv.models import CV
 
-# ─── Scraper registry ────────────────────────────────────────────────────────
-# (name, fn, tier, slug)
-# tier: "gov" | "high" | "medium" | "low"
+# ─── Job type filter map ──────────────────────────────────────────────────────
+# Maps CLI/form slug → job_type strings stored on job records
+JOB_TYPE_MAP = {
+    'internship':  ['internship'],
+    'learnership': ['learnership'],
+    'bursary':     ['bursary', 'scholarship'],
+    'scholarship': ['scholarship', 'bursary'],
+    'graduate':    ['graduate'],
+    'entry_level': ['entry level'],
+    'low_barrier': ['entry level'],   # also uses _low_barrier flag
+    'permanent':   ['Government / Permanent', 'Permanent'],
+    'all':         [],                # empty = no filter
+}
+
+FRIENDLY_NAMES = {
+    'internship':  'Internships',
+    'learnership': 'Learnerships',
+    'bursary':     'Bursaries / Scholarships',
+    'scholarship': 'Scholarships',
+    'graduate':    'Graduate Programmes',
+    'entry_level': 'Entry Level (Grade 12)',
+    'low_barrier': 'Low Barrier (Grade 10–12 / ABET)',
+    'permanent':   'Permanent / General Government',
+    'all':         'All Job Types',
+}
+
+# ─── Scraper registry ─────────────────────────────────────────────────────────
 SCRAPERS_PRIMARY = [
     ("DPSA",              scrape_dpsa,              "gov",    "dpsa"),
     ("SAYouth",           scrape_sayouth,           "gov",    "sayouth"),
@@ -48,14 +77,12 @@ try:
 except ImportError:
     pass
 
-GOV_PLATFORMS    = {"dpsa", "sayouth", "essa", "govza"}
-IT_PLATFORMS     = {"pnet", "careerjunction", "careerjunction_it"}
-GOV_PRIORITY_KW  = "internship learnership entry level graduate IT"
+GOV_PLATFORMS   = {"dpsa", "sayouth", "essa", "govza"}
+IT_PLATFORMS    = {"pnet", "careerjunction", "careerjunction_it"}
+GOV_PRIORITY_KW = "internship learnership entry level graduate IT"
 
-# How many pages each scraper supports when unlimited
-# These are passed as `max_pages` kwargs — scrapers loop until exhausted
 SCRAPER_MAX_PAGES = {
-    "DPSA":              1,     # one PDF circular (or N circulars if enhanced)
+    "DPSA":              1,
     "SAYouth":           20,
     "ESSA":              20,
     "GovZA":             10,
@@ -74,38 +101,89 @@ def _t(value, max_len):
     return (value or "")[:max_len]
 
 
+def _job_passes_type_filter(job, allowed_job_types):
+    """
+    Return True if this job should be kept given the selected type filters.
+    allowed_job_types: set of job_type strings (empty = keep all).
+    """
+    if not allowed_job_types:
+        return True
+
+    jt = (job.get('job_type') or '').lower().strip()
+
+    # Direct match
+    if jt in allowed_job_types:
+        return True
+
+    # Low-barrier flag from dpsa scraper
+    if 'entry level' in allowed_job_types and job.get('_low_barrier'):
+        return True
+
+    # Partial match for edge cases
+    for allowed in allowed_job_types:
+        if allowed in jt:
+            return True
+
+    return False
+
+
+def _resolve_type_filter(type_slugs):
+    """
+    Convert list of CLI slugs e.g. ['internship', 'bursary'] into
+    a set of job_type strings to match against.
+    Returns empty set if 'all' is present or list is empty.
+    """
+    if not type_slugs or 'all' in type_slugs:
+        return set()
+
+    resolved = set()
+    for slug in type_slugs:
+        resolved.update(JOB_TYPE_MAP.get(slug, [slug]))
+    return resolved
+
+
 class Command(BaseCommand):
-    help = "Bulk-scrape jobs from SA/gov platforms — no artificial job limits"
+    help = "Bulk-scrape jobs from SA/gov platforms — filter by job type"
 
     def add_arguments(self, parser):
-        parser.add_argument("--keywords",       type=str,   default=None,
-                            help="Search keywords (default: derived from active CV skills)")
-        parser.add_argument("--max-jobs",       type=int,   default=0,
-                            help="Max jobs to return per scraper (0 = unlimited, default: 0)")
-        parser.add_argument("--max-pages",      type=int,   default=0,
-                            help="Max pages per scraper (0 = use scraper defaults, default: 0)")
-        parser.add_argument("--email-only",     action="store_true",
-                            help="Only run high-yield email scrapers")
-        parser.add_argument("--gov-only",       action="store_true",
-                            help="Only run government scrapers")
-        parser.add_argument("--it-only",        action="store_true",
-                            help="Only run IT-focused scrapers")
-        parser.add_argument("--include-jobspy", action="store_true",
-                            help="Also run LinkedIn/Indeed via jobspy (low email yield)")
-        parser.add_argument("--workers",        type=int,   default=4,
-                            help="Parallel scraper threads (default: 4)")
-        parser.add_argument("--scrapers",       nargs="*",  default=None,
-                            help="Run specific scrapers by slug (e.g. pnet careerjunction dpsa)")
-        parser.add_argument("--skip-existing",  action="store_true", default=True,
-                            help="Skip URLs already in DB (default: True)")
-        parser.add_argument("--no-skip",        action="store_true",
-                            help="Disable skip-existing (re-scrape everything)")
+        parser.add_argument("--keywords",       type=str,   default=None)
+        parser.add_argument("--max-jobs",       type=int,   default=0)
+        parser.add_argument("--max-pages",      type=int,   default=0)
+        parser.add_argument("--email-only",     action="store_true")
+        parser.add_argument("--gov-only",       action="store_true")
+        parser.add_argument("--it-only",        action="store_true")
+        parser.add_argument("--include-jobspy", action="store_true")
+        parser.add_argument("--workers",        type=int,   default=4)
+        parser.add_argument("--scrapers",       nargs="*",  default=None)
+        parser.add_argument("--no-skip",        action="store_true")
+        parser.add_argument(
+            "--types",
+            nargs="*",
+            default=["all"],
+            metavar="TYPE",
+            help=(
+                "Job types to include. Space-separated. "
+                "Options: internship learnership bursary scholarship graduate "
+                "entry_level low_barrier permanent all. "
+                "Default: all"
+            ),
+        )
 
     def handle(self, *args, **options):
         cv = CV.objects.filter(active=True).last()
         if not cv:
             self.stderr.write("No active CV. Upload one first via /upload-cv/")
             return
+
+        # ── Type filter ───────────────────────────────────────────────────────
+        type_slugs  = options.get("types") or ["all"]
+        type_filter = _resolve_type_filter(type_slugs)
+
+        if type_filter:
+            labels = [FRIENDLY_NAMES.get(s, s) for s in type_slugs if s != 'all']
+            self.stdout.write(f"Type filter: {', '.join(labels)}\n")
+        else:
+            self.stdout.write("Type filter: ALL (no filter)\n")
 
         # ── Keywords ──────────────────────────────────────────────────────────
         keywords = options.get("keywords")
@@ -114,9 +192,20 @@ class Command(BaseCommand):
             skills = cv.parsed_data.get("skills", [])
             keywords = " ".join(skills[:4]) if skills else "developer"
 
-        max_jobs     = options["max_jobs"]      # 0 = unlimited
-        max_pages    = options["max_pages"]     # 0 = use SCRAPER_MAX_PAGES defaults
-        workers      = options["workers"]
+        # Inject internship/learnership terms into keyword search when filtered
+        if type_filter and not user_set_keywords:
+            extra_kw = []
+            if 'internship' in type_filter:
+                extra_kw.append('internship')
+            if 'learnership' in type_filter:
+                extra_kw.append('learnership')
+            if 'bursary' in type_filter or 'scholarship' in type_filter:
+                extra_kw.append('bursary')
+            if extra_kw:
+                keywords = f"{keywords} {' '.join(extra_kw)}"
+
+        max_jobs      = options["max_jobs"]
+        workers       = options["workers"]
         skip_existing = not options.get("no_skip", False)
 
         # ── Build scraper list ────────────────────────────────────────────────
@@ -124,7 +213,6 @@ class Command(BaseCommand):
         if options["include_jobspy"] and SCRAPERS_JOBSPY:
             scrapers += SCRAPERS_JOBSPY
 
-        # Filter by tier
         if options["gov_only"]:
             scrapers = [s for s in scrapers if s[3] in GOV_PLATFORMS]
         elif options["it_only"]:
@@ -132,18 +220,14 @@ class Command(BaseCommand):
         elif options["email_only"]:
             scrapers = [s for s in scrapers if s[2] in ("high", "gov")]
 
-        # Filter by explicit slug list
         if options["scrapers"]:
             wanted = set(options["scrapers"])
             scrapers = [s for s in scrapers if s[3] in wanted]
             if not scrapers:
-                self.stderr.write(
-                    f"No matching scrapers for: {options['scrapers']}\n"
-                    f"Available slugs: {[s[3] for s in SCRAPERS_PRIMARY]}"
-                )
+                self.stderr.write(f"No matching scrapers: {options['scrapers']}")
                 return
 
-        # ── Existing URL cache for dedup ──────────────────────────────────────
+        # ── Existing URL cache ────────────────────────────────────────────────
         existing_urls = set()
         if skip_existing:
             existing_urls = set(Job.objects.exclude(url="").values_list("url", flat=True))
@@ -159,21 +243,23 @@ class Command(BaseCommand):
         # ── Run scrapers ──────────────────────────────────────────────────────
         def _run_scraper(name, fn, tier, slug):
             kw = keywords
-            # Inject priority keywords for gov scrapers when no explicit search
             if slug in {"sayouth", "essa", "govza"} and not user_set_keywords:
                 kw = f"{keywords} {GOV_PRIORITY_KW}"
 
-            # Determine limit & pages to pass
             limit_arg = max_jobs if max_jobs else 9999
-            pages_arg = max_pages if max_pages else SCRAPER_MAX_PAGES.get(name, 30)
 
             try:
-                # All scrapers accept (keywords, limit) — max_pages handled internally
-                # by the scrapers themselves using their own pagination loops.
-                # We pass limit=limit_arg so they know when to stop collecting.
                 results = fn(kw, limit=limit_arg)
 
-                # Filter out URLs already in DB
+                # Apply job type filter
+                if type_filter:
+                    before = len(results)
+                    results = [j for j in results if _job_passes_type_filter(j, type_filter)]
+                    filtered_out = before - len(results)
+                else:
+                    filtered_out = 0
+
+                # Skip existing URLs
                 if skip_existing and existing_urls:
                     before = len(results)
                     results = [j for j in results if j.get("url") not in existing_urls]
@@ -182,12 +268,16 @@ class Command(BaseCommand):
                     skipped_url = 0
 
                 email_count = sum(1 for j in results if j.get("apply_email"))
-                self.stdout.write(
-                    f"  [{tier.upper():6}] {name:<20} {len(results):>4} new jobs "
-                    f"({email_count} with email"
-                    + (f", {skipped_url} skipped/existing" if skipped_url else "")
-                    + ")"
+                msg = (
+                    f"  [{tier.upper():6}] {name:<20} {len(results):>4} jobs"
+                    f" ({email_count} with email"
                 )
+                if filtered_out:
+                    msg += f", {filtered_out} filtered by type"
+                if skipped_url:
+                    msg += f", {skipped_url} skipped/existing"
+                msg += ")"
+                self.stdout.write(msg)
                 return results
 
             except Exception as e:
@@ -205,7 +295,7 @@ class Command(BaseCommand):
                 except Exception:
                     pass
 
-        # ── Deduplicate across scrapers before DB write ───────────────────────
+        # ── Dedup across scrapers ─────────────────────────────────────────────
         seen_keys = set()
         deduped = []
         for j in all_jobs:
@@ -218,7 +308,17 @@ class Command(BaseCommand):
                 seen_keys.add(key)
                 deduped.append(j)
 
-        self.stdout.write(f"\n{len(all_jobs)} total scraped → {len(deduped)} after cross-scraper dedup\n")
+        self.stdout.write(f"\n{len(all_jobs)} total → {len(deduped)} after dedup\n")
+
+        # Type breakdown summary
+        type_counts = {}
+        for j in deduped:
+            jt = j.get('job_type', 'unknown')
+            type_counts[jt] = type_counts.get(jt, 0) + 1
+        if type_counts:
+            self.stdout.write("Type breakdown:\n")
+            for jt, count in sorted(type_counts.items(), key=lambda x: -x[1]):
+                self.stdout.write(f"  {jt:<30} {count}\n")
 
         # ── Write to DB ───────────────────────────────────────────────────────
         created = updated = skipped = errors = 0
@@ -255,20 +355,15 @@ class Command(BaseCommand):
             if new:
                 created += 1
             else:
-                # Opportunistically fill in missing fields on existing records
                 dirty = []
-                if not obj.apply_email and j.get("apply_email"):
-                    obj.apply_email = _t(j["apply_email"], 255); dirty.append("apply_email")
-                if not obj.salary and j.get("salary"):
-                    obj.salary = _t(j["salary"], 255); dirty.append("salary")
-                if not obj.job_type and j.get("job_type"):
-                    obj.job_type = _t(j["job_type"], 100); dirty.append("job_type")
-                if not obj.how_to_apply and j.get("how_to_apply"):
-                    obj.how_to_apply = j["how_to_apply"]; dirty.append("how_to_apply")
-                if not obj.docs_required and j.get("docs_required"):
-                    obj.docs_required = j["docs_required"]; dirty.append("docs_required")
-                if (not obj.description or len(obj.description) < 100) and j.get("description"):
-                    obj.description = j["description"]; dirty.append("description")
+                for field, max_len in [("apply_email", 255), ("salary", 255), ("job_type", 100)]:
+                    if not getattr(obj, field) and j.get(field):
+                        setattr(obj, field, _t(j[field], max_len))
+                        dirty.append(field)
+                for field in ["how_to_apply", "docs_required", "description"]:
+                    if not getattr(obj, field) and j.get(field):
+                        setattr(obj, field, j[field])
+                        dirty.append(field)
                 if dirty:
                     obj.save(update_fields=dirty)
                     updated += 1
@@ -277,10 +372,10 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"\n{'─'*50}\n"
-            f"  ✓ Created : {created} new jobs\n"
-            f"  ↑ Updated : {updated} existing jobs (filled missing fields)\n"
-            f"  = Skipped : {skipped} already complete\n"
+            f"  ✓ Created : {created}\n"
+            f"  ↑ Updated : {updated}\n"
+            f"  = Skipped : {skipped}\n"
             f"  ✗ Errors  : {errors}\n"
-            f"  TOTAL DB  : {Job.objects.count()} jobs\n"
+            f"  TOTAL DB  : {Job.objects.count()}\n"
             f"{'─'*50}"
         ))

@@ -53,14 +53,45 @@
   .msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
   .msg.error   { border-color: var(--danger); background: rgba(255,68,102,0.05); }
 
+  /* ── Action bar ── */
   .action-bar {
-    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-    padding: 1rem 2rem; border-bottom: 1px solid var(--border); background: var(--card);
+    padding: 0.85rem 2rem; border-bottom: 1px solid var(--border);
+    background: var(--card);
   }
-  .action-bar-label { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .action-bar-top {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  }
+  .action-bar-label {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  }
   .divider-v { width: 1px; height: 20px; background: var(--border); }
-  .dry-label { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+  .dry-label {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted);
+    display: flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  }
   .dry-label input { accent-color: var(--accent2); }
+
+  /* ── Type filter strip ── */
+  .type-filter-strip {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    margin-top: 0.65rem; padding-top: 0.65rem; border-top: 1px solid var(--border);
+  }
+  .type-filter-label {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .type-chip {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem; font-weight: 700;
+    padding: 0.25rem 0.65rem; border: 1px solid var(--border);
+    color: var(--muted); background: transparent; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    user-select: none; white-space: nowrap;
+  }
+  .type-chip:hover { border-color: var(--accent2); color: var(--accent2); }
+  .type-chip.active { border-color: var(--accent2); color: var(--accent2); background: rgba(124,106,255,0.1); }
+  .type-chip.active-all { border-color: var(--accent); color: var(--accent); background: rgba(0,255,136,0.07); }
 
   .main { display: grid; grid-template-columns: 1fr 340px; }
 
@@ -94,9 +125,19 @@
 
   .job-info { min-width: 0; }
   .job-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .job-meta  { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
-  .job-meta .platform { display: inline-block; padding: 0.1rem 0.4rem; border: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 0.6rem; margin-left: 0.4rem; vertical-align: middle; }
+  .job-meta  { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+  .job-meta .platform { display: inline-block; padding: 0.1rem 0.4rem; border: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 0.6rem; }
   .job-meta .platform.gov { border-color: rgba(255,159,67,0.4); color: var(--warn); }
+  .job-type-badge {
+    font-family: 'Space Mono', monospace; font-size: 0.55rem; font-weight: 700;
+    padding: 0.1rem 0.4rem; border: 1px solid;
+  }
+  .job-type-badge.internship  { border-color: rgba(124,106,255,0.5); color: var(--accent2); }
+  .job-type-badge.learnership { border-color: rgba(255,159,67,0.5);  color: var(--warn); }
+  .job-type-badge.bursary     { border-color: rgba(0,255,136,0.4);   color: var(--accent); }
+  .job-type-badge.graduate    { border-color: rgba(124,106,255,0.5); color: var(--accent2); }
+  .job-type-badge.entry       { border-color: rgba(85,85,112,0.5);   color: var(--muted); }
+
   .job-actions { display: flex; align-items: center; gap: 0.5rem; }
   .email-dot    { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
   .no-email-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted);  flex-shrink: 0; }
@@ -120,28 +161,22 @@
   .running-badge { display: none; align-items: center; gap: 0.4rem; font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
   .running-badge.show { display: flex; }
 
-  /* ===================== DRAWER ===================== */
+  /* ── Drawer ── */
   .drawer-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s;
   }
   .drawer-overlay.open { opacity: 1; pointer-events: all; }
-
   .drawer {
     position: fixed; top: 0; right: 0; bottom: 0;
     width: 540px; max-width: 95vw;
     background: var(--surface); border-left: 1px solid var(--border);
     z-index: 101; transform: translateX(100%);
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    display: flex; flex-direction: column;
-    overflow: hidden; height: 100vh;
+    display: flex; flex-direction: column; overflow: hidden; height: 100vh;
   }
   .drawer.open { transform: translateX(0); }
-
-  #drawer-inner {
-    display: flex; flex-direction: column; height: 100%; overflow: hidden;
-  }
-
+  #drawer-inner { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
   .drawer-header {
     padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
     display: flex; align-items: flex-start; justify-content: space-between;
@@ -157,7 +192,6 @@
     transition: border-color 0.15s, color 0.15s;
   }
   .drawer-close:hover { border-color: var(--danger); color: var(--danger); }
-
   .drawer-score-bar {
     padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; gap: 1.5rem; flex-shrink: 0;
@@ -173,33 +207,24 @@
   .score-bar-fill.high { background: var(--accent); }
   .score-bar-fill.mid  { background: var(--accent2); }
   .score-bar-fill.low  { background: var(--muted); }
-
   .drawer-meta-row {
     padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border);
     display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; flex-shrink: 0;
   }
   .meta-chip { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--muted); }
   .meta-chip strong { color: var(--text); }
-  .platform-badge {
-    font-family: 'Space Mono', monospace; font-size: 0.6rem;
-    padding: 0.2rem 0.5rem; border: 1px solid var(--border); color: var(--accent2);
-  }
+  .platform-badge { font-family: 'Space Mono', monospace; font-size: 0.6rem; padding: 0.2rem 0.5rem; border: 1px solid var(--border); color: var(--accent2); }
   .platform-badge.gov { border-color: rgba(255,159,67,0.4); color: var(--warn); }
-
   .drawer-status-bar {
     padding: 0.85rem 1.5rem; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; flex-shrink: 0;
   }
-  .status-pill {
-    font-family: 'Space Mono', monospace; font-size: 0.62rem;
-    font-weight: 700; padding: 0.3rem 0.75rem;
-  }
+  .status-pill { font-family: 'Space Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 0.3rem 0.75rem; }
   .status-pill.applied  { background: rgba(0,255,136,0.12); color: var(--accent);  border: 1px solid rgba(0,255,136,0.3); }
   .status-pill.pending  { background: rgba(85,85,112,0.2);  color: var(--muted);   border: 1px solid var(--border); }
   .status-pill.no-email { background: rgba(255,68,102,0.1); color: var(--danger);  border: 1px solid rgba(255,68,102,0.3); }
   .status-time { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); }
   .gov-warn-chip { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--warn); }
-
   .spider-banner {
     padding: 0.6rem 1.5rem; border-bottom: 1px solid var(--border);
     font-family: 'Space Mono', monospace; font-size: 0.65rem;
@@ -208,12 +233,7 @@
   .spider-banner.running { display: flex; color: var(--warn); }
   .spider-banner.success { display: flex; color: var(--accent); }
   .spider-banner.fail    { display: flex; color: var(--danger); }
-
-  .drawer-body {
-    flex: 1; overflow-y: auto; padding: 1.5rem;
-    min-height: 0;
-  }
-
+  .drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; min-height: 0; }
   .drawer-section { margin-bottom: 1.75rem; }
   .drawer-section-title {
     font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--muted);
@@ -221,46 +241,32 @@
     display: flex; align-items: center; gap: 0.5rem;
   }
   .drawer-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
   .info-grid { display: flex; flex-direction: column; gap: 0.55rem; }
   .info-row  { display: flex; gap: 0.75rem; align-items: baseline; }
-  .info-label {
-    font-family: 'Space Mono', monospace; font-size: 0.6rem;
-    color: var(--muted); min-width: 120px; flex-shrink: 0;
-  }
+  .info-label { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); min-width: 120px; flex-shrink: 0; }
   .info-val { font-size: 0.82rem; color: var(--text); line-height: 1.5; }
-
-  .description-text {
-    font-size: 0.83rem; line-height: 1.7; color: #b0b0c8;
-    white-space: pre-wrap; word-break: break-word;
-  }
+  .description-text { font-size: 0.83rem; line-height: 1.7; color: #b0b0c8; white-space: pre-wrap; word-break: break-word; }
   .req-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
   .req-list li { font-size: 0.8rem; color: #b0b0c8; padding-left: 1rem; position: relative; line-height: 1.5; }
   .req-list li::before { content: '›'; position: absolute; left: 0; color: var(--accent2); }
-
   .cover-letter-box {
-    background: var(--card, #13131f); border: 1px solid var(--border);
+    background: var(--card); border: 1px solid var(--border);
     padding: 1rem; font-size: 0.78rem; color: #b0b0c8;
     line-height: 1.7; white-space: pre-wrap; word-break: break-word;
     max-height: 180px; overflow-y: auto;
   }
-
   .email-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
   .email-chip {
     font-family: 'Space Mono', monospace; font-size: 0.62rem;
     padding: 0.25rem 0.6rem; border: 1px solid rgba(0,255,136,0.3);
-    color: var(--accent); background: rgba(0,255,136,0.05); cursor: pointer;
-    transition: background 0.15s;
+    color: var(--accent); background: rgba(0,255,136,0.05); cursor: pointer; transition: background 0.15s;
   }
   .email-chip:hover { background: rgba(0,255,136,0.15); }
-
   .gov-notice {
     background: rgba(255,159,67,0.08); border: 1px solid rgba(255,159,67,0.25);
-    padding: 0.75rem 1rem; font-size: 0.78rem; color: var(--warn);
-    line-height: 1.5; margin-bottom: 1rem;
+    padding: 0.75rem 1rem; font-size: 0.78rem; color: var(--warn); line-height: 1.5; margin-bottom: 1rem;
   }
   .gov-notice strong { display: block; font-family: 'Space Mono', monospace; font-size: 0.65rem; margin-bottom: 0.3rem; }
-
   .drawer-actions {
     padding: 1rem 1.5rem; border-top: 1px solid var(--border);
     display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
@@ -303,10 +309,10 @@
   <div class="logo">job<span>/</span>hunter</div>
   <div class="nav">
     <span class="running-badge" id="running-badge"><span class="pulse"></span> RUNNING...</span>
-    <a href="/jobs/"      class="btn btn-outline btn-sm">📋 All Jobs</a>
-    <a href="/upload-cv/" class="btn btn-outline btn-sm">+ Upload CV</a>
+    <a href="/jobs/"        class="btn btn-outline btn-sm">📋 All Jobs</a>
+    <a href="/upload-cv/"   class="btn btn-outline btn-sm">+ Upload CV</a>
     <a href="/credentials/" class="btn btn-outline btn-sm">🔑 Gmail</a>
-    <a href="/admin/"     class="btn btn-outline btn-sm">⚙ Admin</a>
+    <a href="/admin/"       class="btn btn-outline btn-sm">⚙ Admin</a>
   </div>
 </div>
 
@@ -318,23 +324,43 @@
 </div>
 {% endif %}
 
-<div class="action-bar">
-  <span class="action-bar-label">Run</span>
-  <form method="POST" action="/trigger/" id="pipeline-form">
-    {% csrf_token %}
-    <input type="hidden" name="action"  id="action-input"  value="all">
-    <input type="hidden" name="dry_run" id="dry-run-input" value="0">
-  </form>
-  <button class="btn btn-green  btn-sm" onclick="submit('all')">⚡ Run All</button>
-  <button class="btn btn-outline btn-sm" onclick="submit('scrape')">Scrape</button>
-  <button class="btn btn-orange  btn-sm" onclick="submit('spider')">🕷 Spider</button>
-  <button class="btn btn-outline btn-sm" onclick="submit('match')">Match</button>
-  <button class="btn btn-purple  btn-sm" onclick="submit('apply')">Apply</button>
-  <div class="divider-v"></div>
-  <label class="dry-label">
-    <input type="checkbox" id="dry-run-toggle" onchange="toggleDry(this)"> Dry run
-  </label>
-</div>
+<!-- Single form covers the whole action bar -->
+<form method="POST" action="/trigger/" id="pipeline-form">
+  {% csrf_token %}
+  <input type="hidden" name="action"  id="action-input"  value="all">
+  <input type="hidden" name="dry_run" id="dry-run-input" value="0">
+  <!-- job_types populated by JS from chip selection -->
+  <div id="job-type-inputs"></div>
+
+  <div class="action-bar">
+    <!-- top row: pipeline buttons -->
+    <div class="action-bar-top">
+      <span class="action-bar-label">Run</span>
+      <button type="button" class="btn btn-green  btn-sm" onclick="submitAction('all')">⚡ Run All</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="submitAction('scrape')">Scrape</button>
+      <button type="button" class="btn btn-orange  btn-sm" onclick="submitAction('spider')">🕷 Spider</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="submitAction('match')">Match</button>
+      <button type="button" class="btn btn-purple  btn-sm" onclick="submitAction('apply')">Apply</button>
+      <div class="divider-v"></div>
+      <label class="dry-label">
+        <input type="checkbox" id="dry-run-toggle" onchange="toggleDry(this)"> Dry run
+      </label>
+    </div>
+
+    <!-- bottom row: job type filter chips -->
+    <div class="type-filter-strip">
+      <span class="type-filter-label">Types:</span>
+      <span class="type-chip active-all" data-type="all"     onclick="toggleChip(this)">✅ All</span>
+      <span class="type-chip" data-type="internship"         onclick="toggleChip(this)">🎓 Internship</span>
+      <span class="type-chip" data-type="learnership"        onclick="toggleChip(this)">📋 Learnership</span>
+      <span class="type-chip" data-type="bursary"            onclick="toggleChip(this)">🏆 Bursary</span>
+      <span class="type-chip" data-type="graduate"           onclick="toggleChip(this)">🎯 Graduate</span>
+      <span class="type-chip" data-type="entry_level"        onclick="toggleChip(this)">📌 Entry Level</span>
+      <span class="type-chip" data-type="low_barrier"        onclick="toggleChip(this)">🟢 Gr10–12/ABET</span>
+      <span class="type-chip" data-type="permanent"          onclick="toggleChip(this)">🏛 Permanent</span>
+    </div>
+  </div>
+</form>
 
 <div class="stats-row">
   <div class="stat">
@@ -376,6 +402,18 @@
               <span class="platform {% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov{% endif %}">
                 {{ job.platform }}
               </span>
+              {% if job.job_type %}
+                {% with jt=job.job_type|lower %}
+                <span class="job-type-badge
+                  {% if 'intern' in jt %}internship
+                  {% elif 'learner' in jt %}learnership
+                  {% elif 'bursary' in jt or 'scholar' in jt %}bursary
+                  {% elif 'graduate' in jt %}graduate
+                  {% else %}entry{% endif %}">
+                  {{ job.job_type|upper }}
+                </span>
+                {% endwith %}
+              {% endif %}
             </div>
           </div>
           <div class="job-actions">
@@ -438,17 +476,64 @@
 <script>
   const CSRF = '{{ csrf_token }}';
 
-  function submit(action) {
+  // ── Type chip logic ──────────────────────────────────────────────────────
+  const allChip  = document.querySelector('.type-chip[data-type="all"]');
+  const typeChips = document.querySelectorAll('.type-chip:not([data-type="all"])');
+
+  function toggleChip(el) {
+    const isAll = el.dataset.type === 'all';
+
+    if (isAll) {
+      // clicking All → deselect everything else
+      typeChips.forEach(c => c.classList.remove('active'));
+      allChip.classList.add('active-all');
+    } else {
+      // clicking a specific type
+      allChip.classList.remove('active-all');
+      el.classList.toggle('active');
+      // if nothing specific left, revert to All
+      const anyActive = Array.from(typeChips).some(c => c.classList.contains('active'));
+      if (!anyActive) allChip.classList.add('active-all');
+    }
+
+    syncTypeInputs();
+  }
+
+  function syncTypeInputs() {
+    const container = document.getElementById('job-type-inputs');
+    container.innerHTML = '';
+    const active = Array.from(typeChips).filter(c => c.classList.contains('active'));
+
+    if (!active.length) {
+      // "All" is selected — send a single "all" value
+      const inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'job_types'; inp.value = 'all';
+      container.appendChild(inp);
+    } else {
+      active.forEach(c => {
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = 'job_types'; inp.value = c.dataset.type;
+        container.appendChild(inp);
+      });
+    }
+  }
+
+  // initialise with "all"
+  syncTypeInputs();
+
+  // ── Pipeline actions ─────────────────────────────────────────────────────
+  function submitAction(action) {
     document.getElementById('action-input').value = action;
     document.getElementById('running-badge').classList.add('show');
     document.getElementById('pipeline-form').submit();
   }
+
   function toggleDry(cb) {
     document.getElementById('dry-run-input').value = cb.checked ? '1' : '0';
   }
 
+  // ── Drawer ───────────────────────────────────────────────────────────────
   const GOV_PLATFORMS = ['dpsa', 'sayouth', 'essa', 'govza'];
-
   function scoreClass(s) { return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low'; }
 
   function showToast(msg, ok = true) {
@@ -478,7 +563,6 @@
     document.getElementById('drawer').classList.remove('open');
     if (window._activeDrawerRow) {
       window._activeDrawerRow.classList.remove('active');
-      window._activeDrawerRow.style.background = '';
       window._activeDrawerRow = null;
     }
   }
@@ -486,10 +570,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
   function openDrawer(jobId, row) {
-    if (window._activeDrawerRow) {
-      window._activeDrawerRow.classList.remove('active');
-      window._activeDrawerRow.style.background = '';
-    }
+    if (window._activeDrawerRow) window._activeDrawerRow.classList.remove('active');
     window._activeDrawerRow = row;
     row.classList.add('active');
 
@@ -513,7 +594,7 @@
   }
 
   function renderDrawer(d) {
-    const cls = scoreClass(d.match_score);
+    const cls   = scoreClass(d.match_score);
     const isGov = GOV_PLATFORMS.includes(d.platform);
 
     let statusHtml = '';
@@ -531,9 +612,9 @@
     }
 
     const rows = [
-      d.salary       ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
-      d.job_type     ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
-      d.how_to_apply ? `<div class="info-row"><span class="info-label">📨 How to Apply</span><span class="info-val">${d.how_to_apply}</span></div>` : '',
+      d.salary        ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
+      d.job_type      ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
+      d.how_to_apply  ? `<div class="info-row"><span class="info-label">📨 How to Apply</span><span class="info-val">${d.how_to_apply}</span></div>` : '',
       d.docs_required ? `<div class="info-row"><span class="info-label" style="color:var(--warn)">📋 Docs Required</span><span class="info-val" style="color:var(--warn)">${d.docs_required}</span></div>` : '',
     ].filter(Boolean).join('');
 
@@ -589,7 +670,6 @@
         </div>
         <button class="drawer-close" onclick="closeDrawer()">✕</button>
       </div>
-
       <div class="drawer-score-bar" style="flex-shrink:0">
         <div>
           <div class="big-score ${cls}">${d.match_score}<span class="score-unit">%</span></div>
@@ -599,17 +679,14 @@
           <div class="score-bar-fill ${cls}" style="width:${d.match_score}%"></div>
         </div>
       </div>
-
       <div class="drawer-meta-row" style="flex-shrink:0">
         <span class="platform-badge ${isGov ? 'gov' : ''}">${d.platform}</span>
         <div class="meta-chip">📍 <strong>${d.location || 'Not specified'}</strong></div>
         <div class="meta-chip">🕐 ${d.scraped_at}</div>
         ${emailChip}
       </div>
-
       <div class="drawer-status-bar" style="flex-shrink:0">${statusHtml}</div>
       <div class="spider-banner" id="spider-banner" style="flex-shrink:0"></div>
-
       <div class="drawer-body">
         ${govNotice}
         <div id="email-chips-section"></div>
@@ -621,7 +698,6 @@
         </div>
         ${coverHtml}
       </div>
-
       <div class="drawer-actions">
         ${spiderBtn}
         ${d.url ? `<a href="${d.url}" target="_blank" class="drawer-link">↗ View Posting</a>` : ''}
@@ -631,7 +707,7 @@
   }
 
   function doSpider(jobId) {
-    const btn = document.getElementById('spider-btn');
+    const btn    = document.getElementById('spider-btn');
     const banner = document.getElementById('spider-banner');
     btn.disabled = true;
     btn.textContent = '🕷 Spidering...';
@@ -644,15 +720,13 @@
         if (d.error) {
           banner.className = 'spider-banner fail';
           banner.textContent = '✗ ' + d.error;
-          btn.disabled = false;
-          btn.textContent = '🕷 Retry Spider';
+          btn.disabled = false; btn.textContent = '🕷 Retry Spider';
           return;
         }
         if (d.apply_email) {
           banner.className = 'spider-banner success';
           banner.innerHTML = `✓ Email found: <strong>${d.apply_email}</strong>${d.followed_url ? ' (via contact page)' : ''}`;
           showToast(`Email found: ${d.apply_email}`);
-
           if (d.all_emails && d.all_emails.length > 1) {
             document.getElementById('email-chips-section').innerHTML = `
               <div class="drawer-section">
@@ -662,26 +736,22 @@
                 </div>
               </div>`;
           }
-
           btn.outerHTML = `<div class="apply-btn-wrap"><button class="btn btn-green" id="apply-btn" onclick="doApply(${jobId})">✉ Apply Now</button></div>`;
           document.querySelector('.drawer-status-bar').innerHTML =
             `<span class="status-pill pending">Pending</span><span class="status-time">Email found · ready to apply</span>`;
-
           const dot = document.querySelector(`[data-id="${jobId}"] .no-email-dot`);
           if (dot) { dot.className = 'email-dot'; dot.title = d.apply_email; }
         } else {
           banner.className = 'spider-banner fail';
           banner.textContent = '✗ No email found on this posting';
-          btn.disabled = false;
-          btn.textContent = '🕷 Retry Spider';
+          btn.disabled = false; btn.textContent = '🕷 Retry Spider';
           showToast('No email found on this page.', false);
         }
       })
       .catch(err => {
         banner.className = 'spider-banner fail';
         banner.textContent = '✗ ' + (err.message || 'Network error');
-        btn.disabled = false;
-        btn.textContent = '🕷 Retry Spider';
+        btn.disabled = false; btn.textContent = '🕷 Retry Spider';
       });
   }
 
@@ -692,22 +762,20 @@
 
     fetch(`/job/${jobId}/apply/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
       .then(r => {
-        if (!r.ok && r.headers.get('content-type')?.includes('text/html')) {
+        if (!r.ok && r.headers.get('content-type')?.includes('text/html'))
           throw new Error(`Server error ${r.status} — check Gmail/Groq credentials`);
-        }
         return r.json();
       })
       .then(d => {
         if (d.error) {
           showToast(d.error, false);
-          btn.disabled = false;
-          btn.textContent = '✉ Apply Now';
+          btn.disabled = false; btn.textContent = '✉ Apply Now';
           return;
         }
         showToast('Application sent!');
         const now = new Date();
-        const ts = now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })
-          + ' · ' + now.toTimeString().slice(0, 5);
+        const ts  = now.toLocaleDateString('en-ZA', { day:'2-digit', month:'short', year:'numeric' })
+                  + ' · ' + now.toTimeString().slice(0, 5);
         document.querySelector('.drawer-status-bar').innerHTML =
           `<span class="status-pill applied">✓ Applied</span><span class="status-time">${ts}</span>`;
         btn.outerHTML = `<div class="apply-btn-wrap"><span class="applied-done-label">✓ APPLIED</span></div>`;
@@ -720,17 +788,14 @@
         }
         const card = document.querySelector(`[data-id="${jobId}"]`);
         if (card) {
-          card.dataset.applied = '1';
           const actionsEl = card.querySelector('.job-actions');
-          if (actionsEl && !actionsEl.querySelector('.applied-tag')) {
+          if (actionsEl && !actionsEl.querySelector('.applied-tag'))
             actionsEl.insertAdjacentHTML('afterbegin', '<span class="applied-tag">✓ sent</span>');
-          }
         }
       })
       .catch(err => {
         showToast(err.message || 'Network error', false);
-        btn.disabled = false;
-        btn.textContent = '✉ Apply Now';
+        btn.disabled = false; btn.textContent = '✉ Apply Now';
       });
   }
 </script>

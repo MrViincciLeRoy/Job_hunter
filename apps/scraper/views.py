@@ -11,27 +11,50 @@ from apps.scraper.models import Job
 from apps.cv.models import CV
 from apps.mailer.models import Application
 
-GITHUB_REPO = os.getenv("GITHUB_REPO", "")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_REPO     = os.getenv("GITHUB_REPO", "")
+GITHUB_TOKEN    = os.getenv("GITHUB_TOKEN", "")
 GITHUB_WORKFLOW = "scrape.yml"
 
+# Must match JOB_TYPE_MAP keys in scrape_jobs.py
+VALID_JOB_TYPES = {
+    'internship', 'learnership', 'bursary', 'scholarship',
+    'graduate', 'entry_level', 'low_barrier', 'permanent', 'all',
+}
 
-def _trigger_github_workflow(step="all"):
+
+def _trigger_github_workflow(step="all", job_types="all"):
     if not GITHUB_REPO or not GITHUB_TOKEN:
         return False, "GITHUB_REPO or GITHUB_TOKEN not set in environment."
     url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/dispatches"
     resp = http_requests.post(
         url,
-        json={"ref": "main", "inputs": {"step": step}},
+        json={
+            "ref": "main",
+            "inputs": {
+                "step":      step,
+                "job_types": job_types,   # space-separated string e.g. "internship learnership"
+            },
+        },
         headers={
             "Authorization": f"Bearer {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github+json",
+            "Accept":        "application/vnd.github+json",
         },
         timeout=10,
     )
     if resp.status_code == 204:
         return True, None
     return False, f"GitHub API returned {resp.status_code}: {resp.text[:200]}"
+
+
+def _parse_job_types(post_data):
+    """Extract and validate job_type checkboxes from POST data."""
+    selected = post_data.getlist("job_types")  # getlist handles multiple checkboxes
+    valid = [t for t in selected if t in VALID_JOB_TYPES]
+    if not valid:
+        return "all"
+    if "all" in valid:
+        return "all"
+    return " ".join(valid)
 
 
 def dashboard(request):
@@ -53,24 +76,24 @@ def job_detail(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
     app = getattr(job, "application", None)
     return JsonResponse({
-        "id": job.pk,
-        "title": job.title,
-        "company": job.company,
-        "location": job.location,
-        "platform": job.platform,
-        "url": job.url,
-        "apply_email": job.apply_email,
-        "match_score": job.match_score,
-        "description": job.description,
-        "salary": getattr(job, "salary", "") or "",
-        "job_type": getattr(job, "job_type", "") or "",
-        "how_to_apply": getattr(job, "how_to_apply", "") or "",
+        "id":            job.pk,
+        "title":         job.title,
+        "company":       job.company,
+        "location":      job.location,
+        "platform":      job.platform,
+        "url":           job.url,
+        "apply_email":   job.apply_email,
+        "match_score":   job.match_score,
+        "description":   job.description,
+        "salary":        getattr(job, "salary",        "") or "",
+        "job_type":      getattr(job, "job_type",      "") or "",
+        "how_to_apply":  getattr(job, "how_to_apply",  "") or "",
         "docs_required": getattr(job, "docs_required", "") or "",
-        "scraped_at": job.scraped_at.strftime("%d %b %Y · %H:%M"),
-        "applied": app is not None,
-        "applied_at": app.sent_at.strftime("%d %b %Y · %H:%M") if app else None,
-        "cover_letter": app.cover_letter if app else None,
-        "status": app.status if app else None,
+        "scraped_at":    job.scraped_at.strftime("%d %b %Y · %H:%M"),
+        "applied":       app is not None,
+        "applied_at":    app.sent_at.strftime("%d %b %Y · %H:%M") if app else None,
+        "cover_letter":  app.cover_letter if app else None,
+        "status":        app.status if app else None,
     })
 
 
@@ -102,21 +125,21 @@ def spider_job(request, job_id):
 
     app = getattr(job, "application", None)
     return JsonResponse({
-        "id": job.pk,
-        "apply_email": job.apply_email,
-        "all_emails": result["emails"],
-        "phone": result["phone"],
-        "followed_url": result["followed_url"],
+        "id":                  job.pk,
+        "apply_email":         job.apply_email,
+        "all_emails":          result["emails"],
+        "phone":               result["phone"],
+        "followed_url":        result["followed_url"],
         "description_updated": bool(result["description"]),
-        "applied": app is not None,
-        "deleted": False,
+        "applied":             app is not None,
+        "deleted":             False,
     })
 
 
 @require_POST
 def apply_single(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
-    cv = CV.objects.filter(active=True).last()
+    cv  = CV.objects.filter(active=True).last()
 
     if not cv:
         return JsonResponse({"error": "No active CV"}, status=400)
@@ -134,8 +157,8 @@ def apply_single(request, job_id):
         ok, result = send_application(
             cv.parsed_data,
             {
-                "title": job.title,
-                "company": job.company,
+                "title":       job.title,
+                "company":     job.company,
                 "description": job.description,
                 "apply_email": job.apply_email,
             },
@@ -170,8 +193,8 @@ def _run_apply(threshold=60, dry_run=False):
             ok, result = send_application(
                 cv.parsed_data,
                 {
-                    "title": job.title,
-                    "company": job.company,
+                    "title":       job.title,
+                    "company":     job.company,
                     "description": job.description,
                     "apply_email": job.apply_email,
                 },
@@ -186,8 +209,9 @@ def _run_apply(threshold=60, dry_run=False):
 
 @require_POST
 def trigger_pipeline(request):
-    action = request.POST.get("action", "all")
-    dry_run = request.POST.get("dry_run") == "1"
+    action    = request.POST.get("action", "all")
+    dry_run   = request.POST.get("dry_run") == "1"
+    job_types = _parse_job_types(request.POST)   # e.g. "internship learnership"
 
     if action == "apply":
         thread = threading.Thread(target=_run_apply, kwargs={"dry_run": dry_run}, daemon=True)
@@ -196,17 +220,13 @@ def trigger_pipeline(request):
         return redirect("dashboard")
 
     step = action if action in ("scrape", "spider", "match") else "all"
-    ok, error = _trigger_github_workflow(step)
+    ok, error = _trigger_github_workflow(step, job_types=job_types)
 
-    label = {
-        "all": "Scrape + Spider + Match",
-        "scrape": "Scrape",
-        "spider": "Spider",
-        "match": "Match",
-    }.get(step, step)
+    label = {"all": "Scrape + Spider + Match", "scrape": "Scrape", "spider": "Spider", "match": "Match"}.get(step, step)
+    type_label = f" [{job_types}]" if job_types != "all" else ""
 
     if ok:
-        messages.success(request, f"⚡ {label} triggered on GitHub Actions — results in ~5 min.")
+        messages.success(request, f"⚡ {label}{type_label} triggered on GitHub Actions.")
     else:
         messages.error(request, f"GitHub dispatch failed: {error}")
 
@@ -219,7 +239,7 @@ def cron_cleanup(request):
     if secret != os.getenv("CRON_SECRET", ""):
         return JsonResponse({"error": "unauthorized"}, status=401)
 
-    dry_run = request.POST.get("dry_run", "yes") != "no"
+    dry_run  = request.POST.get("dry_run", "yes") != "no"
     platform = request.POST.get("platform", "").strip() or None
 
     applied_job_ids = set(Application.objects.values_list("job_id", flat=True))
@@ -231,17 +251,17 @@ def cron_cleanup(request):
 
     if dry_run:
         return JsonResponse({
-            "status": "dry_run",
-            "would_delete": count,
-            "applied_kept": Job.objects.filter(pk__in=applied_job_ids).count(),
+            "status":        "dry_run",
+            "would_delete":  count,
+            "applied_kept":  Job.objects.filter(pk__in=applied_job_ids).count(),
             "platform_filter": platform,
         })
 
     deleted, _ = qs.delete()
     return JsonResponse({
-        "status": "deleted",
-        "deleted": deleted,
-        "applied_kept": Job.objects.filter(pk__in=applied_job_ids).count(),
+        "status":        "deleted",
+        "deleted":       deleted,
+        "applied_kept":  Job.objects.filter(pk__in=applied_job_ids).count(),
         "platform_filter": platform,
     })
 

@@ -18,13 +18,36 @@ HEADERS = {
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
 SKIP_EMAILS = {'noreply', 'no-reply', 'donotreply', 'webmaster', 'admin', 'info@dpsa', 'privacy'}
 
+# Priority tiers for job types (higher = more interesting to surface first)
+JOB_TYPE_PRIORITY = {
+    'internship':  10,
+    'learnership': 9,
+    'bursary':     8,
+    'scholarship': 8,
+    'graduate':    7,
+    'entry level': 6,
+    'Government / Permanent': 1,
+}
+
 GOV_JOB_TYPES = [
-    ('internship',  ['internship', ' intern ']),
+    ('internship',  ['internship programme', 'internship program', ' intern ', 'intern programme']),
     ('learnership', ['learnership', 'learner ']),
-    ('scholarship', ['scholarship', 'bursary']),
+    ('bursary',     ['bursary', 'bursary officer', 'bursary programme']),
+    ('scholarship', ['scholarship']),
     ('graduate',    ['graduate programme', 'graduate program', 'graduate development']),
     ('entry level', ['entry level', 'entry-level']),
 ]
+
+# Qualifications that indicate low barrier to entry
+LOW_BARRIER_QUALS = [
+    'grade 10', 'grade 11', 'grade 12', 'abet', 'matric',
+    'std 8', 'std 9', 'std 10', 'no experience', 'no formal',
+]
+
+# Regex to detect minimum qualification level from requirements text
+GRADE_RE = re.compile(r'grade\s+(\d+)', re.IGNORECASE)
+NQF_RE = re.compile(r'nqf\s+level\s+(\d+)', re.IGNORECASE)
+SALARY_LEVEL_RE = re.compile(r'salary level\s+0*(\d+)', re.IGNORECASE)
 
 
 def _find_email(text):
@@ -40,10 +63,58 @@ def _detect_gov_job_type(title, description='', salary=''):
     for jtype, terms in GOV_JOB_TYPES:
         if any(t in text for t in terms):
             return jtype
-    m = re.search(r'salary level\s+0*([1-7])\b', salary.lower())
-    if m:
+    m = SALARY_LEVEL_RE.search(salary.lower())
+    if m and int(m.group(1)) <= 5:
         return 'entry level'
     return 'Government / Permanent'
+
+
+def _is_low_barrier(requirements_text):
+    """True if the job needs Grade 12 or less / ABET / no experience."""
+    t = requirements_text.lower()
+    if any(q in t for q in LOW_BARRIER_QUALS):
+        # Make sure there's no higher qualification also mentioned
+        has_degree = any(w in t for w in ['degree', 'diploma', 'bachelor', 'honours', 'postgraduate', 'llb', 'b.com'])
+        if not has_degree:
+            return True
+    return False
+
+
+def _check_qualification_match(requirements_text, user_qualifications=None):
+    """
+    Check if user meets or exceeds the minimum requirements.
+    Returns: 'exceeds' | 'meets' | 'below' | 'unknown'
+    user_qualifications: list of strings e.g. ['grade 12', 'diploma']
+    If not provided, assumes Grade 12 as baseline.
+    """
+    if user_qualifications is None:
+        user_qualifications = ['grade 12', 'matric']
+
+    t = requirements_text.lower()
+    user_t = ' '.join(user_qualifications).lower()
+
+    # Detect minimum grade required
+    grade_m = GRADE_RE.search(t)
+    if grade_m:
+        min_grade = int(grade_m.group(1))
+        user_grade_m = GRADE_RE.search(user_t)
+        user_grade = int(user_grade_m.group(1)) if user_grade_m else 12
+        if user_grade > min_grade:
+            return 'exceeds'
+        elif user_grade == min_grade:
+            return 'meets'
+        else:
+            return 'below'
+
+    # No grade requirement found — check for degree/diploma
+    needs_degree = any(w in t for w in ['degree', 'diploma', 'bachelor', 'honours', 'postgraduate', 'llb'])
+    has_degree = any(w in user_t for w in ['degree', 'diploma', 'bachelor', 'honours', 'postgraduate'])
+    if needs_degree and not has_degree:
+        return 'below'
+    if needs_degree and has_degree:
+        return 'meets'
+
+    return 'unknown'
 
 
 def _extract_docs_required(field_data):
@@ -71,8 +142,25 @@ def _extract_docs_required(field_data):
     return ', '.join(docs) if docs else ''
 
 
+def _parse_stipend(stipend_text):
+    """
+    Internship stipends look like:
+    'A stipend will be paid ... Diploma/Degree/Honours R7860.50 and Master's R9482.00 per month'
+    Extract the range or the base amount.
+    """
+    if not stipend_text:
+        return stipend_text
+    # Try to extract R amounts
+    amounts = re.findall(r'R[\d\s,]+(?:\.\d+)?', stipend_text)
+    if amounts:
+        cleaned = [a.strip() for a in amounts]
+        if len(cleaned) >= 2:
+            return f"{cleaned[0]} – {cleaned[-1]} per month (stipend)"
+        return f"{cleaned[0]} per month (stipend)"
+    return stipend_text.strip()[:200]
+
+
 def _get_all_circulars(max_circulars=5):
-    """Return a list of (url, num, year) for the most recent circulars — not just the latest one."""
     try:
         r = requests.get(PSVC_URL, headers=HEADERS, timeout=30)
         r.raise_for_status()
@@ -166,7 +254,12 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
     dept_pattern = re.compile(
         r'(?m)^\s*(DEPARTMENT\s+OF[^\n]+|OFFICE\s+OF[^\n]+|[A-Z\s]+ADMINISTRATION[^\n]*)$'
     )
-    field_labels = ['SALARY', 'CENTRE', 'REQUIREMENTS', 'DUTIES', 'ENQUIRIES', 'APPLICATIONS', 'NOTE', 'CLOSING DATE']
+
+    # STIPEND added — critical for internship posts
+    field_labels = [
+        'SALARY', 'STIPEND', 'CENTRE', 'REQUIREMENTS', 'DUTIES',
+        'ENQUIRIES', 'APPLICATIONS', 'NOTE', 'CLOSING DATE',
+    ]
     field_pattern = re.compile(r'(?m)^\s*(' + '|'.join(field_labels) + r')\s*:\s*')
 
     splits = list(post_pattern.finditer(full_text))
@@ -182,9 +275,9 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
         first_field = field_pattern.search(block)
         header = block[:first_field.start()].strip() if first_field else block[:200]
 
-        ref_match = re.search(r'REF\s*NO[:\s]+([\w/]+)', header, re.IGNORECASE)
+        ref_match = re.search(r'REF\s*NO[:\s]+([\w/\s]+?)(?:\n|$)', header, re.IGNORECASE)
         ref_no = ref_match.group(1).strip() if ref_match else ''
-        title = re.sub(r'REF\s*NO[:\s]+[\w/]+', '', header).strip()
+        title = re.sub(r'REF\s*NO[:\s]+[\w/\s]+', '', header).strip()
         title = re.sub(r'\s+', ' ', title).strip()
 
         preceding = full_text[max(0, match.start() - 2000):match.start()]
@@ -201,13 +294,27 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
         enquiries = field_data.get('ENQUIRIES', '')
         applications = field_data.get('APPLICATIONS', '')
         closing_date = field_data.get('CLOSING DATE', '')
-        salary_raw = field_data.get('SALARY', '')
-        centre = field_data.get('CENTRE', 'South Africa')
         requirements_text = field_data.get('REQUIREMENTS', '')
         duties_text = field_data.get('DUTIES', '')
+        centre = field_data.get('CENTRE', 'South Africa')
+
+        # Handle both SALARY and STIPEND fields
+        salary_raw = field_data.get('SALARY', '')
+        stipend_raw = field_data.get('STIPEND', '')
+        is_internship_stipend = bool(stipend_raw and not salary_raw)
+        if is_internship_stipend:
+            salary_raw = _parse_stipend(stipend_raw)
+
         email = _find_email(enquiries) or _find_email(applications) or _find_email(block)
 
-        # Build requirements and duties as lists (split on bullet/newline patterns)
+        job_type = _detect_gov_job_type(title, requirements_text + ' ' + duties_text, salary_raw)
+
+        # Low-barrier flag — Grade 12 / ABET only
+        low_barrier = _is_low_barrier(requirements_text) and job_type not in ('internship', 'learnership', 'bursary')
+
+        # Qualification match check (baseline: Grade 12)
+        qual_match = _check_qualification_match(requirements_text)
+
         def _split_field(text):
             if not text:
                 return []
@@ -227,13 +334,17 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
         if not title or len(title) < 4:
             continue
 
-        # ── Option 5 schema via job_record() ──────────────────────────────────
+        # Priority score: internships/learnerships/bursaries first, then low-barrier, then rest
+        priority = JOB_TYPE_PRIORITY.get(job_type, 1)
+        if low_barrier:
+            priority = max(priority, 5)  # bump low-barrier above regular gov jobs
+
         jobs.append(job_record({
             'title': title,
             'company': department,
             'location': centre,
             'salary': salary_raw,
-            'job_type': _detect_gov_job_type(title, description, salary_raw),
+            'job_type': job_type,
             'closing_date': closing_date,
             'apply_email': email,
             'requirements': _split_field(requirements_text),
@@ -244,22 +355,23 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
             'platform': 'dpsa',
             'description': description[:2000],
             'raw_text': block[:3000],
-            # DPSA-specific extras stored so scrape_jobs can use them
+            # DPSA-specific extras
             '_ref_no': ref_no,
             '_post_ref': f'POST {post_ref}',
             '_circular': f'{circ_num} of {circ_year}',
             '_closing_date': closing_date,
+            '_is_internship_stipend': is_internship_stipend,
+            '_low_barrier': low_barrier,
+            '_qual_match': qual_match,   # 'exceeds' | 'meets' | 'below' | 'unknown'
+            '_priority': priority,
         }))
 
+    # Sort: highest priority first, then by closing date proximity
+    jobs.sort(key=lambda j: -j.get('_priority', 1))
     return jobs
 
 
 def scrape_dpsa(keywords=None, limit=500):
-    """
-    Scrape ALL available DPSA circulars (up to 5 most recent).
-    No artificial limit — returns everything found, deduped by POST ref.
-    `limit` is a safety cap; default 500 is effectively uncapped for normal circulars.
-    """
     all_jobs = []
     seen_posts = set()
 
@@ -280,7 +392,6 @@ def scrape_dpsa(keywords=None, limit=500):
                 key = j.get('_post_ref', j['title'])
                 if key not in seen_posts:
                     seen_posts.add(key)
-                    # Apply keyword filter if specified
                     if keywords:
                         kws = keywords.lower().split()
                         text = (j['title'] + ' ' + j['description']).lower()
@@ -294,5 +405,14 @@ def scrape_dpsa(keywords=None, limit=500):
             traceback.print_exc()
             continue
 
-    print(f'[DPSA] Total unique jobs across all circulars: {len(all_jobs)} → returning up to {limit}')
+    # Final sort: priority desc, then internships/learnerships/bursaries float to top
+    all_jobs.sort(key=lambda j: -j.get('_priority', 1))
+
+    counts = {}
+    for j in all_jobs:
+        jt = j.get('job_type', 'other')
+        counts[jt] = counts.get(jt, 0) + 1
+    print(f'[DPSA] Job type breakdown: {counts}')
+    print(f'[DPSA] Total unique jobs: {len(all_jobs)} → returning up to {limit}')
+
     return all_jobs[:limit]

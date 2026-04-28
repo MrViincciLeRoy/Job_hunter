@@ -1,11 +1,11 @@
-name: Scrape + Match Jobs
+name: Job Scraper Pipeline
 
 on:
   workflow_dispatch:
     inputs:
       step:
-        description: "Which step to run"
-        required: true
+        description: "Pipeline step to run"
+        required: false
         default: "all"
         type: choice
         options:
@@ -13,15 +13,24 @@ on:
           - scrape
           - spider
           - match
+      job_types:
+        description: "Job types to include (space-separated). Options: internship learnership bursary scholarship graduate entry_level low_barrier permanent all"
+        required: false
+        default: "all"
+        type: string
+  schedule:
+    - cron: "0 6 * * 1"   # every Monday 06:00 UTC
 
 jobs:
-  run:
+  pipeline:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DEBUG: "False"
+      DJANGO_SETTINGS_MODULE: job_hunter.settings
+      DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+      GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
+      HF_API_KEY:      ${{ secrets.HF_API_KEY }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASS: ${{ secrets.EMAIL_HOST_PASS }}
 
     steps:
       - uses: actions/checkout@v4
@@ -29,30 +38,41 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements-heavy.txt
+        run: pip install -r requirements.txt
 
-      - name: Cache sentence-transformers model
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/huggingface
-          key: minilm-l6-v2
+      - name: Run migrations
+        run: python manage.py migrate --noinput
 
-      - name: Migrate
-        run: python manage.py migrate --run-syncdb
+      # ── Resolve job_types arg ──────────────────────────────────────────────
+      # When triggered by schedule, default to 'all'.
+      # When triggered manually, use whatever was passed in.
+      - name: Set job_types env
+        run: |
+          JOB_TYPES="${{ github.event.inputs.job_types }}"
+          if [ -z "$JOB_TYPES" ]; then
+            JOB_TYPES="all"
+          fi
+          echo "JOB_TYPES=$JOB_TYPES" >> $GITHUB_ENV
 
+      # ── Scrape ────────────────────────────────────────────────────────────
       - name: Scrape jobs
-        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'scrape' || github.event_name == 'schedule' }}
-        run: python manage.py scrape_jobs --max-jobs 700 --max-pages 15 --gov-only --force-color --workers 8
-        timeout-minutes: 60
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'scrape' || github.event.inputs.step == '' }}
+        run: |
+          if [ "$JOB_TYPES" = "all" ]; then
+            python manage.py scrape_jobs --workers 4
+          else
+            python manage.py scrape_jobs --workers 4 --types $JOB_TYPES
+          fi
 
+      # ── Spider ────────────────────────────────────────────────────────────
       - name: Spider for emails
-        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'spider' || github.event_name == 'schedule' }}
-        run: python manage.py spider_jobs --limit 60 --concurrent 10
-        timeout-minutes: 60
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'spider' || github.event.inputs.step == '' }}
+        run: python manage.py spider_jobs --limit 100 --concurrent 15
 
-      - name: Match jobs to CV
-        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'match' || github.event_name == 'schedule' }}
-        run: python manage.py match_jobs --limit 1000
-        timeout-minutes: 80
+      # ── Match ─────────────────────────────────────────────────────────────
+      - name: Match CV to jobs
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'match' || github.event.inputs.step == '' }}
+        run: python manage.py match_jobs
