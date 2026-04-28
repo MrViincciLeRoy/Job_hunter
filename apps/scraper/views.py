@@ -15,7 +15,6 @@ GITHUB_REPO     = os.getenv("GITHUB_REPO", "")
 GITHUB_TOKEN    = os.getenv("GITHUB_TOKEN", "")
 GITHUB_WORKFLOW = "scrape.yml"
 
-# Must match JOB_TYPE_MAP keys in scrape_jobs.py
 VALID_JOB_TYPES = {
     'internship', 'learnership', 'bursary', 'scholarship',
     'graduate', 'entry_level', 'low_barrier', 'permanent', 'all',
@@ -32,7 +31,7 @@ def _trigger_github_workflow(step="all", job_types="all"):
             "ref": "main",
             "inputs": {
                 "step":      step,
-                "job_types": job_types,   # space-separated string e.g. "internship learnership"
+                "job_types": job_types,
             },
         },
         headers={
@@ -47,8 +46,7 @@ def _trigger_github_workflow(step="all", job_types="all"):
 
 
 def _parse_job_types(post_data):
-    """Extract and validate job_type checkboxes from POST data."""
-    selected = post_data.getlist("job_types")  # getlist handles multiple checkboxes
+    selected = post_data.getlist("job_types")
     valid = [t for t in selected if t in VALID_JOB_TYPES]
     if not valid:
         return "all"
@@ -59,22 +57,33 @@ def _parse_job_types(post_data):
 
 def dashboard(request):
     cv = CV.objects.filter(active=True).last()
-    jobs = Job.objects.order_by("-match_score", "-scraped_at")
-    applications = Application.objects.select_related("job").order_by("-sent_at")
+
+    jobs = Job.objects.only(
+        "id", "title", "company", "match_score", "apply_email", "scraped_at", "platform"
+    ).order_by("-match_score", "-scraped_at")
+
+    applications = Application.objects.select_related("job").only(
+        "id", "job__id", "job__title", "job__company", "sent_at", "status"
+    ).order_by("-sent_at")
+
+    top_jobs = Job.objects.filter(match_score__gte=60).exclude(apply_email="").only(
+        "id", "title", "company", "match_score", "apply_email"
+    )[:5]
+
     return render(request, "dashboard.html", {
-        "cv": cv,
-        "jobs": jobs,
-        "applications": applications,
-        "total_jobs": jobs.count(),
+        "cv":            cv,
+        "jobs":          jobs[:20],
+        "applications":  applications[:20],
+        "total_jobs":    Job.objects.count(),
         "applied_count": applications.count(),
-        "matched_count": jobs.filter(match_score__gte=60).count(),
-        "top_jobs": jobs.filter(match_score__gte=60).exclude(apply_email="")[:5],
+        "matched_count": Job.objects.filter(match_score__gte=60).count(),
+        "top_jobs":      top_jobs,
     })
 
 
 def job_detail(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
-    app = getattr(job, "application", None)
+    app = Application.objects.filter(job=job).first()
     return JsonResponse({
         "id":            job.pk,
         "title":         job.title,
@@ -85,10 +94,10 @@ def job_detail(request, job_id):
         "apply_email":   job.apply_email,
         "match_score":   job.match_score,
         "description":   job.description,
-        "salary":        getattr(job, "salary",        "") or "",
-        "job_type":      getattr(job, "job_type",      "") or "",
-        "how_to_apply":  getattr(job, "how_to_apply",  "") or "",
-        "docs_required": getattr(job, "docs_required", "") or "",
+        "salary":        job.salary or "",
+        "job_type":      job.job_type or "",
+        "how_to_apply":  job.how_to_apply or "",
+        "docs_required": job.docs_required or "",
         "scraped_at":    job.scraped_at.strftime("%d %b %Y · %H:%M"),
         "applied":       app is not None,
         "applied_at":    app.sent_at.strftime("%d %b %Y · %H:%M") if app else None,
@@ -123,7 +132,7 @@ def spider_job(request, job_id):
         job.delete()
         return JsonResponse({"no_email": True, "deleted": True, "all_emails": []})
 
-    app = getattr(job, "application", None)
+    app = Application.objects.filter(job=job).first()
     return JsonResponse({
         "id":                  job.pk,
         "apply_email":         job.apply_email,
@@ -145,7 +154,7 @@ def apply_single(request, job_id):
         return JsonResponse({"error": "No active CV"}, status=400)
     if not job.apply_email:
         return JsonResponse({"error": "No email address for this job"}, status=400)
-    if hasattr(job, "application"):
+    if Application.objects.filter(job=job).exists():
         return JsonResponse({"error": "Already applied"}, status=400)
 
     pdf_bytes = cv.get_pdf_bytes()
@@ -184,7 +193,7 @@ def _run_apply(threshold=60, dry_run=False):
     jobs = (
         Job.objects.filter(match_score__gte=threshold)
         .exclude(apply_email="")
-        .exclude(application__isnull=False)
+        .exclude(id__in=Application.objects.values_list("job_id", flat=True))
     )
     for job in jobs:
         if dry_run:
@@ -211,7 +220,7 @@ def _run_apply(threshold=60, dry_run=False):
 def trigger_pipeline(request):
     action    = request.POST.get("action", "all")
     dry_run   = request.POST.get("dry_run") == "1"
-    job_types = _parse_job_types(request.POST)   # e.g. "internship learnership"
+    job_types = _parse_job_types(request.POST)
 
     if action == "apply":
         thread = threading.Thread(target=_run_apply, kwargs={"dry_run": dry_run}, daemon=True)
@@ -251,17 +260,17 @@ def cron_cleanup(request):
 
     if dry_run:
         return JsonResponse({
-            "status":        "dry_run",
-            "would_delete":  count,
-            "applied_kept":  Job.objects.filter(pk__in=applied_job_ids).count(),
+            "status":          "dry_run",
+            "would_delete":    count,
+            "applied_kept":    Job.objects.filter(pk__in=applied_job_ids).count(),
             "platform_filter": platform,
         })
 
     deleted, _ = qs.delete()
     return JsonResponse({
-        "status":        "deleted",
-        "deleted":       deleted,
-        "applied_kept":  Job.objects.filter(pk__in=applied_job_ids).count(),
+        "status":          "deleted",
+        "deleted":         deleted,
+        "applied_kept":    Job.objects.filter(pk__in=applied_job_ids).count(),
         "platform_filter": platform,
     })
 
