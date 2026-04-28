@@ -1,17 +1,12 @@
 import re
-import time
 import requests
 from bs4 import BeautifulSoup
 from .async_http import parallel_fetch
+from utils.scraper_utils import random_headers, polite_delay, page_delay, job_record
 
 BASE_URL = 'https://www.careerjunction.co.za'
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept-Language': 'en-ZA,en;q=0.9',
-}
-IT_SEARCH_URL = 'https://www.careerjunction.co.za/jobs/results?Location=1&SortBy=Relevance&rbcat=16&lr=0'
-GENERAL_SEARCH_URL = 'https://www.careerjunction.co.za/jobs/results?Location=1&SortBy=Relevance&lr=0'
+IT_SEARCH_URL = f'{BASE_URL}/jobs/results?Location=1&SortBy=Relevance&rbcat=16&lr=0'
+GENERAL_SEARCH_URL = f'{BASE_URL}/jobs/results?Location=1&SortBy=Relevance&lr=0'
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
 SKIP_EMAILS = {'noreply', 'no-reply', 'donotreply', 'info@careerjunction', 'support@careerjunction', 'privacy', 'legal'}
 
@@ -24,12 +19,13 @@ def _find_email(text):
     return ''
 
 
-def _get_listing_links(search_url, per_page=100, max_pages=5):
+def _get_listing_links(search_url, per_page=100, max_pages=20):
     links = []
+    seen = set()
     session = requests.Session()
-    session.headers.update(HEADERS)
 
     for page in range(1, max_pages + 1):
+        session.headers.update(random_headers())
         url = f'{search_url}&PerPage={per_page}&Page={page}'
         try:
             r = session.get(url, timeout=30)
@@ -40,29 +36,33 @@ def _get_listing_links(search_url, per_page=100, max_pages=5):
                 href = a['href']
                 if href.endswith('.aspx') and '-job-' in href:
                     full = href if href.startswith('http') else BASE_URL + href
-                    if full not in links:
+                    if full not in seen:
+                        seen.add(full)
                         found.append(full)
             if not found:
+                print(f'[CJ] No more results at page {page}, stopping')
                 break
             links.extend(found)
             print(f'[CJ] Page {page}: {len(found)} jobs (total: {len(links)})')
-            if len(found) < per_page:
+            if len(found) < 10:
                 break
+            page_delay()
         except Exception as e:
-            print(f'[CJ] Listing page {page} error: {e}')
+            print(f'[CJ] Page {page} error: {e}')
             break
 
-    return list(dict.fromkeys(links))
+    return links
 
 
 def _scrape_job(url):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=20)
+        r = requests.get(url, headers=random_headers(), timeout=20)
         r.raise_for_status()
-    except Exception as e:
+    except Exception:
         return None
 
     soup = BeautifulSoup(r.text, 'html.parser')
+    raw_text = soup.get_text(separator='\n', strip=True)
 
     def text(selector, default=''):
         el = soup.select_one(selector)
@@ -75,34 +75,49 @@ def _scrape_job(url):
     company = text('h2 a') or text('h2')
     meta_items = [el.get_text(strip=True) for el in soup.select('ul.job-summary li, .job-details li, section ul li')]
 
-    salary = job_type = level = location = ''
+    salary = job_type = location = closing_date = ''
     for item in meta_items:
         item_l = item.lower()
-        if 'undisclosed' in item_l or item.startswith('R ') or 'market related' in item_l:
+        if 'undisclosed' in item_l or item.startswith('R ') or 'market related' in item_l or re.match(r'R\s*[\d,]+', item):
             salary = item
-        elif any(t in item_l for t in ['permanent', 'contract', 'internship']):
+        elif any(t in item_l for t in ['permanent', 'contract', 'temporary', 'internship', 'learnership', 'part-time', 'full-time']):
             job_type = item
-        elif not location and len(item) < 50 and re.match(r'^[A-Z][a-z]', item):
+        elif re.search(r'\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)', item_l):
+            closing_date = item
+        elif not location and len(item) < 60 and re.match(r'^[A-Z][a-z]', item):
             location = item
 
-    desc_el = soup.select_one('.job-description, article, .about-position, section.description')
+    if not location:
+        loc_m = re.search(r'(?:Location|City)[:\s]+([^\n]+)', raw_text, re.I)
+        location = loc_m.group(1).strip() if loc_m else 'South Africa'
+
+    desc_el = soup.select_one('.job-description, article, .about-position, section.description, [class*="description"]')
     description = desc_el.get_text(separator='\n', strip=True) if desc_el else ''
     if not description:
-        all_text = soup.get_text(separator='\n')
-        m = re.search(r'About the position(.+?)(?:Apply Now|Desired Skills|$)', all_text, re.DOTALL | re.IGNORECASE)
+        m = re.search(r'About the position(.+?)(?:Apply Now|Desired Skills|$)', raw_text, re.DOTALL | re.IGNORECASE)
         description = m.group(1).strip() if m else ''
 
-    email = _find_email(description) or _find_email(soup.get_text())
+    how_to_apply_m = re.search(r'(?:How to Apply|To Apply|Application Process)[:\s]*([^\n]{10,300})', raw_text, re.I)
+    how_to_apply = how_to_apply_m.group(1).strip() if how_to_apply_m else ''
 
-    return {
+    phone_m = re.search(r'(\+27|0)[0-9()\s-]{8,14}', raw_text)
+    phone = phone_m.group(0).strip() if phone_m else ''
+
+    return job_record({
         'title': title,
         'company': company,
-        'location': location or 'South Africa',
-        'description': description[:800],
+        'location': location,
+        'salary': salary,
+        'job_type': job_type,
+        'closing_date': closing_date,
+        'apply_email': _find_email(description) or _find_email(raw_text),
+        'phone': phone,
+        'how_to_apply': how_to_apply,
         'url': url,
-        'apply_email': email,
         'platform': 'careerjunction',
-    }
+        'description': description[:2000],
+        'raw_text': raw_text[:3000],
+    })
 
 
 def _scrape_job_it(url):
@@ -112,37 +127,35 @@ def _scrape_job_it(url):
     return job
 
 
-def scrape_careerjunction(keywords=None, limit=50):
+def scrape_careerjunction(keywords=None, limit=500):
     if keywords:
         q = keywords.strip().replace(' ', '+')
         search_url = f'{BASE_URL}/jobs/results?Keywords={q}&Location=1&SortBy=Relevance&lr=0'
     else:
         search_url = GENERAL_SEARCH_URL
 
-    links = _get_listing_links(search_url, per_page=100, max_pages=3)
+    links = _get_listing_links(search_url, per_page=100, max_pages=20)
     if not links:
         print('[CJ] No links, falling back to IT category')
-        links = _get_listing_links(IT_SEARCH_URL, per_page=100, max_pages=3)
+        links = _get_listing_links(IT_SEARCH_URL, per_page=100, max_pages=20)
 
-    urls = links[:limit]
-    print(f'[CJ] Fetching {len(urls)} detail pages in parallel...')
-    jobs = parallel_fetch(urls, _scrape_job, max_workers=10)
+    print(f'[CJ] Fetching {len(links)} detail pages in parallel...')
+    jobs = parallel_fetch(links[:limit], _scrape_job, max_workers=12)
     jobs = [j for j in jobs if j and j.get('title')]
     print(f'[CJ] {len(jobs)} jobs scraped')
     return jobs
 
 
-def scrape_careerjunction_it(keywords=None, limit=50):
+def scrape_careerjunction_it(keywords=None, limit=500):
     if keywords:
         q = keywords.strip().replace(' ', '+')
         search_url = f'{BASE_URL}/jobs/results?Keywords={q}&Location=1&SortBy=Relevance&rbcat=16&lr=0'
     else:
         search_url = IT_SEARCH_URL
 
-    links = _get_listing_links(search_url, per_page=100, max_pages=3)
-    urls = links[:limit]
-    print(f'[CJ-IT] Fetching {len(urls)} detail pages in parallel...')
-    jobs = parallel_fetch(urls, _scrape_job_it, max_workers=10)
+    links = _get_listing_links(search_url, per_page=100, max_pages=20)
+    print(f'[CJ-IT] Fetching {len(links)} detail pages in parallel...')
+    jobs = parallel_fetch(links[:limit], _scrape_job_it, max_workers=12)
     jobs = [j for j in jobs if j and j.get('title')]
     print(f'[CJ-IT] {len(jobs)} jobs scraped')
     return jobs
