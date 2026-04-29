@@ -2,30 +2,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jobs — Job Hunter</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/base.css' %}">
-<link rel="stylesheet" href="{% static 'css/drawer.css' %}">
-<link rel="stylesheet" href="{% static 'css/jobs.css' %}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jobs — Job Hunter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/drawer.css' %}">
+  <link rel="stylesheet" href="{% static 'css/jobs.css' %}">
 </head>
 <body>
 
 <div class="top-bar">
   <div class="logo">job<span>/</span>hunter</div>
   <div class="nav">
-    <a href="/"             class="btn btn-outline btn-sm">← Dashboard</a>
-    <a href="/upload-cv/"   class="btn btn-outline btn-sm">+ CV</a>
-    <a href="/credentials/" class="btn btn-outline btn-sm">🔑 Gmail</a>
-    <a href="/admin/"       class="btn btn-outline btn-sm">⚙ Admin</a>
+    {# It is better practice to use named URL patterns instead of hardcoded paths #}
+    <a href="{% url 'dashboard' %}" class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="{% url 'upload_cv' %}" class="btn btn-outline btn-sm">+ CV</a>
+    <a href="{% url 'credentials' %}" class="btn btn-outline btn-sm">🔑 Gmail</a>
+    <a href="{% url 'admin:index' %}" class="btn btn-outline btn-sm">⚙ Admin</a>
   </div>
 </div>
 
 {% if messages %}
-<div style="padding:0.6rem 1.2rem">
+<div class="message-container" style="padding: 0.6rem 1.2rem;">
   {% for message in messages %}
-  <div class="msg {{ message.tags }}">{{ message }}</div>
+    {# Added standard Django message classes for better compatibility #}
+    <div class="msg {{ message.tags }} alert-{{ message.tags }}">{{ message }}</div>
   {% endfor %}
 </div>
 {% endif %}
@@ -54,13 +56,13 @@
       {% for p in active_platforms %}<input type="hidden" name="platform" value="{{ p }}">{% endfor %}
       {% if active_job_type %}<input type="hidden" name="job_type" value="{{ active_job_type }}">{% endif %}
       <input type="hidden" name="page_size" value="{{ page_size }}">
-      <input class="search-inp" type="text" name="q" value="{{ active_search }}" placeholder="Search jobs...">
+      <input class="search-inp" type="text" name="q" value="{{ active_search }}" placeholder="Search jobs..." aria-label="Search">
     </form>
 
-    <form method="POST" action="/trigger/" style="display:inline">
+    <form method="POST" action="{% url 'trigger_action' %}" style="display:inline">
       {% csrf_token %}
       <input type="hidden" name="action" value="spider">
-      <button type="submit" class="btn btn-orange btn-sm">🕷 Spider All</button>
+      <button type="submit" class="btn btn-orange btn-sm" title="Spider all listings">🕷 Spider All</button>
     </form>
   </div>
 
@@ -71,13 +73,15 @@
        href="?tab={{ active_tab }}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">All</a>
     {% for plat, label, is_gov in platform_defs %}
       {% if plat in active_platforms %}
-      <a class="pchip {% if is_gov %}gov {% endif %}on"
-         href="?tab={{ active_tab }}{% for p in active_platforms %}{% if p != plat %}&platform={{ p }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
-        {% if is_gov %}🏛 {% endif %}{{ label }}</a>
+        <a class="pchip {% if is_gov %}gov {% endif %}on"
+           href="?tab={{ active_tab }}{% for p in active_platforms %}{% if p != plat %}&platform={{ p }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
+          {% if is_gov %}🏛 {% endif %}{{ label }}
+        </a>
       {% else %}
-      <a class="pchip {% if is_gov %}gov{% endif %}"
-         href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}&platform={{ plat }}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
-        {% if is_gov %}🏛 {% endif %}{{ label }}</a>
+        <a class="pchip {% if is_gov %}gov{% endif %}"
+           href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}&platform={{ plat }}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
+          {% if is_gov %}🏛 {% endif %}{{ label }}
+        </a>
       {% endif %}
     {% endfor %}
   </div>
@@ -117,19 +121,19 @@
     </form>
 
     {% for p in active_platforms %}
-    <a class="pill" href="?tab={{ active_tab }}{% for op in active_platforms %}{% if op != p %}&platform={{ op }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
-      {{ p }} <span class="x">✕</span>
-    </a>
+      <a class="pill" href="?tab={{ active_tab }}{% for op in active_platforms %}{% if op != p %}&platform={{ op }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
+        {{ p }} <span class="x">✕</span>
+      </a>
     {% endfor %}
 
     {% if active_job_type %}
-    <a class="pill" href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
-      {{ active_job_type }} <span class="x">✕</span>
-    </a>
+      <a class="pill" href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
+        {{ active_job_type }} <span class="x">✕</span>
+      </a>
     {% endif %}
 
     {% if active_platforms or active_job_type or active_search %}
-    <a class="clear-btn" href="?tab={{ active_tab }}&page_size={{ page_size }}">✕ Clear filters</a>
+      <a class="clear-btn" href="?tab={{ active_tab }}&page_size={{ page_size }}">✕ Clear filters</a>
     {% endif %}
   </div>
 </div>
@@ -143,49 +147,57 @@
 
 <div class="jobs-list">
   {% for job in jobs %}
-  {% with is_gov=job.platform|lower in 'dpsa sayouth essa govza' %}
-  <div class="job-card {% if job.pk in applied_ids %}applied{% elif job.apply_email %}has-email{% elif is_gov %}gov-job{% else %}no-email{% endif %}"
-       onclick="openDrawer({{ job.pk }}, this)" data-id="{{ job.pk }}">
-    <div class="score-ring {% if job.match_score >= 70 %}high{% elif job.match_score >= 50 %}mid{% else %}low{% endif %}">
-      {{ job.match_score }}%
-    </div>
-    <div class="job-info">
-      <div class="job-title">{{ job.title }}</div>
-      <div class="job-company">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}</div>
-      <div class="job-tags">
-        {% if is_gov %}
-          <span class="tag gov-tag">🏛 {{ job.platform }}</span>
-        {% else %}
-          <span class="tag plat-tag">{{ job.platform }}</span>
-        {% endif %}
-        {% if job.job_type %}<span class="tag type-tag">{{ job.job_type }}</span>{% endif %}
-        {% if job.apply_email %}<span class="tag email-tag">✉ {{ job.apply_email }}</span>{% endif %}
-        {% if job.pk in applied_ids %}<span class="tag applied-tag">✓ applied</span>{% endif %}
+    {# Refined logic to check specific government platforms to avoid substring match errors #}
+    {% with plat=job.platform|lower %}
+    {% with is_gov=plat == 'dpsa' or plat == 'sayouth' or plat == 'essa' or plat == 'govza' %}
+    <div class="job-card {% if job.pk in applied_ids %}applied{% elif job.apply_email %}has-email{% elif is_gov %}gov-job{% else %}no-email{% endif %}"
+         onclick="openDrawer({{ job.pk }}, this)" data-id="{{ job.pk }}">
+      
+      <div class="score-ring {% if job.match_score >= 70 %}high{% elif job.match_score >= 50 %}mid{% else %}low{% endif %}" title="Match Score: {{ job.match_score }}%">
+        {{ job.match_score }}%
+      </div>
+
+      <div class="job-info">
+        <div class="job-title">{{ job.title }}</div>
+        <div class="job-company">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}</div>
+        <div class="job-tags">
+          {% if is_gov %}
+            <span class="tag gov-tag">🏛 {{ job.platform }}</span>
+          {% else %}
+            <span class="tag plat-tag">{{ job.platform }}</span>
+          {% endif %}
+          {% if job.job_type %}<span class="tag type-tag">{{ job.job_type }}</span>{% endif %}
+          {% if job.apply_email %}<span class="tag email-tag">✉ {{ job.apply_email }}</span>{% endif %}
+          {% if job.pk in applied_ids %}<span class="tag applied-tag">✓ applied</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="job-right">
+        <div class="job-time">{{ job.scraped_at|date:"d M · H:i" }}</div>
+        <div class="job-btns">
+          {% if job.apply_email and job.pk not in applied_ids %}
+            <button class="apply-inline-btn" onclick="event.stopPropagation(); doApplyInline({{ job.pk }}, this)">✉ Apply</button>
+          {% elif job.pk in applied_ids %}
+            <span class="status-label">✓ sent</span>
+          {% endif %}
+          
+          {% if not job.apply_email and job.url %}
+            <button class="btn btn-orange btn-sm" onclick="event.stopPropagation(); doSpiderInline({{ job.pk }}, this)" title="Spider this link">🕷</button>
+          {% endif %}
+          
+          {% if job.url %}
+            <a href="{{ job.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" onclick="event.stopPropagation()" title="Open original link">↗</a>
+          {% endif %}
+        </div>
       </div>
     </div>
-    <div class="job-right">
-      <div class="job-time">{{ job.scraped_at|date:"d M · H:i" }}</div>
-      <div class="job-btns">
-        {% if job.apply_email and job.pk not in applied_ids %}
-          <button class="apply-inline-btn" onclick="event.stopPropagation();doApplyInline({{ job.pk }}, this)">✉ Apply</button>
-        {% elif job.pk in applied_ids %}
-          <span style="font-family:'Space Mono',monospace;font-size:0.55rem;color:var(--accent)">✓ sent</span>
-        {% endif %}
-        {% if not job.apply_email and job.url %}
-          <button class="btn btn-orange btn-sm" onclick="event.stopPropagation();doSpiderInline({{ job.pk }}, this)">🕷</button>
-        {% endif %}
-        {% if job.url %}
-          <a href="{{ job.url }}" target="_blank" class="btn btn-outline btn-sm" onclick="event.stopPropagation()">↗</a>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-  {% endwith %}
+    {% endwith %}
+    {% endwith %}
   {% empty %}
-  <div class="empty-state">
-    <h3>No jobs match your filters</h3>
-    <p>Try clearing some filters or running a new scrape.</p>
-  </div>
+    <div class="empty-state">
+      <h3>No jobs match your filters</h3>
+      <p>Try clearing some filters or running a new scrape.</p>
+    </div>
   {% endfor %}
 </div>
 
@@ -207,7 +219,10 @@
 <div class="drawer" id="drawer"><div id="drawer-inner"></div></div>
 <div class="toast" id="toast"></div>
 
-<script>const CSRF = '{{ csrf_token }}';</script>
+<script>
+  // Ensure the CSRF token is available for external JS files
+  const CSRF = '{{ csrf_token }}';
+</script>
 <script src="{% static 'js/drawer.js' %}"></script>
 <script src="{% static 'js/jobs.js' %}"></script>
 </body>
