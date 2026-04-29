@@ -20,6 +20,8 @@ VALID_JOB_TYPES = {
     'graduate', 'entry_level', 'low_barrier', 'permanent', 'all',
 }
 
+def test_view(request):
+    return render(request, "base.html")
 
 def _trigger_github_workflow(step="all", job_types="all"):
     if not GITHUB_REPO or not GITHUB_TOKEN:
