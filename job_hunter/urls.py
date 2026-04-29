@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from apps.scraper.views import dashboard, trigger_pipeline, cron_trigger, job_detail, spider_job, apply_single, *
+from apps.scraper.views import dashboard, trigger_pipeline, cron_trigger, job_detail, spider_job, apply_single, test_view
 from apps.scraper.jobs_view import jobs_list
 from apps.cv.views import upload_cv
 from apps.cv.credentials_view import credentials_view, run_gmail_auth, oauth_callback
