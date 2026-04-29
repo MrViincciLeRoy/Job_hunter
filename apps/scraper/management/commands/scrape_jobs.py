@@ -81,6 +81,13 @@ GOV_PLATFORMS   = {"dpsa", "sayouth", "essa", "govza"}
 IT_PLATFORMS    = {"pnet", "careerjunction", "careerjunction_it"}
 GOV_PRIORITY_KW = "internship learnership entry level graduate IT"
 
+# These scrapers parse full documents (PDFs/circulars) regardless of search terms.
+# Applying a type filter before DB write would silently drop valid opportunities
+# when the user triggers a type-specific scrape (e.g. "learnership" would drop
+# DPSA internships since they have job_type='internship').
+# The UI filter handles display-level filtering separately.
+GOV_PDF_SCRAPERS = {'dpsa'}
+
 SCRAPER_MAX_PAGES = {
     "DPSA":              1,
     "SAYouth":           20,
@@ -251,8 +258,13 @@ class Command(BaseCommand):
             try:
                 results = fn(kw, limit=limit_arg)
 
-                # Apply job type filter
-                if type_filter:
+                # Apply job type filter — but NOT for gov PDF scrapers (e.g. dpsa).
+                # DPSA parses the full circular PDF regardless of search terms,
+                # so filtering before DB write would silently drop internships
+                # when the user triggered scrape with a different type selected
+                # (e.g. "learnership" would drop job_type='internship' DPSA posts).
+                # The UI handles display-level filtering separately.
+                if type_filter and slug not in GOV_PDF_SCRAPERS:
                     before = len(results)
                     results = [j for j in results if _job_passes_type_filter(j, type_filter)]
                     filtered_out = before - len(results)

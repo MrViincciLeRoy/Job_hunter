@@ -194,8 +194,13 @@ def _get_all_circulars(max_circulars=5):
         import datetime
         now = datetime.datetime.now()
         year = now.year
-        approx_num = max(1, (now.month * 4) + (now.day // 7))
+        # Use ISO week number as approximation — DPSA publishes ~1 circular per week
+        # starting from circular 1 in January. isocalendar()[1] gives week 1-53.
+        # Subtract 1 to account for the fact that the current week's circular
+        # may not be published yet.
+        approx_num = max(1, now.isocalendar()[1] - 1)
         fallback_url = f'{BASE_URL}/newsroom/psvc/circular-{approx_num}-of-{year}/'
+        print(f'[DPSA] Falling back to estimated circular {approx_num} of {year}')
         return [(fallback_url, approx_num, year)]
 
 
@@ -220,6 +225,8 @@ def _get_pdf_url(circular_page_url, circ_num, circ_year):
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/psv%20circular%20{padded}%20of%20{circ_year}.pdf',
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/Circular{padded}of{circ_year}.pdf',
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/CIRCULAR%20{padded}%20OF%20{circ_year}.pdf',
+        # Some circulars use no leading zero for single-digit numbers
+        f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/PSV%20CIRCULAR%20{circ_num}%20of%20{circ_year}.pdf',
     ]
     for url in candidates:
         try:
