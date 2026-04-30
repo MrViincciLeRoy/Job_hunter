@@ -1,17 +1,13 @@
 name: Make & Commit Migrations
 
-
 on:
-  workflow_dispatch:
-
   push:
     branches:
       - main
-permissions:
-  contents: write
 
 jobs:
   migrate:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     env:
@@ -21,6 +17,9 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       HF_API_KEY: ${{ secrets.HF_API_KEY }}
       HF_MODEL: ${{ secrets.HF_MODEL }}
+
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -32,12 +31,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Delete all existing migrations
-        run: |
-          find apps -path "*/migrations/*.py" -not -name "__init__.py" -delete
-          find apps -path "*/migrations/*.pyc" -delete
-
-      - name: Make fresh migrations
+      - name: Make migrations
         run: |
           python manage.py makemigrations accounts --no-input
           python manage.py makemigrations cv --no-input
@@ -45,13 +39,16 @@ jobs:
           python manage.py makemigrations mailer --no-input
           python manage.py makemigrations matcher --no-input
 
+      - name: Merge migrations if needed
+        run: python manage.py makemigrations --merge --no-input
+
       - name: Run migrate
         run: python manage.py migrate --no-input
 
       - name: Commit migration files
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add apps/*/migrations/*.py
-          git diff --cached --quiet || git commit -m "chore: regenerate migrations"
+          git diff --cached --quiet || git commit -m "chore: update migrations [skip ci]"
           git push
