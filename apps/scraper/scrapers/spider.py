@@ -1,6 +1,10 @@
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
+
 import re
 import asyncio
-import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, unquote
 from .async_http import run_async
@@ -21,12 +25,12 @@ LOW_EMAIL_DOMAINS = {
 }
 
 
-def _is_low_email_domain(url: str) -> bool:
+def _is_low_email_domain(url):
     domain = urlparse(url).netloc.lower()
     return any(d in domain for d in LOW_EMAIL_DOMAINS)
 
 
-def _clean_emails(emails: list) -> list:
+def _clean_emails(emails):
     seen, out = set(), []
     for e in emails:
         e = e.lower().strip().rstrip(".")
@@ -38,7 +42,7 @@ def _clean_emails(emails: list) -> list:
     return out
 
 
-def _extract_mailto_emails(html: str) -> list:
+def _extract_mailto_emails(html):
     emails = []
     for match in re.finditer(r'mailto:([^"\'?\s>]+)', html, re.IGNORECASE):
         addr = unquote(match.group(1)).split("?")[0].strip()
@@ -47,7 +51,7 @@ def _extract_mailto_emails(html: str) -> list:
     return emails
 
 
-def _decode_cloudflare_email(encoded: str) -> str:
+def _decode_cloudflare_email(encoded):
     try:
         r = int(encoded[:2], 16)
         return "".join(chr(int(encoded[i:i+2], 16) ^ r) for i in range(2, len(encoded), 2))
@@ -55,7 +59,7 @@ def _decode_cloudflare_email(encoded: str) -> str:
         return ""
 
 
-def _parse_page(html: str, url: str) -> dict:
+def _parse_page(html, url):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(separator=" ", strip=True)
 
@@ -99,8 +103,12 @@ def _parse_page(html: str, url: str) -> dict:
     }
 
 
-async def _async_spider(url: str, session: aiohttp.ClientSession, timeout: int = 12) -> dict:
+async def _async_spider(url, session, timeout=12):
     result = {"emails": [], "phone": "", "description": "", "followed_url": None, "error": None, "raw_url": url}
+
+    if aiohttp is None:
+        result["error"] = "aiohttp not installed"
+        return result
 
     if not url or not url.startswith("http"):
         result["error"] = "Invalid URL"
@@ -146,7 +154,10 @@ async def _async_spider(url: str, session: aiohttp.ClientSession, timeout: int =
     return result
 
 
-async def _spider_many_async(urls: list[str], timeout: int = 12, max_concurrent: int = 15) -> dict[str, dict]:
+async def _spider_many_async(urls, timeout=12, max_concurrent=15):
+    if aiohttp is None:
+        return {url: {"emails": [], "phone": "", "description": "", "error": "aiohttp not installed"} for url in urls}
+
     sem = asyncio.Semaphore(max_concurrent)
     connector = aiohttp.TCPConnector(limit=max_concurrent, ssl=False)
     results = {}
@@ -161,21 +172,23 @@ async def _spider_many_async(urls: list[str], timeout: int = 12, max_concurrent:
     return results
 
 
-def spider_url(url: str, timeout: int = 12) -> dict:
+def spider_url(url, timeout=12):
     return run_async(_async_spider_single(url, timeout))
 
 
-async def _async_spider_single(url: str, timeout: int) -> dict:
+async def _async_spider_single(url, timeout):
+    if aiohttp is None:
+        return {"emails": [], "phone": "", "description": "", "error": "aiohttp not installed"}
     connector = aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(headers=HEADERS, connector=connector) as session:
         return await _async_spider(url, session, timeout)
 
 
-def spider_many(urls: list[str], timeout: int = 12, max_concurrent: int = 15) -> dict[str, dict]:
+def spider_many(urls, timeout=12, max_concurrent=15):
     return run_async(_spider_many_async(urls, timeout, max_concurrent))
 
 
-def email_likelihood_score(platform: str, url: str) -> int:
+def email_likelihood_score(platform, url):
     if _is_low_email_domain(url):
         return 0
     scores = {

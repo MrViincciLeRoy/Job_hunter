@@ -3,9 +3,15 @@ import time
 import random
 import json
 import requests
-from groq import Groq, RateLimitError
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+try:
+    from groq import Groq, RateLimitError
+    _groq_client = Groq(api_key=os.getenv("GROQ_API_KEY", "dummy"))
+except Exception:
+    Groq = None
+    RateLimitError = Exception
+    _groq_client = None
+
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 HF_API_KEY = os.getenv("HF_API_KEY")
@@ -42,13 +48,16 @@ def _extract_json(text):
 
 
 def groq_call(messages, model=GROQ_MODEL, response_format=None, retries=4):
+    if _groq_client is None:
+        raise RuntimeError("Groq not available — install groq and set GROQ_API_KEY")
+
     time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
     for attempt in range(retries):
         try:
             kwargs = dict(model=model, messages=messages)
             if response_format:
                 kwargs["response_format"] = response_format
-            return groq_client.chat.completions.create(**kwargs)
+            return _groq_client.chat.completions.create(**kwargs)
         except RateLimitError:
             wait = (2 ** attempt) * 15 + random.uniform(0, 10)
             print(f"[Groq] Rate limited. Waiting {wait:.1f}s (attempt {attempt+1}/{retries})")
@@ -73,7 +82,6 @@ def hf_call(messages, response_format=None, retries=3):
         "Content-Type": "application/json",
     }
 
-    # Inject JSON instruction into last user message if needed
     msgs = list(messages)
     if response_format and response_format.get("type") == "json_object":
         msgs[-1] = {
@@ -116,7 +124,7 @@ def hf_call(messages, response_format=None, retries=3):
 
                 if response_format and response_format.get("type") == "json_object":
                     text = _extract_json(text)
-                    json.loads(text)  # validate — raises if bad JSON
+                    json.loads(text)
 
                 print(f"[HF] Success with {model}")
                 return _Response(text)

@@ -1,5 +1,9 @@
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
+
 import asyncio
-import aiohttp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HEADERS = {
@@ -9,7 +13,9 @@ HEADERS = {
 }
 
 
-async def fetch_many(urls: list[str], timeout: int = 15, max_concurrent: int = 12) -> dict[str, str]:
+async def fetch_many(urls, timeout=15, max_concurrent=12):
+    if aiohttp is None:
+        return {}
     sem = asyncio.Semaphore(max_concurrent)
     connector = aiohttp.TCPConnector(limit=max_concurrent, ssl=False)
     results = {}
@@ -19,7 +25,7 @@ async def fetch_many(urls: list[str], timeout: int = 15, max_concurrent: int = 1
             try:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as r:
                     results[url] = await r.text(errors="replace")
-            except Exception as e:
+            except Exception:
                 results[url] = ""
 
     async with aiohttp.ClientSession(headers=HEADERS, connector=connector) as session:
@@ -40,7 +46,7 @@ def run_async(coro):
         return asyncio.run(coro)
 
 
-def parallel_fetch(urls: list[str], fn, max_workers: int = 10) -> list:
+def parallel_fetch(urls, fn, max_workers=10):
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(fn, url): url for url in urls}
@@ -49,12 +55,12 @@ def parallel_fetch(urls: list[str], fn, max_workers: int = 10) -> list:
                 r = future.result()
                 if r:
                     results.append(r)
-            except Exception as e:
+            except Exception:
                 pass
     return results
 
 
-def parallel_run(fns_args: list[tuple], max_workers: int = 6) -> list:
+def parallel_run(fns_args, max_workers=6):
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(fn, *args): (fn, args) for fn, *args in fns_args}
