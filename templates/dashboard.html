@@ -45,14 +45,14 @@
 <body>
 
 <div class="top-bar">
-  <a href="/" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
+  <a href="{% url 'dashboard' %}" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
   <div class="nav">
     <span class="running-badge" id="running-badge"><span class="pulse"></span> RUNNING...</span>
-    <a href="/jobs/"            class="btn btn-outline btn-sm">📋 All Jobs</a>
-    <a href="/upload-cv/"       class="btn btn-outline btn-sm">+ Upload CV</a>
-    <a href="/credentials/"     class="btn btn-outline btn-sm">🔑 Gmail</a>
-    <a href="/profile/"         class="btn btn-outline btn-sm">👤 Profile</a>
-    <a href="/accounts/logout/" class="btn btn-outline btn-sm">Sign out</a>
+    <a href="{% url 'jobs_list' %}"        class="btn btn-outline btn-sm">📋 All Jobs</a>
+    <a href="{% url 'upload_cv' %}"        class="btn btn-outline btn-sm">+ Upload CV</a>
+    <a href="{% url 'credentials' %}"      class="btn btn-outline btn-sm">🔑 Gmail</a>
+    <a href="{% url 'accounts:profile' %}" class="btn btn-outline btn-sm">👤 Profile</a>
+    <a href="{% url 'accounts:logout' %}"  class="btn btn-outline btn-sm">Sign out</a>
   </div>
 </div>
 
@@ -64,12 +64,11 @@
 </div>
 {% endif %}
 
-<form method="POST" action="/trigger/" id="pipeline-form">
+<form method="POST" action="{% url 'trigger_pipeline' %}" id="pipeline-form">
   {% csrf_token %}
   <input type="hidden" name="action"  id="action-input"  value="all">
   <input type="hidden" name="dry_run" id="dry-run-input" value="0">
   <div id="job-type-inputs"></div>
-
   <div class="action-bar">
     <div class="action-bar-top">
       <span class="action-bar-label">Run</span>
@@ -87,42 +86,21 @@
 </form>
 
 <div class="stats-row">
-  <div class="stat">
-    <div class="stat-val">{{ total_jobs }}</div>
-    <div class="stat-label">Jobs Found</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val purple">{{ matched_count }}</div>
-    <div class="stat-label">Matched ≥60%</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val">{{ applied_count }}</div>
-    <div class="stat-label">Applied</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val red">{{ total_jobs|add:0|add:applied_count }}</div>
-    <div class="stat-label">Pending</div>
-  </div>
+  <div class="stat"><div class="stat-val">{{ total_jobs }}</div><div class="stat-label">Jobs Found</div></div>
+  <div class="stat"><div class="stat-val purple">{{ matched_count }}</div><div class="stat-label">Matched ≥60%</div></div>
+  <div class="stat"><div class="stat-val">{{ applied_count }}</div><div class="stat-label">Applied</div></div>
+  <div class="stat"><div class="stat-val red">{{ total_jobs|add:0|add:applied_count }}</div><div class="stat-label">Pending</div></div>
 </div>
 
 <div class="filter-bar">
   <div class="filter-row">
     {% for slug, label, count in tab_defs %}
-    <a class="ftab
-      {% if active_tab == slug %}
-        {% if slug == 'email' %}act-green
-        {% elif slug == 'matched' %}act-purple
-        {% elif slug == 'applied' %}act-orange
-        {% elif slug == 'gov' %}act-gov
-        {% else %}act-green{% endif %}
-      {% endif %}"
+    <a class="ftab {% if active_tab == slug %}{% if slug == 'email' %}act-green{% elif slug == 'matched' %}act-purple{% elif slug == 'applied' %}act-orange{% elif slug == 'gov' %}act-gov{% else %}act-green{% endif %}{% endif %}"
        href="?tab={{ slug }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
       {{ label }} <span class="filter-count">({{ count }})</span>
     </a>
     {% endfor %}
-
     <div class="spacer"></div>
-
     <form method="get" action="{{ request.path }}" style="display:contents">
       <input type="hidden" name="tab" value="{{ active_tab }}" />
       {% for p in active_platforms %}<input type="hidden" name="platform" value="{{ p }}" />{% endfor %}
@@ -179,23 +157,16 @@
         <span class="type-arr">▾</span>
       </div>
     </form>
-
     {% for p in active_platforms %}
-    <a class="pill"
-       href="?tab={{ active_tab }}{% for op in active_platforms %}{% if op != p %}&platform={{ op }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
-      {{ p }} <span class="x">✕</span>
-    </a>
+    <a class="pill" href="?tab={{ active_tab }}{% for op in active_platforms %}{% if op != p %}&platform={{ op }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
+      {{ p }} <span class="x">✕</span></a>
     {% endfor %}
-
     {% if active_job_type %}
-    <a class="pill"
-       href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_search %}&q={{ active_search }}{% endif %}">
-      {{ active_job_type }} <span class="x">✕</span>
-    </a>
+    <a class="pill" href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_search %}&q={{ active_search }}{% endif %}">
+      {{ active_job_type }} <span class="x">✕</span></a>
     {% endif %}
-
     {% if active_platforms or active_job_type or active_search %}
-    <a class="clear-btn" href="/">✕ Clear filters</a>
+    <a class="clear-btn" href="{% url 'dashboard' %}">✕ Clear filters</a>
     {% endif %}
   </div>
 </div>
@@ -205,60 +176,42 @@
   {% if active_platforms %} · Platform: {% for p in active_platforms %}<strong>{{ p }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
   {% if active_job_type %} · Type: <strong>{{ active_job_type }}</strong>{% endif %}
   {% if active_search %} · Search: <strong>"{{ active_search }}"</strong>{% endif %}
-  &nbsp;·&nbsp;<a href="/jobs/" style="color:var(--accent2);font-size:0.57rem">View all →</a>
+  &nbsp;·&nbsp;<a href="{% url 'jobs_list' %}" style="color:var(--accent2);font-size:0.57rem">View all →</a>
 </div>
 
 <div class="main">
   <div class="jobs-panel">
     <div class="panel-header">
       <strong>Recent Jobs</strong>
-      <a href="/jobs/">View all →</a>
+      <a href="{% url 'jobs_list' %}">View all →</a>
     </div>
-
     {% if jobs %}
       {% for job in jobs %}
         {% with score=job.match_score %}
         <div class="job-row" onclick="openDrawer({{ job.pk }}, this)" data-id="{{ job.pk }}">
-          <div class="score-ring {% if score >= 70 %}high{% elif score >= 50 %}mid{% else %}low{% endif %}">
-            {{ score }}%
-          </div>
+          <div class="score-ring {% if score >= 70 %}high{% elif score >= 50 %}mid{% else %}low{% endif %}">{{ score }}%</div>
           <div class="job-info">
             <div class="job-title">{{ job.title }}</div>
             <div class="job-meta">
               {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
-              <span class="platform {% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov{% endif %}">
-                {{ job.platform }}
-              </span>
-              {% if job.job_type %}
-                {% with jt=job.job_type|lower %}
-                <span class="job-type-badge
-                  {% if 'intern' in jt %}internship
-                  {% elif 'learner' in jt %}learnership
-                  {% elif 'bursary' in jt or 'scholar' in jt %}bursary
-                  {% elif 'graduate' in jt %}graduate
-                  {% else %}entry{% endif %}">
-                  {{ job.job_type|upper }}
-                </span>
-                {% endwith %}
-              {% endif %}
+              <span class="platform {% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov{% endif %}">{{ job.platform }}</span>
+              {% if job.job_type %}{% with jt=job.job_type|lower %}
+              <span class="job-type-badge {% if 'intern' in jt %}internship{% elif 'learner' in jt %}learnership{% elif 'bursary' in jt or 'scholar' in jt %}bursary{% elif 'graduate' in jt %}graduate{% else %}entry{% endif %}">
+                {{ job.job_type|upper }}</span>
+              {% endwith %}{% endif %}
             </div>
           </div>
           <div class="job-actions">
-            {% if job.apply_email %}
-              <div class="email-dot" title="{{ job.apply_email }}"></div>
-            {% else %}
-              <div class="no-email-dot" title="No email"></div>
-            {% endif %}
+            {% if job.apply_email %}<div class="email-dot" title="{{ job.apply_email }}"></div>
+            {% else %}<div class="no-email-dot" title="No email"></div>{% endif %}
             {% if job.pk in applied_ids %}<span class="applied-tag">✓ sent</span>{% endif %}
-            {% if job.url %}
-              <a href="{{ job.url }}" target="_blank" style="color:var(--muted);font-size:0.7rem;text-decoration:none;" onclick="event.stopPropagation()">↗</a>
-            {% endif %}
+            {% if job.url %}<a href="{{ job.url }}" target="_blank" style="color:var(--muted);font-size:0.7rem;text-decoration:none;" onclick="event.stopPropagation()">↗</a>{% endif %}
           </div>
         </div>
         {% endwith %}
       {% endfor %}
     {% else %}
-      <div class="empty">No jobs match your filters. <a href="/" style="color:var(--accent)">Clear filters</a> or <strong>⚡ Run All</strong> to scrape new jobs.</div>
+      <div class="empty">No jobs match your filters. <a href="{% url 'dashboard' %}" style="color:var(--accent)">Clear filters</a> or <strong>⚡ Run All</strong> to scrape new jobs.</div>
     {% endif %}
   </div>
 
@@ -269,15 +222,12 @@
         <div class="cv-name">{{ cv.parsed_data.name }}</div>
         <div class="cv-email">{{ cv.parsed_data.email }}</div>
         <div class="skills-wrap">
-          {% for skill in cv.parsed_data.skills %}
-            <span class="skill-tag">{{ skill }}</span>
-          {% endfor %}
+          {% for skill in cv.parsed_data.skills %}<span class="skill-tag">{{ skill }}</span>{% endfor %}
         </div>
       {% else %}
-        <div class="no-cv">No CV uploaded. <a href="/upload-cv/" style="color:var(--accent)">Upload one →</a></div>
+        <div class="no-cv">No CV uploaded. <a href="{% url 'upload_cv' %}" style="color:var(--accent)">Upload one →</a></div>
       {% endif %}
     </div>
-
     <div class="applied-section">
       <h3>Applications Sent ({{ applied_count }})</h3>
       {% if applications %}
@@ -296,14 +246,11 @@
 </div>
 
 <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
-<div class="drawer" id="drawer">
-  <div id="drawer-inner"></div>
-</div>
+<div class="drawer" id="drawer"><div id="drawer-inner"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>const CSRF = '{{ csrf_token }}';</script>
 <script src="{% static 'js/drawer.js' %}"></script>
 <script src="{% static 'js/dashboard.js' %}"></script>
-
 </body>
 </html>

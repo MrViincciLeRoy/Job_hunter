@@ -1,5 +1,3 @@
-import os
-import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
@@ -23,7 +21,7 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect("/accounts/login/")
+    return redirect("accounts:login")
 
 
 @login_required
@@ -66,7 +64,7 @@ def onboarding_view(request):
             if not f:
                 return JsonResponse({"ok": False, "error": "No file selected"})
             data = f.read()
-            doc = UserDocument.objects.create(
+            UserDocument.objects.create(
                 user=request.user, doc_type="cv", label=f.name,
                 file_data=data, file_name=f.name,
                 mime_type=f.content_type or "application/octet-stream",
@@ -101,17 +99,17 @@ def profile_view(request):
     profile = get_or_create_profile(request.user)
 
     if not profile.onboarding_done:
-        return redirect("onboarding")
+        return redirect("accounts:onboarding")
 
     if request.method == "POST":
-        profile.phone         = request.POST.get("phone", "").strip()
-        profile.location      = request.POST.get("location", "").strip()
-        profile.bio           = request.POST.get("bio", "").strip()
-        profile.github_url    = request.POST.get("github_url", "").strip()
-        profile.portfolio_url = request.POST.get("portfolio_url", "").strip()
-        profile.linkedin_url  = request.POST.get("linkedin_url", "").strip()
-        profile.id_number     = request.POST.get("id_number", "").strip()
-        profile.occupation    = request.POST.get("occupation", "").strip()
+        profile.phone            = request.POST.get("phone", "").strip()
+        profile.location         = request.POST.get("location", "").strip()
+        profile.bio              = request.POST.get("bio", "").strip()
+        profile.github_url       = request.POST.get("github_url", "").strip()
+        profile.portfolio_url    = request.POST.get("portfolio_url", "").strip()
+        profile.linkedin_url     = request.POST.get("linkedin_url", "").strip()
+        profile.id_number        = request.POST.get("id_number", "").strip()
+        profile.occupation       = request.POST.get("occupation", "").strip()
         profile.years_experience = request.POST.get("years_experience", "").strip()
 
         request.user.first_name = request.POST.get("first_name", "").strip()
@@ -158,7 +156,9 @@ def documents_view(request):
         )
 
         if doc_type == "cv":
-            if not UserDocument.objects.filter(user=request.user, doc_type="cv", is_primary=True).exclude(pk=doc.pk).exists():
+            if not UserDocument.objects.filter(
+                user=request.user, doc_type="cv", is_primary=True
+            ).exclude(pk=doc.pk).exists():
                 doc.is_primary = True
                 doc.save(update_fields=["is_primary"])
             _sync_cv_to_pipeline(request.user, data, f.name)
