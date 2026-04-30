@@ -6,19 +6,14 @@ from django.contrib.auth import logout
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import UserProfile, UserDocument, DOC_TYPES
 
-
-# ── Auto-create profile on first login ───────────────────────────────────────
 
 def get_or_create_profile(user):
     profile, _ = UserProfile.objects.get_or_create(user=user)
     return profile
 
-
-# ── Auth views ───────────────────────────────────────────────────────────────
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -28,14 +23,85 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect("login")
+    return redirect("/accounts/login/")
 
 
-# ── Profile ──────────────────────────────────────────────────────────────────
+@login_required
+def onboarding_view(request):
+    profile = get_or_create_profile(request.user)
+
+    if profile.onboarding_done:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        step = request.POST.get("step")
+
+        if step == "personal":
+            request.user.first_name = request.POST.get("first_name", "").strip()
+            request.user.last_name  = request.POST.get("last_name", "").strip()
+            request.user.save(update_fields=["first_name", "last_name"])
+            profile.date_of_birth = request.POST.get("date_of_birth") or None
+            profile.phone         = request.POST.get("phone", "").strip()
+            profile.id_number     = request.POST.get("id_number", "").strip()
+            profile.location      = request.POST.get("location", "").strip()
+            profile.save()
+            return JsonResponse({"ok": True})
+
+        elif step == "professional":
+            profile.occupation       = request.POST.get("occupation", "").strip()
+            profile.years_experience = request.POST.get("years_experience", "").strip()
+            profile.bio              = request.POST.get("bio", "").strip()
+            profile.save()
+            return JsonResponse({"ok": True})
+
+        elif step == "online":
+            profile.github_url    = request.POST.get("github_url", "").strip()
+            profile.linkedin_url  = request.POST.get("linkedin_url", "").strip()
+            profile.portfolio_url = request.POST.get("portfolio_url", "").strip()
+            profile.save()
+            return JsonResponse({"ok": True})
+
+        elif step == "cv":
+            f = request.FILES.get("file")
+            if not f:
+                return JsonResponse({"ok": False, "error": "No file selected"})
+            data = f.read()
+            doc = UserDocument.objects.create(
+                user=request.user, doc_type="cv", label=f.name,
+                file_data=data, file_name=f.name,
+                mime_type=f.content_type or "application/octet-stream",
+                file_size=len(data), is_primary=True,
+            )
+            _sync_cv_to_pipeline(request.user, data, f.name)
+            return JsonResponse({"ok": True})
+
+        elif step == "id":
+            f = request.FILES.get("file")
+            if not f:
+                return JsonResponse({"ok": False, "error": "No file selected"})
+            data = f.read()
+            UserDocument.objects.create(
+                user=request.user, doc_type="id_document", label=f.name,
+                file_data=data, file_name=f.name,
+                mime_type=f.content_type or "application/octet-stream",
+                file_size=len(data),
+            )
+            return JsonResponse({"ok": True})
+
+        elif step == "complete":
+            profile.onboarding_done = True
+            profile.save()
+            return JsonResponse({"ok": True, "redirect": "/"})
+
+    return render(request, "accounts/onboarding.html", {"profile": profile})
+
 
 @login_required
 def profile_view(request):
     profile = get_or_create_profile(request.user)
+
+    if not profile.onboarding_done:
+        return redirect("onboarding")
 
     if request.method == "POST":
         profile.phone         = request.POST.get("phone", "").strip()
@@ -45,13 +111,13 @@ def profile_view(request):
         profile.portfolio_url = request.POST.get("portfolio_url", "").strip()
         profile.linkedin_url  = request.POST.get("linkedin_url", "").strip()
         profile.id_number     = request.POST.get("id_number", "").strip()
+        profile.occupation    = request.POST.get("occupation", "").strip()
+        profile.years_experience = request.POST.get("years_experience", "").strip()
 
-        # Also update Django user fields
         request.user.first_name = request.POST.get("first_name", "").strip()
         request.user.last_name  = request.POST.get("last_name", "").strip()
         request.user.save(update_fields=["first_name", "last_name"])
 
-        # Photo upload
         photo_file = request.FILES.get("photo")
         if photo_file:
             profile.photo      = photo_file.read()
@@ -59,7 +125,7 @@ def profile_view(request):
 
         profile.save()
         messages.success(request, "Profile updated.")
-        return redirect("profile")
+        return redirect("accounts:profile")
 
     docs = UserDocument.objects.filter(user=request.user)
     doc_counts = {dt: docs.filter(doc_type=dt).count() for dt, _ in DOC_TYPES}
@@ -72,8 +138,6 @@ def profile_view(request):
     })
 
 
-# ── Documents ────────────────────────────────────────────────────────────────
-
 @login_required
 def documents_view(request):
     if request.method == "POST":
@@ -83,30 +147,24 @@ def documents_view(request):
 
         if not f:
             messages.error(request, "No file selected.")
-            return redirect("documents")
+            return redirect("accounts:documents")
 
         data = f.read()
         doc = UserDocument.objects.create(
-            user      = request.user,
-            doc_type  = doc_type,
-            label     = label,
-            file_data = data,
-            file_name = f.name,
-            mime_type = f.content_type or "application/octet-stream",
-            file_size = len(data),
+            user=request.user, doc_type=doc_type, label=label,
+            file_data=data, file_name=f.name,
+            mime_type=f.content_type or "application/octet-stream",
+            file_size=len(data),
         )
 
-        # If this is a CV and user has no primary CV yet, mark it primary
         if doc_type == "cv":
             if not UserDocument.objects.filter(user=request.user, doc_type="cv", is_primary=True).exclude(pk=doc.pk).exists():
                 doc.is_primary = True
                 doc.save(update_fields=["is_primary"])
-
-            # Also sync to apps.cv so the pipeline can use it
             _sync_cv_to_pipeline(request.user, data, f.name)
 
         messages.success(request, f"'{label}' uploaded.")
-        return redirect("documents")
+        return redirect("accounts:documents")
 
     docs = UserDocument.objects.filter(user=request.user)
     grouped = {}
@@ -155,21 +213,14 @@ def photo_view(request):
     return HttpResponse(bytes(profile.photo), content_type=profile.photo_mime or "image/jpeg")
 
 
-# ── Helper: keep apps.cv.CV in sync with primary CV doc ──────────────────────
-
 def _sync_cv_to_pipeline(user, pdf_bytes, filename):
-    """Push the uploaded CV into apps.cv so the scraper pipeline picks it up."""
     try:
         from apps.cv.models import CV
         from apps.cv.parser import parse_cv_bytes
-
-        # Deactivate previous CVs for this user
         CV.objects.filter(user=user).update(active=False)
-
         cv = CV(pdf_filename=filename, user=user)
         cv.pdf_data = pdf_bytes
         cv.save()
-
         try:
             parsed = parse_cv_bytes(pdf_bytes)
             cv.parsed_data = parsed

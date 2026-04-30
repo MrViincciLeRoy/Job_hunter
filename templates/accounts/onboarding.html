@@ -1,0 +1,433 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup Your Account — Job Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --border: #1e1e2e;
+    --accent: #00ff88; --accent2: #7c6aff; --text: #e8e8f0; --muted: #555570;
+    --danger: #ff4466;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', sans-serif; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 1.5rem;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace; font-size: 0.8rem;
+    color: var(--muted); margin-bottom: 2rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .logo-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  /* Progress */
+  .progress-bar {
+    width: 100%; max-width: 520px; height: 2px;
+    background: var(--border); margin-bottom: 2.5rem; position: relative;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.4s ease;
+  }
+  .progress-steps {
+    display: flex; justify-content: space-between;
+    max-width: 520px; width: 100%; margin-top: 0.5rem; margin-bottom: 2rem;
+  }
+  .step-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); transition: background 0.3s;
+  }
+  .step-dot.active { background: var(--accent); }
+  .step-dot.done   { background: var(--accent2); }
+
+  /* Card */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 2.5rem; width: 100%; max-width: 520px;
+    position: relative; display: none;
+  }
+  .card.active { display: block; }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .card-step {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+  }
+  .card-title { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.4rem; }
+  .card-sub   { font-size: 0.83rem; color: var(--muted); margin-bottom: 2rem; line-height: 1.6; }
+
+  .form-group  { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
+  .form-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-label  {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .form-input, .form-select, .form-textarea {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 0.65rem 0.8rem;
+    font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
+    outline: none; transition: border-color 0.15s; width: 100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent2); }
+  .form-textarea { resize: vertical; min-height: 80px; }
+  .form-select   { appearance: none; cursor: pointer; }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border); padding: 2.5rem 1.5rem;
+    text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(0,255,136,0.02); }
+  .upload-zone input { display: none; }
+  .upload-hint  {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--accent); display: block; margin-bottom: 0.4rem;
+  }
+  .upload-sub   { font-size: 0.75rem; color: var(--muted); }
+  .upload-name  {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--accent2); margin-top: 0.75rem; display: none;
+  }
+  .upload-name.show { display: block; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 0.75rem; margin-top: 1.75rem; align-items: center; }
+  .btn-next {
+    font-family: 'Space Mono', monospace; font-size: 0.7rem; font-weight: 700;
+    padding: 0.7rem 1.75rem; background: var(--accent); color: #000;
+    border: none; cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-next:hover   { opacity: 0.85; }
+  .btn-next:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-skip {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--muted); background: none; border: none; cursor: pointer;
+    transition: color 0.15s;
+  }
+  .btn-skip:hover { color: var(--text); }
+
+  .required-note {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--danger); margin-top: 0.75rem;
+  }
+
+  .error-msg {
+    font-size: 0.78rem; color: var(--danger);
+    margin-top: 0.5rem; display: none;
+  }
+  .error-msg.show { display: block; }
+
+  @media (max-width: 540px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .card { padding: 1.75rem 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="logo"><div class="logo-dot"></div>job/hunter</div>
+
+<div class="progress-bar" style="max-width:520px;width:100%">
+  <div class="progress-fill" id="progress" style="width:0%"></div>
+</div>
+<div class="progress-steps">
+  <div class="step-dot active" id="dot-0"></div>
+  <div class="step-dot" id="dot-1"></div>
+  <div class="step-dot" id="dot-2"></div>
+  <div class="step-dot" id="dot-3"></div>
+  <div class="step-dot" id="dot-4"></div>
+</div>
+
+{# ── Step 1: Personal ── #}
+<div class="card active" id="card-0">
+  <div class="card-step">Step 1 of 5</div>
+  <div class="card-title">Let's get to know you 👋</div>
+  <div class="card-sub">Fill in your basic personal details so your applications look professional.</div>
+
+  <div class="form-grid">
+    <div class="form-group">
+      <label class="form-label">First Name *</label>
+      <input class="form-input" type="text" id="first_name" value="{{ request.user.first_name }}" placeholder="Viincci">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Last Name *</label>
+      <input class="form-input" type="text" id="last_name" value="{{ request.user.last_name }}" placeholder="Le Roy">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date of Birth *</label>
+      <input class="form-input" type="date" id="date_of_birth" value="{{ profile.date_of_birth|default:'' }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">SA ID Number</label>
+      <input class="form-input" type="text" id="id_number" value="{{ profile.id_number }}" placeholder="13-digit ID">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone *</label>
+      <input class="form-input" type="text" id="phone" value="{{ profile.phone }}" placeholder="+27 ...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Location *</label>
+      <input class="form-input" type="text" id="location" value="{{ profile.location }}" placeholder="City, Province">
+    </div>
+  </div>
+
+  <div class="error-msg" id="err-0">Please fill in all required fields.</div>
+  <div class="btn-row">
+    <button class="btn-next" onclick="submitStep0()">Next →</button>
+  </div>
+</div>
+
+{# ── Step 2: Professional ── #}
+<div class="card" id="card-1">
+  <div class="card-step">Step 2 of 5</div>
+  <div class="card-title">What do you do? 💼</div>
+  <div class="card-sub">Tell us about your professional background so we can match you to the right jobs.</div>
+
+  <div class="form-group">
+    <label class="form-label">Job Title / Occupation *</label>
+    <input class="form-input" type="text" id="occupation" value="{{ profile.occupation }}" placeholder="e.g. Software Developer">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Years of Experience</label>
+    <select class="form-select" id="years_experience">
+      <option value="">Select...</option>
+      <option value="0-1" {% if profile.years_experience == "0-1" %}selected{% endif %}>Less than 1 year</option>
+      <option value="1-2" {% if profile.years_experience == "1-2" %}selected{% endif %}>1–2 years</option>
+      <option value="3-5" {% if profile.years_experience == "3-5" %}selected{% endif %}>3–5 years</option>
+      <option value="5-10" {% if profile.years_experience == "5-10" %}selected{% endif %}>5–10 years</option>
+      <option value="10+" {% if profile.years_experience == "10+" %}selected{% endif %}>10+ years</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Professional Summary</label>
+    <textarea class="form-textarea" id="bio" placeholder="Brief summary of your skills and experience...">{{ profile.bio }}</textarea>
+  </div>
+
+  <div class="error-msg" id="err-1">Please enter your occupation.</div>
+  <div class="btn-row">
+    <button class="btn-next" onclick="submitStep1()">Next →</button>
+    <button class="btn-skip" onclick="goTo(2)">Skip for now</button>
+  </div>
+</div>
+
+{# ── Step 3: Online presence ── #}
+<div class="card" id="card-2">
+  <div class="card-step">Step 3 of 5</div>
+  <div class="card-title">Online presence 🌐</div>
+  <div class="card-sub">Add your profiles so employers can learn more about you. All optional.</div>
+
+  <div class="form-group">
+    <label class="form-label">LinkedIn URL</label>
+    <input class="form-input" type="url" id="linkedin_url" value="{{ profile.linkedin_url }}" placeholder="https://linkedin.com/in/...">
+  </div>
+  <div class="form-group">
+    <label class="form-label">GitHub URL</label>
+    <input class="form-input" type="url" id="github_url" value="{{ profile.github_url }}" placeholder="https://github.com/...">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Portfolio / Website</label>
+    <input class="form-input" type="url" id="portfolio_url" value="{{ profile.portfolio_url }}" placeholder="https://...">
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-next" onclick="submitStep2()">Next →</button>
+    <button class="btn-skip" onclick="goTo(3)">Skip for now</button>
+  </div>
+</div>
+
+{# ── Step 4: CV upload ── #}
+<div class="card" id="card-3">
+  <div class="card-step">Step 4 of 5</div>
+  <div class="card-title">Upload your CV 📄</div>
+  <div class="card-sub">Your CV is required to apply for jobs. PDF only, max 10MB.</div>
+
+  <div class="upload-zone" id="cv-zone" onclick="document.getElementById('cv-input').click()">
+    <input type="file" id="cv-input" accept=".pdf,.doc,.docx" onchange="onFile(this,'cv')">
+    <span class="upload-hint">CLICK OR DRAG & DROP</span>
+    <span class="upload-sub">PDF, DOC, DOCX — max 10MB</span>
+    <div class="upload-name" id="cv-name"></div>
+  </div>
+
+  <div class="required-note">* CV is required to continue</div>
+  <div class="error-msg" id="err-3">Please upload your CV to continue.</div>
+  <div class="btn-row">
+    <button class="btn-next" id="cv-btn" onclick="submitFile('cv')" disabled>Next →</button>
+  </div>
+</div>
+
+{# ── Step 5: ID upload ── #}
+<div class="card" id="card-4">
+  <div class="card-step">Step 5 of 5</div>
+  <div class="card-title">Upload your ID document 🪪</div>
+  <div class="card-sub">A certified copy of your SA ID or passport is required for most job applications.</div>
+
+  <div class="upload-zone" id="id-zone" onclick="document.getElementById('id-input').click()">
+    <input type="file" id="id-input" accept=".pdf,.jpg,.jpeg,.png" onchange="onFile(this,'id')">
+    <span class="upload-hint">CLICK OR DRAG & DROP</span>
+    <span class="upload-sub">PDF, JPG, PNG — max 10MB</span>
+    <div class="upload-name" id="id-name"></div>
+  </div>
+
+  <div class="required-note">* ID document is required to continue</div>
+  <div class="error-msg" id="err-4">Please upload your ID document to continue.</div>
+  <div class="btn-row">
+    <button class="btn-next" id="id-btn" onclick="submitFile('id')" disabled>Finish Setup →</button>
+  </div>
+</div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+let currentStep = 0;
+const TOTAL = 5;
+
+function updateProgress() {
+  const pct = (currentStep / (TOTAL - 1)) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+  for (let i = 0; i < TOTAL; i++) {
+    const dot = document.getElementById('dot-' + i);
+    dot.className = 'step-dot' + (i < currentStep ? ' done' : i === currentStep ? ' active' : '');
+  }
+}
+
+function goTo(step) {
+  document.getElementById('card-' + currentStep).classList.remove('active');
+  currentStep = step;
+  document.getElementById('card-' + currentStep).classList.add('active');
+  updateProgress();
+  window.scrollTo(0, 0);
+}
+
+function showErr(id, show) {
+  const el = document.getElementById(id);
+  el.classList.toggle('show', show);
+}
+
+async function post(step, body) {
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('step', step);
+  for (const [k, v] of Object.entries(body)) fd.append(k, v);
+  const r = await fetch('/accounts/onboarding/', { method: 'POST', body: fd });
+  return r.json();
+}
+
+async function postFile(step, file) {
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('step', step);
+  fd.append('file', file);
+  const r = await fetch('/accounts/onboarding/', { method: 'POST', body: fd });
+  return r.json();
+}
+
+async function submitStep0() {
+  const fn = document.getElementById('first_name').value.trim();
+  const ln = document.getElementById('last_name').value.trim();
+  const dob = document.getElementById('date_of_birth').value;
+  const phone = document.getElementById('phone').value.trim();
+  const loc = document.getElementById('location').value.trim();
+  if (!fn || !ln || !dob || !phone || !loc) { showErr('err-0', true); return; }
+  showErr('err-0', false);
+  await post('personal', {
+    first_name: fn, last_name: ln, date_of_birth: dob,
+    phone, location: loc,
+    id_number: document.getElementById('id_number').value.trim(),
+  });
+  goTo(1);
+}
+
+async function submitStep1() {
+  const occ = document.getElementById('occupation').value.trim();
+  if (!occ) { showErr('err-1', true); return; }
+  showErr('err-1', false);
+  await post('professional', {
+    occupation: occ,
+    years_experience: document.getElementById('years_experience').value,
+    bio: document.getElementById('bio').value.trim(),
+  });
+  goTo(2);
+}
+
+async function submitStep2() {
+  await post('online', {
+    github_url:    document.getElementById('github_url').value.trim(),
+    linkedin_url:  document.getElementById('linkedin_url').value.trim(),
+    portfolio_url: document.getElementById('portfolio_url').value.trim(),
+  });
+  goTo(3);
+}
+
+const _files = {};
+
+function onFile(input, key) {
+  const f = input.files[0];
+  if (!f) return;
+  _files[key] = f;
+  const nameEl = document.getElementById(key + '-name');
+  nameEl.textContent = '✓ ' + f.name;
+  nameEl.classList.add('show');
+  document.getElementById(key + '-btn').disabled = false;
+}
+
+async function submitFile(key) {
+  const f = _files[key];
+  if (!f) { showErr('err-' + (key === 'cv' ? 3 : 4), true); return; }
+  showErr('err-' + (key === 'cv' ? 3 : 4), false);
+  const btn = document.getElementById(key + '-btn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+  const d = await postFile(key, f);
+  if (d.ok) {
+    if (key === 'cv') {
+      goTo(4);
+    } else {
+      btn.textContent = 'Finishing...';
+      const r = await post('complete', {});
+      if (r.ok) window.location.href = r.redirect || '/';
+    }
+  } else {
+    btn.disabled = false;
+    btn.textContent = key === 'cv' ? 'Next →' : 'Finish Setup →';
+    showErr('err-' + (key === 'cv' ? 3 : 4), true);
+  }
+}
+
+// Drag & drop
+['cv','id'].forEach(key => {
+  const zone = document.getElementById(key + '-zone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) {
+      const inp = document.getElementById(key + '-input');
+      const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
+      onFile(inp, key);
+    }
+  });
+});
+
+updateProgress();
+</script>
+</body>
+</html>

@@ -3,18 +3,22 @@ from django.contrib.auth.models import User
 
 
 class UserProfile(models.Model):
-    user          = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
-    photo         = models.BinaryField(blank=True, null=True)
-    photo_mime    = models.CharField(max_length=50, blank=True)
-    phone         = models.CharField(max_length=30, blank=True)
-    location      = models.CharField(max_length=100, blank=True)
-    bio           = models.TextField(blank=True)
-    github_url    = models.URLField(blank=True)
-    portfolio_url = models.URLField(blank=True)
-    linkedin_url  = models.URLField(blank=True)
-    id_number     = models.CharField(max_length=20, blank=True)   # SA ID
-    created_at    = models.DateTimeField(auto_now_add=True)
-    updated_at    = models.DateTimeField(auto_now=True)
+    user             = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    photo            = models.BinaryField(blank=True, null=True)
+    photo_mime       = models.CharField(max_length=50, blank=True)
+    phone            = models.CharField(max_length=30, blank=True)
+    location         = models.CharField(max_length=100, blank=True)
+    bio              = models.TextField(blank=True)
+    github_url       = models.URLField(blank=True)
+    portfolio_url    = models.URLField(blank=True)
+    linkedin_url     = models.URLField(blank=True)
+    id_number        = models.CharField(max_length=20, blank=True)
+    date_of_birth    = models.DateField(null=True, blank=True)
+    occupation       = models.CharField(max_length=100, blank=True)
+    years_experience = models.CharField(max_length=20, blank=True)
+    onboarding_done  = models.BooleanField(default=False)
+    created_at       = models.DateTimeField(auto_now_add=True)
+    updated_at       = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Profile: {self.user.email}"
@@ -33,13 +37,13 @@ DOC_TYPES = [
 class UserDocument(models.Model):
     user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name="documents")
     doc_type    = models.CharField(max_length=30, choices=DOC_TYPES)
-    label       = models.CharField(max_length=255)          # user-given name
+    label       = models.CharField(max_length=255)
     file_data   = models.BinaryField()
     file_name   = models.CharField(max_length=255)
     mime_type   = models.CharField(max_length=100, blank=True)
-    file_size   = models.IntegerField(default=0)            # bytes
+    file_size   = models.IntegerField(default=0)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    is_primary  = models.BooleanField(default=False)        # primary CV flag
+    is_primary  = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-uploaded_at"]
