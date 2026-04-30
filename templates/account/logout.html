@@ -1,0 +1,104 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Out — Job Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --border: #1e1e2e;
+    --accent: #00ff88; --accent2: #7c6aff; --text: #e8e8f0; --muted: #555570;
+    --danger: #ff4466;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', sans-serif; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 3rem 2.5rem; width: 100%; max-width: 400px;
+    position: relative; text-align: center;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--danger), var(--accent2));
+  }
+  .logo {
+    font-family: 'Space Mono', monospace; font-size: 0.85rem;
+    color: var(--muted); margin-bottom: 2.5rem;
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    text-decoration: none; transition: color 0.15s;
+  }
+  .logo:hover { color: var(--text); }
+  .logo-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .icon { font-size: 2.5rem; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.5rem; }
+  .sub { font-size: 0.83rem; color: var(--muted); margin-bottom: 2.25rem; line-height: 1.6; }
+  .sub strong { color: var(--text); }
+  .btn-row { display: flex; flex-direction: column; gap: 0.75rem; }
+  .btn-signout {
+    width: 100%; padding: 0.85rem 1.5rem;
+    background: var(--danger); color: #fff; border: none; cursor: pointer;
+    font-family: 'Space Mono', monospace; font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.06em; transition: opacity 0.15s;
+  }
+  .btn-signout:hover { opacity: 0.85; }
+  .btn-back {
+    display: block; width: 100%; padding: 0.85rem 1.5rem;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font-family: 'Space Mono', monospace; font-size: 0.68rem;
+    cursor: pointer; text-decoration: none; transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-back:hover { border-color: var(--accent2); color: var(--accent2); }
+  .session-info {
+    margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--muted); line-height: 1.8;
+  }
+  .session-info span { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="card">
+  <a href="/" class="logo">
+    <div class="logo-dot"></div>
+    job/hunter
+  </a>
+
+  <div class="icon">👋</div>
+  <h1>Sign out?</h1>
+  <p class="sub">
+    You're signed in as <strong>{{ request.user.email }}</strong>.<br>
+    Are you sure you want to sign out?
+  </p>
+
+  <div class="btn-row">
+    <form method="post" action="{% url 'account_logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn-signout">YES, SIGN ME OUT</button>
+    </form>
+    <a href="/" class="btn-back">← Stay signed in</a>
+  </div>
+
+  <div class="session-info">
+    Your data and documents stay saved.<br>
+    Sign back in anytime with <span>Google</span>.
+  </div>
+</div>
+</body>
+</html>

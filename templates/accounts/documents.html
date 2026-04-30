@@ -17,7 +17,6 @@
   .page-title { font-size: 1.3rem; font-weight: 500; }
   .page-sub   { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
 
-  /* ── Upload card ── */
   .upload-card {
     background: var(--surface); border: 1px solid var(--border);
     padding: 1.5rem; margin-bottom: 1.75rem; position: relative;
@@ -67,7 +66,6 @@
   .drop-sub { font-size: 0.72rem; color: var(--muted); }
   .file-picked { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent2); margin-top: 0.5rem; }
 
-  /* ── Document sections ── */
   .doc-section { margin-bottom: 1.5rem; }
   .doc-section-header {
     display: flex; align-items: center; gap: 0.75rem;
@@ -148,11 +146,11 @@
 <body>
 
 <div class="top-bar">
-  <div class="logo">job<span>/</span>hunter</div>
+  <a href="/" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
   <div class="nav">
-    <a href="/"         class="btn btn-outline btn-sm">← Dashboard</a>
-    <a href="/profile/" class="btn btn-outline btn-sm">👤 Profile</a>
-    <a href="/logout/"  class="btn btn-outline btn-sm">Sign out</a>
+    <a href="/"                 class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="/profile/"         class="btn btn-outline btn-sm">👤 Profile</a>
+    <a href="/accounts/logout/" class="btn btn-outline btn-sm">Sign out</a>
   </div>
 </div>
 
@@ -170,7 +168,6 @@
     {% endfor %}
   {% endif %}
 
-  {# ── Upload form ── #}
   <div class="upload-card">
     <div class="upload-title">Upload Document</div>
     <form method="POST" enctype="multipart/form-data" id="upload-form">
@@ -196,15 +193,12 @@
           <label class="upload-label">Label / Name</label>
           <input class="upload-input" type="text" name="label" id="label-inp" placeholder="e.g. My CV 2025">
         </div>
-        <div class="upload-group" style="grid-column: span 1">
-          {# spacer #}
-        </div>
+        <div class="upload-group"></div>
         <button type="submit" class="upload-btn">UPLOAD →</button>
       </div>
     </form>
   </div>
 
-  {# ── Grouped document sections ── #}
   {% for dt, group in grouped.items %}
   <div class="doc-section">
     <div class="doc-section-header">
@@ -270,18 +264,14 @@ function showToast(msg, ok=true) {
   t._t = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// Auto-fill label from filename
 function onFileChange(input) {
   const f = input.files[0];
   if (!f) return;
   document.getElementById('file-picked').textContent = '✓ ' + f.name;
   const labelInp = document.getElementById('label-inp');
-  if (!labelInp.value) {
-    labelInp.value = f.name.replace(/\.[^.]+$/, ''); // strip extension
-  }
+  if (!labelInp.value) labelInp.value = f.name.replace(/\.[^.]+$/, '');
 }
 
-// Drag & drop
 const zone = document.getElementById('drop-zone');
 zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
 zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
@@ -290,10 +280,7 @@ zone.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f) {
     const inp = document.getElementById('file-input');
-    // DataTransfer trick to set files
-    const dt = new DataTransfer();
-    dt.items.add(f);
-    inp.files = dt.files;
+    const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
     onFileChange(inp);
   }
 });
@@ -303,10 +290,7 @@ function deleteDoc(id) {
   fetch(`/documents/${id}/delete/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
     .then(r => r.json())
     .then(d => {
-      if (d.ok) {
-        document.getElementById(`doc-row-${id}`)?.remove();
-        showToast('Deleted.');
-      }
+      if (d.ok) { document.getElementById(`doc-row-${id}`)?.remove(); showToast('Deleted.'); }
     })
     .catch(() => showToast('Delete failed.', false));
 }
@@ -316,12 +300,10 @@ function setPrimary(id) {
     .then(r => r.json())
     .then(d => {
       if (d.ok) {
-        // Clear all primary markers
         document.querySelectorAll('.doc-row').forEach(r => {
           r.classList.remove('primary');
           r.querySelector('.primary-tag')?.remove();
         });
-        // Mark the new primary
         const row = document.getElementById(`doc-row-${id}`);
         if (row) {
           row.classList.add('primary');
@@ -329,7 +311,7 @@ function setPrimary(id) {
           if (meta) meta.insertAdjacentHTML('beforeend', '<span class="doc-tag primary-tag">★ Primary CV</span>');
           row.querySelector('.icon-btn.primary-btn')?.remove();
         }
-        showToast('Primary CV updated. Pipeline will use this CV.');
+        showToast('Primary CV updated.');
       }
     })
     .catch(() => showToast('Failed.', false));

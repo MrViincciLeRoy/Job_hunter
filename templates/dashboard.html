@@ -9,9 +9,7 @@
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/drawer.css' %}">
-{# Borrow jobs filter styles for the filter bar #}
 <style>
-  /* ── filter bar (shared with jobs.css but scoped here) ── */
   .filter-bar { border-bottom: 1px solid var(--border); background: var(--card); }
   .filter-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; padding: 0.55rem 1.5rem; border-bottom: 1px solid var(--border); }
   .filter-row:last-child { border-bottom: none; }
@@ -47,13 +45,14 @@
 <body>
 
 <div class="top-bar">
-  <div class="logo">job<span>/</span>hunter</div>
+  <a href="/" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
   <div class="nav">
     <span class="running-badge" id="running-badge"><span class="pulse"></span> RUNNING...</span>
-    <a href="/jobs/"        class="btn btn-outline btn-sm">📋 All Jobs</a>
-    <a href="/upload-cv/"   class="btn btn-outline btn-sm">+ Upload CV</a>
-    <a href="/credentials/" class="btn btn-outline btn-sm">🔑 Gmail</a>
-    <a href="/admin/"       class="btn btn-outline btn-sm">⚙ Admin</a>
+    <a href="/jobs/"            class="btn btn-outline btn-sm">📋 All Jobs</a>
+    <a href="/upload-cv/"       class="btn btn-outline btn-sm">+ Upload CV</a>
+    <a href="/credentials/"     class="btn btn-outline btn-sm">🔑 Gmail</a>
+    <a href="/profile/"         class="btn btn-outline btn-sm">👤 Profile</a>
+    <a href="/accounts/logout/" class="btn btn-outline btn-sm">Sign out</a>
   </div>
 </div>
 
@@ -65,7 +64,6 @@
 </div>
 {% endif %}
 
-{# ── Pipeline action bar ────────────────────────────────────────────────── #}
 <form method="POST" action="/trigger/" id="pipeline-form">
   {% csrf_token %}
   <input type="hidden" name="action"  id="action-input"  value="all">
@@ -88,7 +86,6 @@
   </div>
 </form>
 
-{# ── Stats row ──────────────────────────────────────────────────────────── #}
 <div class="stats-row">
   <div class="stat">
     <div class="stat-val">{{ total_jobs }}</div>
@@ -108,10 +105,7 @@
   </div>
 </div>
 
-{# ── Filter bar (for the jobs panel) ────────────────────────────────────── #}
 <div class="filter-bar">
-
-  {# Row 1: status tabs + search #}
   <div class="filter-row">
     {% for slug, label, count in tab_defs %}
     <a class="ftab
@@ -137,7 +131,6 @@
     </form>
   </div>
 
-  {# Row 2: platform chips #}
   <div class="filter-row">
     <span class="filter-label">Platform:</span>
     <a class="pchip {% if not active_platforms %}on-all{% endif %}"
@@ -155,7 +148,6 @@
     {% endfor %}
   </div>
 
-  {# Row 3: job type + active pills + clear #}
   <div class="filter-row">
     <span class="filter-label">Type:</span>
     <form method="get" action="{{ request.path }}" style="display:contents">
@@ -216,7 +208,6 @@
   &nbsp;·&nbsp;<a href="/jobs/" style="color:var(--accent2);font-size:0.57rem">View all →</a>
 </div>
 
-{# ── Main layout ────────────────────────────────────────────────────────── #}
 <div class="main">
   <div class="jobs-panel">
     <div class="panel-header">
@@ -271,7 +262,6 @@
     {% endif %}
   </div>
 
-  {# ── Side panel ────────────────────────────────────────────────────── #}
   <div class="side-panel">
     <div class="cv-card">
       <h3>Active CV</h3>
@@ -305,7 +295,6 @@
   </div>
 </div>
 
-{# ── Drawer + Toast ──────────────────────────────────────────────────────── #}
 <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div id="drawer-inner"></div>
