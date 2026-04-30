@@ -1,0 +1,282 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Profile — Job Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/base.css' %}">
+<style>
+  .page { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  .profile-header {
+    display: flex; align-items: flex-start; gap: 1.5rem;
+    padding: 2rem; background: var(--surface); border: 1px solid var(--border);
+    margin-bottom: 1.5rem; position: relative;
+  }
+  .profile-header::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .avatar-wrap { position: relative; flex-shrink: 0; }
+  .avatar {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 2px solid var(--border); object-fit: cover;
+    background: var(--card);
+  }
+  .avatar-placeholder {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace; font-size: 1.4rem; color: var(--accent);
+  }
+  .avatar-upload-btn {
+    position: absolute; bottom: 0; right: 0;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent2); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; color: #fff;
+  }
+
+  .profile-info { flex: 1; }
+  .profile-name { font-size: 1.3rem; font-weight: 600; margin-bottom: 0.2rem; }
+  .profile-email { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
+  .profile-badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .badge {
+    font-family: 'Space Mono', monospace; font-size: 0.55rem;
+    padding: 0.18rem 0.5rem; border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.green { border-color: rgba(0,255,136,0.4); color: var(--accent); }
+
+  .doc-summary {
+    display: flex; gap: 1px; background: var(--border);
+    border: 1px solid var(--border); margin-bottom: 1.5rem;
+  }
+  .doc-stat {
+    flex: 1; background: var(--surface); padding: 1rem 1.25rem;
+    display: flex; flex-direction: column; gap: 0.2rem;
+  }
+  .doc-stat-val {
+    font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent);
+  }
+  .doc-stat-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .section {
+    background: var(--surface); border: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+  }
+  .section-header {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title {
+    font-family: 'Space Mono', monospace; font-size: 0.7rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .section-body { padding: 1.5rem; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .form-input, .form-textarea {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 0.6rem 0.75rem;
+    font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
+    outline: none; transition: border-color 0.15s; width: 100%;
+  }
+  .form-input:focus, .form-textarea:focus { border-color: var(--accent2); }
+  .form-textarea { resize: vertical; min-height: 80px; }
+
+  .save-btn {
+    font-family: 'Space Mono', monospace; font-size: 0.72rem; font-weight: 700;
+    padding: 0.65rem 1.5rem; background: var(--accent); color: #000;
+    border: none; cursor: pointer; transition: opacity 0.15s; margin-top: 0.5rem;
+  }
+  .save-btn:hover { opacity: 0.85; }
+
+  .doc-quick-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .doc-item {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.7rem 1rem; border: 1px solid var(--border); background: var(--bg);
+  }
+  .doc-icon { font-size: 1rem; flex-shrink: 0; }
+  .doc-name { font-size: 0.82rem; flex: 1; }
+  .doc-meta { font-family: 'Space Mono', monospace; font-size: 0.58rem; color: var(--muted); }
+  .doc-link {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem;
+    color: var(--accent2); text-decoration: none;
+  }
+  .doc-link:hover { color: var(--accent); }
+
+  .msg { padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.82rem; border-left: 3px solid; }
+  .msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
+  .msg.error   { border-color: var(--danger,#ff4466); background: rgba(255,68,102,0.05); }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .profile-header { flex-direction: column; }
+    .doc-summary { flex-wrap: wrap; }
+    .doc-stat { flex: 1 1 40%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">job<span>/</span>hunter</div>
+  <div class="nav">
+    <a href="/"            class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="/documents/"  class="btn btn-outline btn-sm">📁 Documents</a>
+    <a href="/logout/"     class="btn btn-outline btn-sm">Sign out</a>
+  </div>
+</div>
+
+<div class="page">
+  {% if messages %}
+    {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {# ── Profile header ── #}
+  <div class="profile-header">
+    <div class="avatar-wrap">
+      {% if profile.photo %}
+        <img class="avatar" src="/photo/" alt="Profile photo">
+      {% else %}
+        <div class="avatar-placeholder">
+          {{ request.user.first_name|first|default:request.user.email|first|upper }}
+        </div>
+      {% endif %}
+    </div>
+    <div class="profile-info">
+      <div class="profile-name">
+        {{ request.user.get_full_name|default:request.user.email }}
+      </div>
+      <div class="profile-email">{{ request.user.email }}</div>
+      <div class="profile-badges">
+        <span class="badge green">Google Account</span>
+        {% if profile.location %}<span class="badge">📍 {{ profile.location }}</span>{% endif %}
+        {% if profile.github_url %}<span class="badge">GitHub linked</span>{% endif %}
+      </div>
+    </div>
+    <a href="/documents/" class="btn btn-outline btn-sm" style="flex-shrink:0">📁 My Documents</a>
+  </div>
+
+  {# ── Document summary strip ── #}
+  <div class="doc-summary">
+    {% for dt, dt_label in doc_types %}
+    <div class="doc-stat">
+      <div class="doc-stat-val">{{ doc_counts|default_if_none:"0" }}</div>
+      <div class="doc-stat-label">{{ dt_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Edit form ── #}
+  <form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Personal Info</span>
+      </div>
+      <div class="section-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input class="form-input" type="text" name="first_name" value="{{ request.user.first_name }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input class="form-input" type="text" name="last_name" value="{{ request.user.last_name }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input class="form-input" type="text" name="phone" value="{{ profile.phone }}" placeholder="+27 ...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">SA ID Number</label>
+            <input class="form-input" type="text" name="id_number" value="{{ profile.id_number }}" placeholder="13-digit ID">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Location</label>
+            <input class="form-input" type="text" name="location" value="{{ profile.location }}" placeholder="City, Province">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Profile Photo</label>
+            <input class="form-input" type="file" name="photo" accept="image/*">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Bio / Summary</label>
+            <textarea class="form-textarea" name="bio" placeholder="Brief professional summary...">{{ profile.bio }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Online Presence</span>
+      </div>
+      <div class="section-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">GitHub URL</label>
+            <input class="form-input" type="url" name="github_url" value="{{ profile.github_url }}" placeholder="https://github.com/...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">LinkedIn URL</label>
+            <input class="form-input" type="url" name="linkedin_url" value="{{ profile.linkedin_url }}" placeholder="https://linkedin.com/in/...">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Portfolio / Website</label>
+            <input class="form-input" type="url" name="portfolio_url" value="{{ profile.portfolio_url }}" placeholder="https://...">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="save-btn">SAVE PROFILE →</button>
+  </form>
+
+  {# ── Recent documents quick view ── #}
+  {% if docs %}
+  <div class="section" style="margin-top:1.5rem">
+    <div class="section-header">
+      <span class="section-title">Recent Documents</span>
+      <a href="/documents/" class="btn btn-outline btn-sm">View all →</a>
+    </div>
+    <div class="section-body">
+      <div class="doc-quick-list">
+        {% for doc in docs|slice:":5" %}
+        <div class="doc-item">
+          <div class="doc-icon">
+            {% if doc.doc_type == "cv" %}📄
+            {% elif doc.doc_type == "id_document" %}🪪
+            {% elif doc.doc_type == "z83" %}📋
+            {% elif doc.doc_type == "certificate" %}🏆
+            {% elif doc.doc_type == "cover_letter" %}✉️
+            {% else %}📁{% endif %}
+          </div>
+          <div>
+            <div class="doc-name">{{ doc.label }}</div>
+            <div class="doc-meta">{{ doc.get_doc_type_display }} · {{ doc.size_display }} · {{ doc.uploaded_at|date:"d M Y" }}</div>
+          </div>
+          <a href="/documents/{{ doc.pk }}/download/" class="doc-link">↓ Download</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+</body>
+</html>

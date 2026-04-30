@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from apps.scraper.views import dashboard, trigger_pipeline, cron_trigger, job_detail, spider_job, apply_single, test_view
@@ -21,4 +21,5 @@ urlpatterns = [
     path("job/<int:job_id>/spider/", spider_job, name="spider_job"),
     path("job/<int:job_id>/apply/", apply_single, name="apply_single"),
     path("test/", test_view, name="test"),
+    include(("apps.accounts.urls", "accounts"), namespace="accounts")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,0 +1,339 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Documents — Job Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/base.css' %}">
+<style>
+  .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+  }
+  .page-title { font-size: 1.3rem; font-weight: 500; }
+  .page-sub   { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+  /* ── Upload card ── */
+  .upload-card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 1.5rem; margin-bottom: 1.75rem; position: relative;
+  }
+  .upload-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+  }
+  .upload-title {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+  }
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 0.75rem; align-items: end; }
+  .upload-group { display: flex; flex-direction: column; gap: 0.35rem; }
+  .upload-label {
+    font-family: 'Space Mono', monospace; font-size: 0.57rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .upload-select, .upload-input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 0.55rem 0.7rem;
+    font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+    outline: none; width: 100%; transition: border-color 0.15s;
+  }
+  .upload-select:focus, .upload-input:focus { border-color: var(--accent2); }
+  .upload-select { appearance: none; -webkit-appearance: none; cursor: pointer; }
+  .upload-btn {
+    font-family: 'Space Mono', monospace; font-size: 0.68rem; font-weight: 700;
+    padding: 0.58rem 1.25rem; background: var(--accent); color: #000;
+    border: none; cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
+    align-self: end;
+  }
+  .upload-btn:hover { opacity: 0.85; }
+
+  .drop-zone {
+    border: 2px dashed var(--border); padding: 1.5rem; text-align: center;
+    cursor: pointer; transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 0.75rem;
+  }
+  .drop-zone:hover, .drop-zone.drag { border-color: var(--accent); background: rgba(0,255,136,0.02); }
+  .drop-zone input { display: none; }
+  .drop-hint {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--accent); display: block; margin-bottom: 0.3rem;
+  }
+  .drop-sub { font-size: 0.72rem; color: var(--muted); }
+  .file-picked { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent2); margin-top: 0.5rem; }
+
+  /* ── Document sections ── */
+  .doc-section { margin-bottom: 1.5rem; }
+  .doc-section-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.65rem 1rem; background: var(--surface);
+    border: 1px solid var(--border); border-bottom: none;
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .doc-section-header .count {
+    background: var(--border); color: var(--text);
+    padding: 0.1rem 0.45rem; font-size: 0.55rem;
+  }
+  .doc-type-icon { font-size: 1rem; }
+
+  .doc-list { border: 1px solid var(--border); }
+  .doc-row {
+    display: grid; grid-template-columns: 2.5rem 1fr auto;
+    align-items: center; gap: 0.75rem; padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border); background: var(--bg);
+    transition: background 0.1s;
+  }
+  .doc-row:last-child { border-bottom: none; }
+  .doc-row:hover { background: rgba(255,255,255,0.02); }
+  .doc-row.primary { border-left: 2px solid var(--accent); padding-left: calc(1rem - 2px); }
+
+  .doc-file-icon { font-size: 1.2rem; text-align: center; }
+  .doc-info { min-width: 0; }
+  .doc-label { font-size: 0.86rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-meta  { display: flex; gap: 0.5rem; margin-top: 0.2rem; flex-wrap: wrap; align-items: center; }
+  .doc-tag {
+    font-family: 'Space Mono', monospace; font-size: 0.52rem;
+    padding: 0.08rem 0.35rem; border: 1px solid var(--border); color: var(--muted);
+  }
+  .doc-tag.primary-tag { border-color: rgba(0,255,136,0.4); color: var(--accent); }
+  .doc-tag.size-tag    { color: var(--muted); }
+
+  .doc-actions { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; }
+  .icon-btn {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem;
+    padding: 0.28rem 0.6rem; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .icon-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .icon-btn.primary-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-btn.del-btn:hover { border-color: var(--danger,#ff4466); color: var(--danger,#ff4466); }
+
+  .empty-section {
+    border: 1px solid var(--border); padding: 1.25rem 1rem;
+    font-size: 0.78rem; color: var(--muted); background: var(--bg);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .msg { padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.82rem; border-left: 3px solid; }
+  .msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
+  .msg.error   { border-color: #ff4466; background: rgba(255,68,102,0.05); }
+
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
+    font-family: 'Space Mono', monospace; font-size: 0.68rem;
+    padding: 0.65rem 1.1rem; border: 1px solid; max-width: 280px;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); pointer-events: all; }
+  .toast.ok  { background: rgba(0,255,136,0.1); border-color: rgba(0,255,136,0.4); color: var(--accent); }
+  .toast.err { background: rgba(255,68,102,0.1); border-color: rgba(255,68,102,0.4); color: #ff4466; }
+
+  @media (max-width: 640px) {
+    .upload-grid { grid-template-columns: 1fr 1fr; }
+    .upload-grid .upload-group:nth-child(3) { grid-column: 1 / -1; }
+    .upload-btn { grid-column: 1 / -1; }
+    .doc-row { grid-template-columns: 2rem 1fr auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">job<span>/</span>hunter</div>
+  <div class="nav">
+    <a href="/"         class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="/profile/" class="btn btn-outline btn-sm">👤 Profile</a>
+    <a href="/logout/"  class="btn btn-outline btn-sm">Sign out</a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">My Documents</div>
+      <div class="page-sub">{{ total }} file{{ total|pluralize }} stored · all private to your account</div>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {# ── Upload form ── #}
+  <div class="upload-card">
+    <div class="upload-title">Upload Document</div>
+    <form method="POST" enctype="multipart/form-data" id="upload-form">
+      {% csrf_token %}
+
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" name="file" onchange="onFileChange(this)">
+        <span class="drop-hint">CLICK OR DRAG & DROP</span>
+        <span class="drop-sub">PDF, JPG, PNG, DOCX — max 10 MB</span>
+        <div class="file-picked" id="file-picked"></div>
+      </div>
+
+      <div class="upload-grid">
+        <div class="upload-group">
+          <label class="upload-label">Document Type</label>
+          <select class="upload-select" name="doc_type" id="doc-type-sel">
+            {% for dt, dt_label in doc_types %}
+            <option value="{{ dt }}">{{ dt_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="upload-group">
+          <label class="upload-label">Label / Name</label>
+          <input class="upload-input" type="text" name="label" id="label-inp" placeholder="e.g. My CV 2025">
+        </div>
+        <div class="upload-group" style="grid-column: span 1">
+          {# spacer #}
+        </div>
+        <button type="submit" class="upload-btn">UPLOAD →</button>
+      </div>
+    </form>
+  </div>
+
+  {# ── Grouped document sections ── #}
+  {% for dt, group in grouped.items %}
+  <div class="doc-section">
+    <div class="doc-section-header">
+      <span class="doc-type-icon">
+        {% if dt == "cv" %}📄
+        {% elif dt == "id_document" %}🪪
+        {% elif dt == "z83" %}📋
+        {% elif dt == "certificate" %}🏆
+        {% elif dt == "cover_letter" %}✉️
+        {% else %}📁{% endif %}
+      </span>
+      {{ group.label }}
+      <span class="count">{{ group.docs|length }}</span>
+    </div>
+
+    {% if group.docs %}
+    <div class="doc-list">
+      {% for doc in group.docs %}
+      <div class="doc-row {% if doc.is_primary %}primary{% endif %}" id="doc-row-{{ doc.pk }}">
+        <div class="doc-file-icon">
+          {% if "pdf" in doc.mime_type %}📕
+          {% elif "image" in doc.mime_type %}🖼️
+          {% elif "word" in doc.mime_type or "docx" in doc.file_name %}📝
+          {% else %}📄{% endif %}
+        </div>
+        <div class="doc-info">
+          <div class="doc-label">{{ doc.label }}</div>
+          <div class="doc-meta">
+            <span class="doc-tag size-tag">{{ doc.size_display }}</span>
+            <span class="doc-tag">{{ doc.uploaded_at|date:"d M Y" }}</span>
+            <span class="doc-tag">{{ doc.file_name }}</span>
+            {% if doc.is_primary %}<span class="doc-tag primary-tag">★ Primary CV</span>{% endif %}
+          </div>
+        </div>
+        <div class="doc-actions">
+          {% if dt == "cv" and not doc.is_primary %}
+          <button class="icon-btn primary-btn" onclick="setPrimary({{ doc.pk }})">★ Set Primary</button>
+          {% endif %}
+          <a href="/documents/{{ doc.pk }}/download/" class="icon-btn">↓ Download</a>
+          <button class="icon-btn del-btn" onclick="deleteDoc({{ doc.pk }})">✕</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-section">No {{ group.label|lower }} uploaded yet.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+
+function showToast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (ok ? 'ok' : 'err');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Auto-fill label from filename
+function onFileChange(input) {
+  const f = input.files[0];
+  if (!f) return;
+  document.getElementById('file-picked').textContent = '✓ ' + f.name;
+  const labelInp = document.getElementById('label-inp');
+  if (!labelInp.value) {
+    labelInp.value = f.name.replace(/\.[^.]+$/, ''); // strip extension
+  }
+}
+
+// Drag & drop
+const zone = document.getElementById('drop-zone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) {
+    const inp = document.getElementById('file-input');
+    // DataTransfer trick to set files
+    const dt = new DataTransfer();
+    dt.items.add(f);
+    inp.files = dt.files;
+    onFileChange(inp);
+  }
+});
+
+function deleteDoc(id) {
+  if (!confirm('Delete this document?')) return;
+  fetch(`/documents/${id}/delete/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        document.getElementById(`doc-row-${id}`)?.remove();
+        showToast('Deleted.');
+      }
+    })
+    .catch(() => showToast('Delete failed.', false));
+}
+
+function setPrimary(id) {
+  fetch(`/documents/${id}/primary/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        // Clear all primary markers
+        document.querySelectorAll('.doc-row').forEach(r => {
+          r.classList.remove('primary');
+          r.querySelector('.primary-tag')?.remove();
+        });
+        // Mark the new primary
+        const row = document.getElementById(`doc-row-${id}`);
+        if (row) {
+          row.classList.add('primary');
+          const meta = row.querySelector('.doc-meta');
+          if (meta) meta.insertAdjacentHTML('beforeend', '<span class="doc-tag primary-tag">★ Primary CV</span>');
+          row.querySelector('.icon-btn.primary-btn')?.remove();
+        }
+        showToast('Primary CV updated. Pipeline will use this CV.');
+      }
+    })
+    .catch(() => showToast('Failed.', false));
+}
+</script>
+</body>
+</html>

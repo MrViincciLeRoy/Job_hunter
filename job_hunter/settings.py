@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "apps.scraper",
     "apps.matcher",
     "apps.mailer",
+    "apps.accounts",
 ]
 
 MIDDLEWARE = [
