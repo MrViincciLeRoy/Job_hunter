@@ -21,5 +21,5 @@ urlpatterns = [
     path("job/<int:job_id>/spider/", spider_job, name="spider_job"),
     path("job/<int:job_id>/apply/", apply_single, name="apply_single"),
     path("test/", test_view, name="test"),
-    include(("apps.accounts.urls", "accounts"), namespace="accounts")),
+    include(("apps.accounts.urls", "accounts"), namespace="accounts"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
