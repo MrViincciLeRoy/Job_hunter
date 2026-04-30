@@ -34,7 +34,12 @@ jobs:
           find apps -path "*/migrations/*.pyc" -delete
 
       - name: Make fresh migrations
-        run: python manage.py makemigrations --no-input
+        run: |
+          python manage.py makemigrations accounts --no-input
+          python manage.py makemigrations cv --no-input
+          python manage.py makemigrations scraper --no-input
+          python manage.py makemigrations mailer --no-input
+          python manage.py makemigrations matcher --no-input
 
       - name: Run migrate
         run: python manage.py migrate --no-input
