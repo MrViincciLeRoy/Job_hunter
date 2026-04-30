@@ -28,11 +28,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Make migrations
-        run: python manage.py makemigrations cv scraper matcher mailer accounts --no-input
+      - name: Delete all existing migrations
+        run: |
+          find apps -path "*/migrations/*.py" -not -name "__init__.py" -delete
+          find apps -path "*/migrations/*.pyc" -delete
 
-      - name: Merge migrations if needed
-        run: python manage.py makemigrations --merge --no-input
+      - name: Make fresh migrations
+        run: python manage.py makemigrations --no-input
 
       - name: Run migrate
         run: python manage.py migrate --no-input
@@ -42,5 +44,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add apps/*/migrations/*.py
-          git diff --cached --quiet || git commit -m "chore: add migrations"
+          git diff --cached --quiet || git commit -m "chore: regenerate migrations"
           git push
