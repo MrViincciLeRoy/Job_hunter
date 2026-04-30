@@ -8,9 +8,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SECRET_KEY: github-actions-dummy-key
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
       DEBUG: "True"
-      DATABASE_URL: sqlite:///db.sqlite3
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +22,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install Django>=4.2 python-jobspy pdfplumber groq requests \
-            beautifulsoup4 python-dotenv dj-database-url google-auth \
-            google-auth-oauthlib google-api-python-client aiohttp
+            beautifulsoup4 python-dotenv dj-database-url psycopg2-binary \
+            google-auth google-auth-oauthlib google-api-python-client aiohttp
 
       - name: Make migrations
         run: python manage.py makemigrations --no-input
