@@ -35,29 +35,17 @@
   .logo-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 
   /* Progress */
-  .progress-bar {
-    width: 100%; max-width: 520px; height: 2px;
-    background: var(--border); margin-bottom: 2.5rem; position: relative;
-  }
-  .progress-fill {
-    height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
-    transition: width 0.4s ease;
-  }
-  .progress-steps {
-    display: flex; justify-content: space-between;
-    max-width: 520px; width: 100%; margin-top: 0.5rem; margin-bottom: 2rem;
-  }
-  .step-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--border); transition: background 0.3s;
-  }
-  .step-dot.active { background: var(--accent); }
-  .step-dot.done   { background: var(--accent2); }
+  .progress-wrap { width: 100%; max-width: 560px; }
+  .progress-bar  { width: 100%; height: 2px; background: var(--border); margin-bottom: 0.6rem; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.4s ease; }
+  .progress-meta { display: flex; justify-content: space-between; margin-bottom: 2rem; }
+  .progress-label { font-family: 'Space Mono', monospace; font-size: 0.58rem; color: var(--muted); }
+  .progress-label.active { color: var(--accent); }
 
   /* Card */
   .card {
     background: var(--surface); border: 1px solid var(--border);
-    padding: 2.5rem; width: 100%; max-width: 520px;
+    padding: 2.5rem; width: 100%; max-width: 560px;
     position: relative; display: none;
   }
   .card.active { display: block; }
@@ -66,27 +54,35 @@
     background: linear-gradient(90deg, var(--accent), var(--accent2));
   }
 
-  .card-step {
+  .card-step  {
     font-family: 'Space Mono', monospace; font-size: 0.6rem;
     color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em;
     margin-bottom: 0.5rem;
   }
-  .card-title { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.4rem; }
-  .card-sub   { font-size: 0.83rem; color: var(--muted); margin-bottom: 2rem; line-height: 1.6; }
+  .card-title { font-size: 1.35rem; font-weight: 500; margin-bottom: 0.4rem; }
+  .card-sub   { font-size: 0.83rem; color: var(--muted); margin-bottom: 1.75rem; line-height: 1.6; }
 
+  /* Forms */
   .form-group  { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
   .form-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .form-label  {
     font-family: 'Space Mono', monospace; font-size: 0.58rem;
     color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .form-label .ai-badge {
+    font-size: 0.5rem; padding: 0.08rem 0.35rem;
+    background: rgba(124,106,255,0.15); border: 1px solid rgba(124,106,255,0.3);
+    color: var(--accent2); border-radius: 2px;
   }
   .form-input, .form-select, .form-textarea {
     background: var(--bg); border: 1px solid var(--border);
     color: var(--text); padding: 0.65rem 0.8rem;
     font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
-    outline: none; transition: border-color 0.15s; width: 100%;
+    outline: none; transition: border-color 0.15s, background 0.2s; width: 100%;
   }
   .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent2); }
+  .form-input.ai-filled { border-color: rgba(124,106,255,0.5); background: rgba(124,106,255,0.04); }
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-select   { appearance: none; cursor: pointer; }
 
@@ -98,16 +94,109 @@
   }
   .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(0,255,136,0.02); }
   .upload-zone input { display: none; }
-  .upload-hint  {
-    font-family: 'Space Mono', monospace; font-size: 0.65rem;
-    color: var(--accent); display: block; margin-bottom: 0.4rem;
-  }
+  .upload-hint  { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); display: block; margin-bottom: 0.4rem; }
   .upload-sub   { font-size: 0.75rem; color: var(--muted); }
-  .upload-name  {
-    font-family: 'Space Mono', monospace; font-size: 0.65rem;
-    color: var(--accent2); margin-top: 0.75rem; display: none;
-  }
+  .upload-name  { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent2); margin-top: 0.75rem; display: none; }
   .upload-name.show { display: block; }
+
+  /* Extraction state */
+  .extract-state { display: none; margin-top: 1.25rem; }
+  .extract-state.show { display: block; }
+  .extract-bar {
+    height: 2px; background: var(--border); overflow: hidden; margin-bottom: 0.75rem;
+  }
+  .extract-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    width: 0%;
+    transition: width 0.3s ease;
+    animation: extractPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes extractPulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+  }
+  .extract-label {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem;
+    color: var(--accent2); text-align: center;
+  }
+  .extract-success {
+    padding: 0.75rem 1rem; background: rgba(0,255,136,0.06);
+    border: 1px solid rgba(0,255,136,0.25); margin-top: 1rem;
+  }
+  .extract-success-title {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent);
+    margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;
+  }
+  .extract-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+  .extract-chip {
+    font-family: 'Space Mono', monospace; font-size: 0.52rem;
+    padding: 0.1rem 0.45rem; border: 1px solid rgba(124,106,255,0.3);
+    color: var(--accent2); background: rgba(124,106,255,0.06);
+  }
+  .extract-err {
+    padding: 0.65rem 0.9rem; border: 1px solid rgba(255,68,102,0.3);
+    background: rgba(255,68,102,0.05); font-size: 0.75rem; color: var(--danger);
+    margin-top: 1rem; display: none;
+  }
+  .extract-err.show { display: block; }
+
+  /* Review sections inside cards */
+  .review-section { margin-bottom: 1.25rem; }
+  .review-section-title {
+    font-family: 'Space Mono', monospace; font-size: 0.58rem;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 0.85rem;
+  }
+
+  /* Dynamic list items (experience, education, skills etc.) */
+  .dyn-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .dyn-item {
+    border: 1px solid var(--border); background: var(--bg);
+    padding: 0.85rem 1rem; position: relative;
+  }
+  .dyn-item.ai-sourced { border-color: rgba(124,106,255,0.35); }
+  .dyn-item-title { font-size: 0.85rem; font-weight: 600; }
+  .dyn-item-sub   { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+  .dyn-item-remove {
+    position: absolute; top: 0.6rem; right: 0.7rem;
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 0.65rem; transition: color 0.15s;
+  }
+  .dyn-item-remove:hover { color: var(--danger); }
+
+  .pill-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+  .pill {
+    display: flex; align-items: center; gap: 0.35rem;
+    border: 1px solid var(--border); padding: 0.2rem 0.6rem 0.2rem 0.7rem;
+    background: var(--bg); font-size: 0.75rem;
+  }
+  .pill.ai-sourced { border-color: rgba(124,106,255,0.35); }
+  .pill-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: var(--accent2); }
+  .pill button {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 0.6rem; padding: 0 0.1rem; line-height: 1; transition: color 0.15s;
+  }
+  .pill button:hover { color: var(--danger); }
+
+  .add-inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-top: 0.5rem; }
+  .add-inline .form-group { flex: 1; min-width: 110px; margin-bottom: 0; }
+  .add-inline .form-input, .add-inline .form-select { padding: 0.5rem 0.65rem; font-size: 0.8rem; }
+  .btn-inline-add {
+    font-family: 'Space Mono', monospace; font-size: 0.6rem; font-weight: 700;
+    padding: 0.5rem 0.9rem; background: var(--surface); color: var(--accent);
+    border: 1px dashed rgba(0,255,136,0.4); cursor: pointer; transition: all 0.15s;
+    align-self: flex-end; white-space: nowrap;
+  }
+  .btn-inline-add:hover { background: rgba(0,255,136,0.05); }
+
+  /* AI info bar */
+  .ai-bar {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.55rem 0.9rem; background: rgba(124,106,255,0.07);
+    border: 1px solid rgba(124,106,255,0.2); margin-bottom: 1.5rem;
+  }
+  .ai-bar-icon { font-size: 0.85rem; flex-shrink: 0; }
+  .ai-bar-text { font-size: 0.75rem; color: var(--accent2); line-height: 1.4; }
 
   /* Buttons */
   .btn-row { display: flex; gap: 0.75rem; margin-top: 1.75rem; align-items: center; }
@@ -129,11 +218,7 @@
     font-family: 'Space Mono', monospace; font-size: 0.6rem;
     color: var(--danger); margin-top: 0.75rem;
   }
-
-  .error-msg {
-    font-size: 0.78rem; color: var(--danger);
-    margin-top: 0.5rem; display: none;
-  }
+  .error-msg { font-size: 0.78rem; color: var(--danger); margin-top: 0.5rem; display: none; }
   .error-msg.show { display: block; }
 
   @media (max-width: 540px) {
@@ -146,31 +231,35 @@
 
 <div class="logo"><div class="logo-dot"></div>job/hunter</div>
 
-<div class="progress-bar" style="max-width:520px;width:100%">
-  <div class="progress-fill" id="progress" style="width:0%"></div>
-</div>
-<div class="progress-steps">
-  <div class="step-dot active" id="dot-0"></div>
-  <div class="step-dot" id="dot-1"></div>
-  <div class="step-dot" id="dot-2"></div>
-  <div class="step-dot" id="dot-3"></div>
-  <div class="step-dot" id="dot-4"></div>
+<!-- Progress -->
+<div class="progress-wrap">
+  <div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+  <div class="progress-meta">
+    <span class="progress-label" id="pl-0">Personal</span>
+    <span class="progress-label" id="pl-1">CV Upload</span>
+    <span class="progress-label" id="pl-2">Professional</span>
+    <span class="progress-label" id="pl-3">Online</span>
+    <span class="progress-label" id="pl-4">Review</span>
+    <span class="progress-label" id="pl-5">ID Doc</span>
+  </div>
 </div>
 
-{# ── Step 1: Personal ── #}
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 0 — Personal
+══════════════════════════════════════════════════════════════ -->
 <div class="card active" id="card-0">
-  <div class="card-step">Step 1 of 5</div>
+  <div class="card-step">Step 1 of 6 · Personal</div>
   <div class="card-title">Let's get to know you 👋</div>
   <div class="card-sub">Fill in your basic personal details so your applications look professional.</div>
 
   <div class="form-grid">
     <div class="form-group">
       <label class="form-label">First Name *</label>
-      <input class="form-input" type="text" id="first_name" value="{{ request.user.first_name }}" placeholder="Viincci">
+      <input class="form-input" type="text" id="first_name" value="{{ request.user.first_name }}" placeholder="Jane">
     </div>
     <div class="form-group">
       <label class="form-label">Last Name *</label>
-      <input class="form-input" type="text" id="last_name" value="{{ request.user.last_name }}" placeholder="Le Roy">
+      <input class="form-input" type="text" id="last_name" value="{{ request.user.last_name }}" placeholder="Dlamini">
     </div>
     <div class="form-group">
       <label class="form-label">Date of Birth *</label>
@@ -196,11 +285,54 @@
   </div>
 </div>
 
-{# ── Step 2: Professional ── #}
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 1 — CV Upload + Extract
+══════════════════════════════════════════════════════════════ -->
 <div class="card" id="card-1">
-  <div class="card-step">Step 2 of 5</div>
-  <div class="card-title">What do you do? 💼</div>
-  <div class="card-sub">Tell us about your professional background so we can match you to the right jobs.</div>
+  <div class="card-step">Step 2 of 6 · CV Upload</div>
+  <div class="card-title">Upload your CV 📄</div>
+  <div class="card-sub">We'll read your CV and pre-fill the rest of your profile automatically. You can review and edit everything before saving.</div>
+
+  <div class="upload-zone" id="cv-zone" onclick="document.getElementById('cv-file').click()">
+    <input type="file" id="cv-file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="onCvFile(this)">
+    <span class="upload-hint">CLICK OR DRAG & DROP YOUR CV</span>
+    <span class="upload-sub">PDF preferred · DOC, DOCX, JPG, PNG also accepted · max 10 MB</span>
+    <div class="upload-name" id="cv-file-name"></div>
+  </div>
+
+  <!-- Extraction progress -->
+  <div class="extract-state" id="extract-state">
+    <div class="extract-bar"><div class="extract-bar-fill" id="extract-fill"></div></div>
+    <div class="extract-label" id="extract-label">Reading CV with AI…</div>
+  </div>
+
+  <!-- Success summary -->
+  <div class="extract-success" id="extract-success" style="display:none">
+    <div class="extract-success-title">✓ CV extracted successfully</div>
+    <div id="extract-summary" class="extract-chips"></div>
+  </div>
+
+  <div class="extract-err" id="extract-err"></div>
+
+  <div class="required-note">* CV is required to continue</div>
+  <div class="btn-row">
+    <button class="btn-next" id="cv-next-btn" onclick="proceedFromCv()" disabled>Continue →</button>
+    <button class="btn-skip" onclick="skipCvExtract()">Skip AI extraction</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 2 — Professional (pre-filled)
+══════════════════════════════════════════════════════════════ -->
+<div class="card" id="card-2">
+  <div class="card-step">Step 3 of 6 · Professional</div>
+  <div class="card-title">Your professional profile 💼</div>
+  <div class="card-sub">Review and edit the details extracted from your CV.</div>
+
+  <div id="ai-bar-2" class="ai-bar" style="display:none">
+    <span class="ai-bar-icon">✦</span>
+    <span class="ai-bar-text">Fields marked <strong style="color:var(--accent2)">AI</strong> were extracted from your CV. Review and correct anything that looks wrong.</span>
+  </div>
 
   <div class="form-group">
     <label class="form-label">Job Title / Occupation *</label>
@@ -210,11 +342,11 @@
     <label class="form-label">Years of Experience</label>
     <select class="form-select" id="years_experience">
       <option value="">Select...</option>
-      <option value="0-1" {% if profile.years_experience == "0-1" %}selected{% endif %}>Less than 1 year</option>
-      <option value="1-2" {% if profile.years_experience == "1-2" %}selected{% endif %}>1–2 years</option>
-      <option value="3-5" {% if profile.years_experience == "3-5" %}selected{% endif %}>3–5 years</option>
-      <option value="5-10" {% if profile.years_experience == "5-10" %}selected{% endif %}>5–10 years</option>
-      <option value="10+" {% if profile.years_experience == "10+" %}selected{% endif %}>10+ years</option>
+      <option value="0-1">Less than 1 year</option>
+      <option value="1-2">1–2 years</option>
+      <option value="3-5">3–5 years</option>
+      <option value="5-10">5–10 years</option>
+      <option value="10+">10+ years</option>
     </select>
   </div>
   <div class="form-group">
@@ -222,18 +354,25 @@
     <textarea class="form-textarea" id="bio" placeholder="Brief summary of your skills and experience...">{{ profile.bio }}</textarea>
   </div>
 
-  <div class="error-msg" id="err-1">Please enter your occupation.</div>
+  <div class="error-msg" id="err-2">Please enter your occupation.</div>
   <div class="btn-row">
-    <button class="btn-next" onclick="submitStep1()">Next →</button>
-    <button class="btn-skip" onclick="goTo(2)">Skip for now</button>
+    <button class="btn-next" onclick="submitStep2()">Next →</button>
+    <button class="btn-skip" onclick="goTo(3)">Skip for now</button>
   </div>
 </div>
 
-{# ── Step 3: Online presence ── #}
-<div class="card" id="card-2">
-  <div class="card-step">Step 3 of 5</div>
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 3 — Online presence (pre-filled)
+══════════════════════════════════════════════════════════════ -->
+<div class="card" id="card-3">
+  <div class="card-step">Step 4 of 6 · Online</div>
   <div class="card-title">Online presence 🌐</div>
-  <div class="card-sub">Add your profiles so employers can learn more about you. All optional.</div>
+  <div class="card-sub">Your profiles extracted from your CV. All optional.</div>
+
+  <div id="ai-bar-3" class="ai-bar" style="display:none">
+    <span class="ai-bar-icon">✦</span>
+    <span class="ai-bar-text">URLs were found in your CV and pre-filled below.</span>
+  </div>
 
   <div class="form-group">
     <label class="form-label">LinkedIn URL</label>
@@ -249,180 +388,517 @@
   </div>
 
   <div class="btn-row">
-    <button class="btn-next" onclick="submitStep2()">Next →</button>
-    <button class="btn-skip" onclick="goTo(3)">Skip for now</button>
+    <button class="btn-next" onclick="submitStep3()">Next →</button>
+    <button class="btn-skip" onclick="goTo(4)">Skip for now</button>
   </div>
 </div>
 
-{# ── Step 4: CV upload ── #}
-<div class="card" id="card-3">
-  <div class="card-step">Step 4 of 5</div>
-  <div class="card-title">Upload your CV 📄</div>
-  <div class="card-sub">Your CV is required to apply for jobs. PDF only, max 10MB.</div>
-
-  <div class="upload-zone" id="cv-zone" onclick="document.getElementById('cv-input').click()">
-    <input type="file" id="cv-input" accept=".pdf,.doc,.docx" onchange="onFile(this,'cv')">
-    <span class="upload-hint">CLICK OR DRAG & DROP</span>
-    <span class="upload-sub">PDF, DOC, DOCX — max 10MB</span>
-    <div class="upload-name" id="cv-name"></div>
-  </div>
-
-  <div class="required-note">* CV is required to continue</div>
-  <div class="error-msg" id="err-3">Please upload your CV to continue.</div>
-  <div class="btn-row">
-    <button class="btn-next" id="cv-btn" onclick="submitFile('cv')" disabled>Next →</button>
-  </div>
-</div>
-
-{# ── Step 5: ID upload ── #}
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 4 — Review extracted data (experience / edu / skills)
+══════════════════════════════════════════════════════════════ -->
 <div class="card" id="card-4">
-  <div class="card-step">Step 5 of 5</div>
+  <div class="card-step">Step 5 of 6 · Review</div>
+  <div class="card-title">Review extracted data 🔍</div>
+  <div class="card-sub">Everything below was pulled from your CV. Remove anything incorrect, add what's missing.</div>
+
+  <!-- Work Experience -->
+  <div class="review-section">
+    <div class="review-section-title">Work Experience</div>
+    <div class="dyn-list" id="review-exp-list"></div>
+    <!-- Add inline -->
+    <div class="add-inline">
+      <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="add-exp-title" placeholder="Job Title"/></div>
+      <div class="form-group"><label class="form-label">Company</label><input class="form-input" id="add-exp-company" placeholder="Company"/></div>
+      <div class="form-group"><label class="form-label">From</label><input class="form-input" id="add-exp-start" type="date"/></div>
+      <button class="btn-inline-add" onclick="addReviewExp()">+ Add</button>
+    </div>
+  </div>
+
+  <!-- Education -->
+  <div class="review-section">
+    <div class="review-section-title">Education & Qualifications</div>
+    <div class="dyn-list" id="review-edu-list"></div>
+    <div class="add-inline">
+      <div class="form-group"><label class="form-label">Institution</label><input class="form-input" id="add-edu-inst" placeholder="Institution"/></div>
+      <div class="form-group"><label class="form-label">Qualification</label><input class="form-input" id="add-edu-qual" placeholder="Degree / Diploma"/></div>
+      <div class="form-group"><label class="form-label">Year</label><input class="form-input" id="add-edu-year" type="number" placeholder="2020"/></div>
+      <button class="btn-inline-add" onclick="addReviewEdu()">+ Add</button>
+    </div>
+  </div>
+
+  <!-- Skills -->
+  <div class="review-section">
+    <div class="review-section-title">Skills</div>
+    <div class="pill-list" id="review-skills-list"></div>
+    <div class="add-inline">
+      <div class="form-group" style="flex:2"><label class="form-label">Skill Name</label><input class="form-input" id="add-skill-name" placeholder="e.g. Python"/></div>
+      <div class="form-group">
+        <label class="form-label">Level</label>
+        <select class="form-select" id="add-skill-level">
+          <option value="beginner">Beginner</option>
+          <option value="intermediate" selected>Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+      </div>
+      <button class="btn-inline-add" onclick="addReviewSkill()">+ Add</button>
+    </div>
+  </div>
+
+  <!-- Languages -->
+  <div class="review-section">
+    <div class="review-section-title">Languages</div>
+    <div class="pill-list" id="review-langs-list"></div>
+    <div class="add-inline">
+      <div class="form-group" style="flex:2"><label class="form-label">Language</label><input class="form-input" id="add-lang-name" placeholder="e.g. Zulu"/></div>
+      <div class="form-group">
+        <label class="form-label">Proficiency</label>
+        <select class="form-select" id="add-lang-prof">
+          <option value="basic">Basic</option>
+          <option value="conversational">Conversational</option>
+          <option value="professional" selected>Professional</option>
+          <option value="native">Native / Fluent</option>
+        </select>
+      </div>
+      <button class="btn-inline-add" onclick="addReviewLang()">+ Add</button>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-next" onclick="submitReview()">Save & Continue →</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 5 — ID Upload
+══════════════════════════════════════════════════════════════ -->
+<div class="card" id="card-5">
+  <div class="card-step">Step 6 of 6 · ID Document</div>
   <div class="card-title">Upload your ID document 🪪</div>
   <div class="card-sub">A certified copy of your SA ID or passport is required for most job applications.</div>
 
-  <div class="upload-zone" id="id-zone" onclick="document.getElementById('id-input').click()">
-    <input type="file" id="id-input" accept=".pdf,.jpg,.jpeg,.png" onchange="onFile(this,'id')">
+  <div class="upload-zone" id="id-zone" onclick="document.getElementById('id-file').click()">
+    <input type="file" id="id-file" accept=".pdf,.jpg,.jpeg,.png" onchange="onIdFile(this)">
     <span class="upload-hint">CLICK OR DRAG & DROP</span>
-    <span class="upload-sub">PDF, JPG, PNG — max 10MB</span>
-    <div class="upload-name" id="id-name"></div>
+    <span class="upload-sub">PDF, JPG, PNG — max 10 MB</span>
+    <div class="upload-name" id="id-file-name"></div>
   </div>
 
   <div class="required-note">* ID document is required to continue</div>
-  <div class="error-msg" id="err-4">Please upload your ID document to continue.</div>
+  <div class="error-msg" id="err-5">Please upload your ID document.</div>
   <div class="btn-row">
-    <button class="btn-next" id="id-btn" onclick="submitFile('id')" disabled>Finish Setup →</button>
+    <button class="btn-next" id="id-next-btn" onclick="submitId()" disabled>Finish Setup →</button>
   </div>
 </div>
 
 <script>
-const CSRF = '{{ csrf_token }}';
-let currentStep = 0;
-const TOTAL = 5;
+const CSRF   = '{{ csrf_token }}';
+const STEPS  = ['Personal','CV Upload','Professional','Online','Review','ID Doc'];
+let   step   = 0;
 
+/* ── Progress ─────────────────────────────────────────────────── */
 function updateProgress() {
-  const pct = (currentStep / (TOTAL - 1)) * 100;
-  document.getElementById('progress').style.width = pct + '%';
-  for (let i = 0; i < TOTAL; i++) {
-    const dot = document.getElementById('dot-' + i);
-    dot.className = 'step-dot' + (i < currentStep ? ' done' : i === currentStep ? ' active' : '');
-  }
+  document.getElementById('progress').style.width = (step / (STEPS.length - 1) * 100) + '%';
+  STEPS.forEach((_,i) => {
+    const el = document.getElementById('pl-' + i);
+    el.className = 'progress-label' + (i === step ? ' active' : '');
+  });
 }
 
-function goTo(step) {
-  document.getElementById('card-' + currentStep).classList.remove('active');
-  currentStep = step;
-  document.getElementById('card-' + currentStep).classList.add('active');
+function goTo(n) {
+  document.getElementById('card-' + step).classList.remove('active');
+  step = n;
+  document.getElementById('card-' + step).classList.add('active');
   updateProgress();
-  window.scrollTo(0, 0);
+  window.scrollTo(0,0);
 }
 
-function showErr(id, show) {
+/* ── API helpers ──────────────────────────────────────────────── */
+async function post(url, data) {
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  for (const [k,v] of Object.entries(data)) fd.append(k, v);
+  const r = await fetch(url, {method:'POST', body:fd});
+  return r.json();
+}
+async function postFile(url, key, file) {
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('step', key);
+  fd.append('file', file);
+  const r = await fetch(url, {method:'POST', body:fd});
+  return r.json();
+}
+function showErr(id, show, msg) {
   const el = document.getElementById(id);
   el.classList.toggle('show', show);
+  if (msg) el.textContent = msg;
 }
 
-async function post(step, body) {
-  const fd = new FormData();
-  fd.append('csrfmiddlewaretoken', CSRF);
-  fd.append('step', step);
-  for (const [k, v] of Object.entries(body)) fd.append(k, v);
-  const r = await fetch('/accounts/onboarding/', { method: 'POST', body: fd });
-  return r.json();
-}
+/* ── Extracted data store ─────────────────────────────────────── */
+let EXTRACTED = null;    // raw extracted object
+let _cvFile   = null;
+let _idFile   = null;
 
-async function postFile(step, file) {
-  const fd = new FormData();
-  fd.append('csrfmiddlewaretoken', CSRF);
-  fd.append('step', step);
-  fd.append('file', file);
-  const r = await fetch('/accounts/onboarding/', { method: 'POST', body: fd });
-  return r.json();
-}
+// Review lists (mutable arrays the user can edit before saving)
+const REVIEW = {
+  experiences: [],
+  educations:  [],
+  skills:      [],
+  languages:   [],
+};
 
+/* ═══════════ STEP 0 — Personal ════════════════════════════════ */
 async function submitStep0() {
-  const fn = document.getElementById('first_name').value.trim();
-  const ln = document.getElementById('last_name').value.trim();
-  const dob = document.getElementById('date_of_birth').value;
+  const fn    = document.getElementById('first_name').value.trim();
+  const ln    = document.getElementById('last_name').value.trim();
+  const dob   = document.getElementById('date_of_birth').value;
   const phone = document.getElementById('phone').value.trim();
-  const loc = document.getElementById('location').value.trim();
+  const loc   = document.getElementById('location').value.trim();
   if (!fn || !ln || !dob || !phone || !loc) { showErr('err-0', true); return; }
   showErr('err-0', false);
-  await post('personal', {
-    first_name: fn, last_name: ln, date_of_birth: dob,
-    phone, location: loc,
+  await post('/accounts/onboarding/', {
+    step: 'personal', first_name: fn, last_name: ln,
+    date_of_birth: dob, phone, location: loc,
     id_number: document.getElementById('id_number').value.trim(),
   });
   goTo(1);
 }
 
-async function submitStep1() {
-  const occ = document.getElementById('occupation').value.trim();
-  if (!occ) { showErr('err-1', true); return; }
-  showErr('err-1', false);
-  await post('professional', {
-    occupation: occ,
-    years_experience: document.getElementById('years_experience').value,
-    bio: document.getElementById('bio').value.trim(),
+/* ═══════════ STEP 1 — CV Upload & Extract ══════════════════════ */
+function onCvFile(input) {
+  const f = input.files[0];
+  if (!f) return;
+  _cvFile = f;
+  const nameEl = document.getElementById('cv-file-name');
+  nameEl.textContent = '✓ ' + f.name;
+  nameEl.classList.add('show');
+  extractCv(f);
+}
+
+async function extractCv(file) {
+  // Show progress bar
+  const state = document.getElementById('extract-state');
+  const fill  = document.getElementById('extract-fill');
+  const label = document.getElementById('extract-label');
+  const errEl = document.getElementById('extract-err');
+  const successEl = document.getElementById('extract-success');
+
+  state.classList.add('show');
+  successEl.style.display = 'none';
+  errEl.classList.remove('show');
+  document.getElementById('cv-next-btn').disabled = true;
+
+  // Animate bar 0→80 while waiting
+  fill.style.transition = 'width 8s ease';
+  fill.style.width = '80%';
+  label.textContent = 'Reading your CV with AI…';
+
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('file', file);
+
+  let data;
+  try {
+    const r = await fetch('/accounts/onboarding/extract-cv/', {method:'POST', body:fd});
+    data = await r.json();
+  } catch(e) {
+    data = {ok: false, error: 'Network error: ' + e.message};
+  }
+
+  // Complete the bar
+  fill.style.transition = 'width 0.3s ease';
+  fill.style.width = '100%';
+
+  if (!data.ok) {
+    label.textContent = 'Extraction failed.';
+    errEl.textContent = data.error || 'Could not extract CV data. You can fill in your details manually.';
+    errEl.classList.add('show');
+    document.getElementById('cv-next-btn').disabled = false;
+    return;
+  }
+
+  EXTRACTED = data.data;
+  label.textContent = 'Extraction complete ✓';
+
+  // Build summary chips
+  const chips = [];
+  if (EXTRACTED.occupation)                   chips.push('💼 ' + EXTRACTED.occupation);
+  if (EXTRACTED.work_experiences?.length)     chips.push(EXTRACTED.work_experiences.length + ' jobs');
+  if (EXTRACTED.educations?.length)           chips.push(EXTRACTED.educations.length + ' qualifications');
+  if (EXTRACTED.skills?.length)               chips.push(EXTRACTED.skills.length + ' skills');
+  if (EXTRACTED.languages?.length)            chips.push(EXTRACTED.languages.length + ' languages');
+  if (EXTRACTED.linkedin_url || EXTRACTED.github_url) chips.push('online profiles');
+
+  document.getElementById('extract-summary').innerHTML = chips
+    .map(c => `<span class="extract-chip">${c}</span>`).join('');
+  successEl.style.display = 'block';
+
+  // Pre-populate step 2 fields
+  prefillStep2();
+  prefillStep3();
+  populateReview();
+
+  document.getElementById('cv-next-btn').disabled = false;
+}
+
+function prefillStep2() {
+  if (!EXTRACTED) return;
+  const occ = document.getElementById('occupation');
+  const bio = document.getElementById('bio');
+  const yr  = document.getElementById('years_experience');
+
+  if (EXTRACTED.occupation)       { occ.value = EXTRACTED.occupation; markAi(occ); }
+  if (EXTRACTED.bio)              { bio.value = EXTRACTED.bio;         markAi(bio); }
+  if (EXTRACTED.years_experience) {
+    yr.value = EXTRACTED.years_experience;
+  }
+  document.getElementById('ai-bar-2').style.display = 'flex';
+}
+
+function prefillStep3() {
+  if (!EXTRACTED) return;
+  const li = document.getElementById('linkedin_url');
+  const gh = document.getElementById('github_url');
+  const po = document.getElementById('portfolio_url');
+  let any = false;
+  if (EXTRACTED.linkedin_url)  { li.value = EXTRACTED.linkedin_url;  markAi(li); any = true; }
+  if (EXTRACTED.github_url)    { gh.value = EXTRACTED.github_url;    markAi(gh); any = true; }
+  if (EXTRACTED.portfolio_url) { po.value = EXTRACTED.portfolio_url; markAi(po); any = true; }
+  if (any) document.getElementById('ai-bar-3').style.display = 'flex';
+}
+
+function markAi(el) { el.classList.add('ai-filled'); }
+
+function populateReview() {
+  if (!EXTRACTED) return;
+
+  // Experiences
+  REVIEW.experiences = (EXTRACTED.work_experiences || []).map((e,i) => ({...e, _id: 'ex'+i, _ai: true}));
+  REVIEW.educations  = (EXTRACTED.educations || []).map((e,i) => ({...e, _id: 'ed'+i, _ai: true}));
+  REVIEW.skills      = (EXTRACTED.skills || []).map((e,i) => ({...e, _id: 'sk'+i, _ai: true}));
+  REVIEW.languages   = (EXTRACTED.languages || []).map((e,i) => ({...e, _id: 'lg'+i, _ai: true}));
+
+  renderReview();
+}
+
+function renderReview() {
+  renderExpList();
+  renderEduList();
+  renderSkillList();
+  renderLangList();
+}
+
+/* ── Render helpers ───────────────────────────────────────────── */
+function renderExpList() {
+  const el = document.getElementById('review-exp-list');
+  el.innerHTML = REVIEW.experiences.length ? '' : '<div style="font-size:.75rem;color:var(--muted)">None extracted — add below.</div>';
+  REVIEW.experiences.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'dyn-item' + (e._ai ? ' ai-sourced' : '');
+    div.id = 'rexp-' + e._id;
+    div.innerHTML = `
+      <div class="dyn-item-title">${e.job_title||'Untitled'} <span style="font-weight:400;color:var(--muted)">@ ${e.company||'?'}</span></div>
+      <div class="dyn-item-sub">${e.start_date||''} → ${e.is_current?'Present':(e.end_date||'?')}${e.location?' · '+e.location:''}</div>
+      ${e._ai?'<span style="position:absolute;top:.6rem;left:.7rem;font-family:\'Space Mono\',monospace;font-size:.48rem;color:var(--accent2)">AI</span>':''}
+      <button class="dyn-item-remove" onclick="removeItem('experiences','${e._id}')">✕ remove</button>
+    `;
+    el.appendChild(div);
   });
+}
+function renderEduList() {
+  const el = document.getElementById('review-edu-list');
+  el.innerHTML = REVIEW.educations.length ? '' : '<div style="font-size:.75rem;color:var(--muted)">None extracted — add below.</div>';
+  REVIEW.educations.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'dyn-item' + (e._ai ? ' ai-sourced' : '');
+    div.innerHTML = `
+      <div class="dyn-item-title">${e.qualification||'Untitled'}</div>
+      <div class="dyn-item-sub">${e.institution||'?'}${e.field_of_study?' · '+e.field_of_study:''} · ${e.start_year||'?'} → ${e.is_current?'Present':(e.end_year||'?')}</div>
+      ${e._ai?'<span style="position:absolute;top:.6rem;left:.7rem;font-family:\'Space Mono\',monospace;font-size:.48rem;color:var(--accent2)">AI</span>':''}
+      <button class="dyn-item-remove" onclick="removeItem('educations','${e._id}')">✕ remove</button>
+    `;
+    el.appendChild(div);
+  });
+}
+function renderSkillList() {
+  const el = document.getElementById('review-skills-list');
+  el.innerHTML = '';
+  if (!REVIEW.skills.length) { el.innerHTML = '<div style="font-size:.75rem;color:var(--muted);margin-bottom:.35rem">None extracted.</div>'; return; }
+  REVIEW.skills.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'pill' + (s._ai ? ' ai-sourced' : '');
+    div.id = 'rpill-' + s._id;
+    div.innerHTML = `<span class="pill-dot"></span><span>${s.name}</span><span style="color:var(--muted);font-size:.6rem">(${s.level})</span><button onclick="removeItem('skills','${s._id}')">✕</button>`;
+    el.appendChild(div);
+  });
+}
+function renderLangList() {
+  const el = document.getElementById('review-langs-list');
+  el.innerHTML = '';
+  if (!REVIEW.languages.length) { el.innerHTML = '<div style="font-size:.75rem;color:var(--muted);margin-bottom:.35rem">None extracted.</div>'; return; }
+  REVIEW.languages.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'pill' + (l._ai ? ' ai-sourced' : '');
+    div.innerHTML = `<span class="pill-dot" style="background:var(--accent)"></span><span>${l.name}</span><span style="color:var(--muted);font-size:.6rem">(${l.proficiency})</span><button onclick="removeItem('languages','${l._id}')">✕</button>`;
+    el.appendChild(div);
+  });
+}
+
+function removeItem(list, id) {
+  REVIEW[list] = REVIEW[list].filter(i => i._id !== id);
+  renderReview();
+}
+
+let _reviewCounter = 0;
+function addReviewExp() {
+  const title   = document.getElementById('add-exp-title').value.trim();
+  const company = document.getElementById('add-exp-company').value.trim();
+  const start   = document.getElementById('add-exp-start').value;
+  if (!title || !company) return;
+  REVIEW.experiences.push({_id:'r'+(++_reviewCounter), _ai:false, job_title:title, company, start_date:start, end_date:null, is_current:false, location:'', description:''});
+  document.getElementById('add-exp-title').value = '';
+  document.getElementById('add-exp-company').value = '';
+  document.getElementById('add-exp-start').value = '';
+  renderExpList();
+}
+function addReviewEdu() {
+  const inst = document.getElementById('add-edu-inst').value.trim();
+  const qual = document.getElementById('add-edu-qual').value.trim();
+  const year = document.getElementById('add-edu-year').value;
+  if (!inst || !qual) return;
+  REVIEW.educations.push({_id:'r'+(++_reviewCounter), _ai:false, institution:inst, qualification:qual, start_year:parseInt(year)||0, end_year:null, is_current:false, field_of_study:'', nqf_level:'', description:''});
+  document.getElementById('add-edu-inst').value = '';
+  document.getElementById('add-edu-qual').value = '';
+  document.getElementById('add-edu-year').value = '';
+  renderEduList();
+}
+function addReviewSkill() {
+  const name = document.getElementById('add-skill-name').value.trim();
+  const level= document.getElementById('add-skill-level').value;
+  if (!name) return;
+  REVIEW.skills.push({_id:'r'+(++_reviewCounter), _ai:false, name, level, category:''});
+  document.getElementById('add-skill-name').value = '';
+  renderSkillList();
+}
+function addReviewLang() {
+  const name = document.getElementById('add-lang-name').value.trim();
+  const prof = document.getElementById('add-lang-prof').value;
+  if (!name) return;
+  REVIEW.languages.push({_id:'r'+(++_reviewCounter), _ai:false, name, proficiency:prof});
+  document.getElementById('add-lang-name').value = '';
+  renderLangList();
+}
+
+function skipCvExtract() {
+  EXTRACTED = null;
+  _cvFile   = null;
   goTo(2);
 }
 
+function proceedFromCv() {
+  goTo(2);
+}
+
+/* ═══════════ STEP 2 — Professional ════════════════════════════ */
 async function submitStep2() {
-  await post('online', {
-    github_url:    document.getElementById('github_url').value.trim(),
-    linkedin_url:  document.getElementById('linkedin_url').value.trim(),
-    portfolio_url: document.getElementById('portfolio_url').value.trim(),
+  const occ = document.getElementById('occupation').value.trim();
+  if (!occ) { showErr('err-2', true); return; }
+  showErr('err-2', false);
+  await post('/accounts/onboarding/', {
+    step:             'professional',
+    occupation:       occ,
+    years_experience: document.getElementById('years_experience').value,
+    bio:              document.getElementById('bio').value.trim(),
   });
   goTo(3);
 }
 
-const _files = {};
-
-function onFile(input, key) {
-  const f = input.files[0];
-  if (!f) return;
-  _files[key] = f;
-  const nameEl = document.getElementById(key + '-name');
-  nameEl.textContent = '✓ ' + f.name;
-  nameEl.classList.add('show');
-  document.getElementById(key + '-btn').disabled = false;
+/* ═══════════ STEP 3 — Online ═══════════════════════════════════ */
+async function submitStep3() {
+  await post('/accounts/onboarding/', {
+    step:          'online',
+    github_url:    document.getElementById('github_url').value.trim(),
+    linkedin_url:  document.getElementById('linkedin_url').value.trim(),
+    portfolio_url: document.getElementById('portfolio_url').value.trim(),
+  });
+  goTo(4);
 }
 
-async function submitFile(key) {
-  const f = _files[key];
-  if (!f) { showErr('err-' + (key === 'cv' ? 3 : 4), true); return; }
-  showErr('err-' + (key === 'cv' ? 3 : 4), false);
-  const btn = document.getElementById(key + '-btn');
+/* ═══════════ STEP 4 — Review & Save extracted data ═════════════ */
+async function submitReview() {
+  const btn = document.querySelector('#card-4 .btn-next');
   btn.disabled = true;
-  btn.textContent = 'Uploading...';
-  const d = await postFile(key, f);
+  btn.textContent = 'Saving…';
+
+  // 1. Upload CV file first (if present and not yet uploaded)
+  if (_cvFile) {
+    await postFile('/accounts/onboarding/', 'cv', _cvFile);
+    _cvFile = null;
+  }
+
+  // 2. Save extracted structured data via a new step
+  const payload = {
+    step:        'extracted_data',
+    experiences: JSON.stringify(REVIEW.experiences.map(({_id,_ai,...rest})=>rest)),
+    educations:  JSON.stringify(REVIEW.educations.map(({_id,_ai,...rest})=>rest)),
+    skills:      JSON.stringify(REVIEW.skills.map(({_id,_ai,...rest})=>rest)),
+    languages:   JSON.stringify(REVIEW.languages.map(({_id,_ai,...rest})=>rest)),
+  };
+
+  const d = await post('/accounts/onboarding/', payload);
+
+  btn.disabled = false;
+  btn.textContent = 'Save & Continue →';
+
   if (d.ok) {
-    if (key === 'cv') {
-      goTo(4);
-    } else {
-      btn.textContent = 'Finishing...';
-      const r = await post('complete', {});
-      if (r.ok) window.location.href = r.redirect || '/';
-    }
+    goTo(5);
   } else {
-    btn.disabled = false;
-    btn.textContent = key === 'cv' ? 'Next →' : 'Finish Setup →';
-    showErr('err-' + (key === 'cv' ? 3 : 4), true);
+    alert('Error saving data: ' + (d.error || 'Unknown error'));
   }
 }
 
-// Drag & drop
-['cv','id'].forEach(key => {
-  const zone = document.getElementById(key + '-zone');
+/* ═══════════ STEP 5 — ID Upload ════════════════════════════════ */
+function onIdFile(input) {
+  const f = input.files[0];
+  if (!f) return;
+  _idFile = f;
+  const nameEl = document.getElementById('id-file-name');
+  nameEl.textContent = '✓ ' + f.name;
+  nameEl.classList.add('show');
+  document.getElementById('id-next-btn').disabled = false;
+}
+
+async function submitId() {
+  if (!_idFile) { showErr('err-5', true); return; }
+  showErr('err-5', false);
+  const btn = document.getElementById('id-next-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+
+  const d = await postFile('/accounts/onboarding/', 'id', _idFile);
+  if (d.ok) {
+    btn.textContent = 'Finishing…';
+    const r = await post('/accounts/onboarding/', {step: 'complete'});
+    if (r.ok) window.location.href = r.redirect || '/';
+  } else {
+    btn.disabled = false; btn.textContent = 'Finish Setup →';
+    showErr('err-5', true, d.error || 'Upload failed.');
+  }
+}
+
+/* ── Drag & drop for CV and ID zones ─────────────────────────── */
+[['cv-zone','cv-file', onCvFile], ['id-zone','id-file', onIdFile]].forEach(([zoneId, inputId, handler]) => {
+  const zone = document.getElementById(zoneId);
+  if (!zone) return;
   zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
   zone.addEventListener('drop', e => {
     e.preventDefault(); zone.classList.remove('drag');
     const f = e.dataTransfer.files[0];
     if (f) {
-      const inp = document.getElementById(key + '-input');
-      const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
-      onFile(inp, key);
+      const inp = document.getElementById(inputId);
+      const dt  = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
+      handler(inp);
     }
   });
 });

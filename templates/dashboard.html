@@ -86,7 +86,7 @@
 </form>
 
 <div class="stats-row">
-  <div class="stat"><div class="stat-val">{{ total_jobs }}</div><div class="stat-label">Jobs Found</div></div>
+  <div class="stat"><div class="stat-val">{{ total_jobs }}</div><div class="stat-label">Job Posting Found</div></div>
   <div class="stat"><div class="stat-val purple">{{ matched_count }}</div><div class="stat-label">Matched ≥60%</div></div>
   <div class="stat"><div class="stat-val">{{ applied_count }}</div><div class="stat-label">Applied</div></div>
   <div class="stat"><div class="stat-val red">{{ total_jobs|add:0|add:applied_count }}</div><div class="stat-label">Pending</div></div>
@@ -172,7 +172,7 @@
 </div>
 
 <div class="results-bar">
-  Showing <span>{{ filter_count }}</span> of {{ total_jobs }} jobs
+  Showing <span>{{ filter_count }}</span> of {{ total_jobs }} job postings
   {% if active_platforms %} · Platform: {% for p in active_platforms %}<strong>{{ p }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
   {% if active_job_type %} · Type: <strong>{{ active_job_type }}</strong>{% endif %}
   {% if active_search %} · Search: <strong>"{{ active_search }}"</strong>{% endif %}
@@ -182,7 +182,7 @@
 <div class="main">
   <div class="jobs-panel">
     <div class="panel-header">
-      <strong>Recent Jobs</strong>
+      <strong>Recent Job Postings</strong>
       <a href="{% url 'jobs_list' %}">View all →</a>
     </div>
     {% if jobs %}
@@ -211,7 +211,7 @@
         {% endwith %}
       {% endfor %}
     {% else %}
-      <div class="empty">No jobs match your filters. <a href="{% url 'dashboard' %}" style="color:var(--accent)">Clear filters</a> or <strong>⚡ Run All</strong> to scrape new jobs.</div>
+      <div class="empty">No Postings match your filters. <a href="{% url 'dashboard' %}" style="color:var(--accent)">Clear filters</a> or <strong>⚡ Run All</strong> to scrape new jobs.</div>
     {% endif %}
   </div>
 
