@@ -1,4 +1,4 @@
-{% load static %}
+{% load static account_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,11 +122,11 @@
 <body>
 
 <div class="top-bar">
-  <a href="/" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
+  <a href="{% url 'dashboard' %}" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
   <div class="nav">
-    <a href="/"                 class="btn btn-outline btn-sm">← Dashboard</a>
-    <a href="/documents/"       class="btn btn-outline btn-sm">📁 Documents</a>
-    <a href="/accounts/logout/" class="btn btn-outline btn-sm">Sign out</a>
+    <a href="{% url 'dashboard' %}"           class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="{% url 'accounts:documents' %}"  class="btn btn-outline btn-sm">📁 Documents</a>
+    <a href="{% url 'accounts:logout' %}"     class="btn btn-outline btn-sm">Sign out</a>
   </div>
 </div>
 
@@ -140,7 +140,7 @@
   <div class="profile-header">
     <div class="avatar-wrap">
       {% if profile.photo %}
-        <img class="avatar" src="/accounts/photo/" alt="Profile photo">
+        <img class="avatar" src="{% url 'accounts:user_photo' %}" alt="Profile photo">
       {% else %}
         <div class="avatar-placeholder">
           {{ request.user.first_name|first|default:request.user.email|first|upper }}
@@ -159,13 +159,13 @@
         {% if profile.github_url %}<span class="badge">GitHub linked</span>{% endif %}
       </div>
     </div>
-    <a href="/documents/" class="btn btn-outline btn-sm" style="flex-shrink:0">📁 My Documents</a>
+    <a href="{% url 'accounts:documents' %}" class="btn btn-outline btn-sm" style="flex-shrink:0">📁 My Documents</a>
   </div>
 
   <div class="doc-summary">
     {% for dt, dt_label in doc_types %}
     <div class="doc-stat">
-      <div class="doc-stat-val">{{ doc_counts|get_item:dt|default:"0" }}</div>
+      <div class="doc-stat-val">{{ doc_counts|get_item:dt }}</div>
       <div class="doc-stat-label">{{ dt_label }}</div>
     </div>
     {% endfor %}
@@ -249,7 +249,7 @@
   <div class="section" style="margin-top:1.5rem">
     <div class="section-header">
       <span class="section-title">Recent Documents</span>
-      <a href="/documents/" class="btn btn-outline btn-sm">View all →</a>
+      <a href="{% url 'accounts:documents' %}" class="btn btn-outline btn-sm">View all →</a>
     </div>
     <div class="section-body">
       <div class="doc-quick-list">
@@ -267,7 +267,7 @@
             <div class="doc-name">{{ doc.label }}</div>
             <div class="doc-meta">{{ doc.get_doc_type_display }} · {{ doc.size_display }} · {{ doc.uploaded_at|date:"d M Y" }}</div>
           </div>
-          <a href="/documents/{{ doc.pk }}/download/" class="doc-link">↓ Download</a>
+          <a href="{% url 'accounts:doc_download' doc.pk %}" class="doc-link">↓ Download</a>
         </div>
         {% endfor %}
       </div>

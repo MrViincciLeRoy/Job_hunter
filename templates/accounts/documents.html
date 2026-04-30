@@ -146,11 +146,11 @@
 <body>
 
 <div class="top-bar">
-  <a href="/" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
+  <a href="{% url 'dashboard' %}" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
   <div class="nav">
-    <a href="/"                 class="btn btn-outline btn-sm">← Dashboard</a>
-    <a href="/profile/"         class="btn btn-outline btn-sm">👤 Profile</a>
-    <a href="/accounts/logout/" class="btn btn-outline btn-sm">Sign out</a>
+    <a href="{% url 'dashboard' %}"          class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="{% url 'accounts:profile' %}"   class="btn btn-outline btn-sm">👤 Profile</a>
+    <a href="{% url 'accounts:logout' %}"    class="btn btn-outline btn-sm">Sign out</a>
   </div>
 </div>
 
@@ -170,7 +170,7 @@
 
   <div class="upload-card">
     <div class="upload-title">Upload Document</div>
-    <form method="POST" enctype="multipart/form-data" id="upload-form">
+    <form method="POST" enctype="multipart/form-data" id="upload-form" action="{% url 'accounts:documents' %}">
       {% csrf_token %}
 
       <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
@@ -237,7 +237,7 @@
           {% if dt == "cv" and not doc.is_primary %}
           <button class="icon-btn primary-btn" onclick="setPrimary({{ doc.pk }})">★ Set Primary</button>
           {% endif %}
-          <a href="/documents/{{ doc.pk }}/download/" class="icon-btn">↓ Download</a>
+          <a href="{% url 'accounts:doc_download' doc.pk %}" class="icon-btn">↓ Download</a>
           <button class="icon-btn del-btn" onclick="deleteDoc({{ doc.pk }})">✕</button>
         </div>
       </div>
@@ -255,6 +255,9 @@
 
 <script>
 const CSRF = '{{ csrf_token }}';
+// Build URLs via Django so they respect any prefix / namespace
+const URL_DELETE  = id => `{% url 'accounts:doc_delete'  0 %}`.replace('/0/', '/' + id + '/');
+const URL_PRIMARY = id => `{% url 'accounts:doc_primary' 0 %}`.replace('/0/', '/' + id + '/');
 
 function showToast(msg, ok=true) {
   const t = document.getElementById('toast');
@@ -287,7 +290,7 @@ zone.addEventListener('drop', e => {
 
 function deleteDoc(id) {
   if (!confirm('Delete this document?')) return;
-  fetch(`/documents/${id}/delete/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+  fetch(URL_DELETE(id), { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
     .then(r => r.json())
     .then(d => {
       if (d.ok) { document.getElementById(`doc-row-${id}`)?.remove(); showToast('Deleted.'); }
@@ -296,7 +299,7 @@ function deleteDoc(id) {
 }
 
 function setPrimary(id) {
-  fetch(`/documents/${id}/primary/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+  fetch(URL_PRIMARY(id), { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
     .then(r => r.json())
     .then(d => {
       if (d.ok) {
