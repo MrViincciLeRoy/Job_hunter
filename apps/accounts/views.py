@@ -5,7 +5,11 @@ from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 
-from .models import UserProfile, UserDocument, DOC_TYPES
+from .models import (
+    UserProfile, UserDocument, DOC_TYPES,
+    WorkExperience, Education, Skill, Language, Reference,
+    NQF_LEVELS, SKILL_LEVELS, PROFICIENCY_LEVELS,
+)
 
 
 def get_or_create_profile(user):
@@ -27,7 +31,6 @@ def logout_view(request):
 @login_required
 def onboarding_view(request):
     profile = get_or_create_profile(request.user)
-
     if profile.onboarding_done:
         return redirect("dashboard")
 
@@ -97,7 +100,6 @@ def onboarding_view(request):
 @login_required
 def profile_view(request):
     profile = get_or_create_profile(request.user)
-
     if not profile.onboarding_done:
         return redirect("accounts:onboarding")
 
@@ -129,12 +131,214 @@ def profile_view(request):
     doc_counts = {dt: docs.filter(doc_type=dt).count() for dt, _ in DOC_TYPES}
 
     return render(request, "accounts/profile.html", {
-        "profile":    profile,
-        "doc_counts": doc_counts,
-        "doc_types":  DOC_TYPES,
-        "docs":       docs,
+        "profile":          profile,
+        "doc_counts":       doc_counts,
+        "doc_types":        DOC_TYPES,
+        "docs":             docs,
+        "work_experiences": WorkExperience.objects.filter(user=request.user),
+        "educations":       Education.objects.filter(user=request.user),
+        "skills":           Skill.objects.filter(user=request.user),
+        "languages":        Language.objects.filter(user=request.user),
+        "references":       Reference.objects.filter(user=request.user),
+        "nqf_levels":       NQF_LEVELS,
+        "skill_levels":     SKILL_LEVELS,
+        "proficiency_levels": PROFICIENCY_LEVELS,
     })
 
+
+# ?? Work Experience ??????????????????????????????????????????????????????????
+
+@login_required
+@require_POST
+def experience_save(request, pk=None):
+    data = {
+        "job_title":   request.POST.get("job_title", "").strip(),
+        "company":     request.POST.get("company", "").strip(),
+        "location":    request.POST.get("location", "").strip(),
+        "start_date":  request.POST.get("start_date"),
+        "end_date":    request.POST.get("end_date") or None,
+        "is_current":  request.POST.get("is_current") == "on",
+        "description": request.POST.get("description", "").strip(),
+    }
+    if not data["job_title"] or not data["company"] or not data["start_date"]:
+        return JsonResponse({"ok": False, "error": "Job title, company, and start date are required."})
+
+    if pk:
+        exp = get_object_or_404(WorkExperience, pk=pk, user=request.user)
+        for k, v in data.items():
+            setattr(exp, k, v)
+        exp.save()
+    else:
+        exp = WorkExperience.objects.create(user=request.user, **data)
+
+    return JsonResponse({
+        "ok": True,
+        "id":          exp.pk,
+        "job_title":   exp.job_title,
+        "company":     exp.company,
+        "location":    exp.location,
+        "start_date":  exp.start_date.strftime("%Y-%m-%d"),
+        "end_date":    exp.end_date.strftime("%Y-%m-%d") if exp.end_date else "",
+        "is_current":  exp.is_current,
+        "description": exp.description,
+        "duration":    exp.duration(),
+    })
+
+
+@login_required
+@require_POST
+def experience_delete(request, pk):
+    get_object_or_404(WorkExperience, pk=pk, user=request.user).delete()
+    return JsonResponse({"ok": True})
+
+
+# ?? Education ????????????????????????????????????????????????????????????????
+
+@login_required
+@require_POST
+def education_save(request, pk=None):
+    data = {
+        "institution":    request.POST.get("institution", "").strip(),
+        "qualification":  request.POST.get("qualification", "").strip(),
+        "field_of_study": request.POST.get("field_of_study", "").strip(),
+        "nqf_level":      request.POST.get("nqf_level", "").strip(),
+        "start_year":     request.POST.get("start_year"),
+        "end_year":       request.POST.get("end_year") or None,
+        "is_current":     request.POST.get("is_current") == "on",
+        "description":    request.POST.get("description", "").strip(),
+    }
+    if not data["institution"] or not data["qualification"] or not data["start_year"]:
+        return JsonResponse({"ok": False, "error": "Institution, qualification, and start year are required."})
+
+    if pk:
+        edu = get_object_or_404(Education, pk=pk, user=request.user)
+        for k, v in data.items():
+            setattr(edu, k, v)
+        edu.save()
+    else:
+        edu = Education.objects.create(user=request.user, **data)
+
+    return JsonResponse({
+        "ok": True,
+        "id":            edu.pk,
+        "institution":   edu.institution,
+        "qualification": edu.qualification,
+        "field_of_study":edu.field_of_study,
+        "nqf_level":     edu.get_nqf_level_display(),
+        "start_year":    edu.start_year,
+        "end_year":      edu.end_year or "",
+        "is_current":    edu.is_current,
+        "description":   edu.description,
+    })
+
+
+@login_required
+@require_POST
+def education_delete(request, pk):
+    get_object_or_404(Education, pk=pk, user=request.user).delete()
+    return JsonResponse({"ok": True})
+
+
+# ?? Skills ???????????????????????????????????????????????????????????????????
+
+@login_required
+@require_POST
+def skill_save(request, pk=None):
+    name     = request.POST.get("name", "").strip()
+    level    = request.POST.get("level", "intermediate")
+    category = request.POST.get("category", "").strip()
+
+    if not name:
+        return JsonResponse({"ok": False, "error": "Skill name is required."})
+
+    if pk:
+        skill = get_object_or_404(Skill, pk=pk, user=request.user)
+        skill.name = name; skill.level = level; skill.category = category
+        skill.save()
+    else:
+        skill = Skill.objects.create(user=request.user, name=name, level=level, category=category)
+
+    return JsonResponse({
+        "ok": True, "id": skill.pk,
+        "name": skill.name, "level": skill.level,
+        "level_display": skill.get_level_display(),
+        "category": skill.category,
+    })
+
+
+@login_required
+@require_POST
+def skill_delete(request, pk):
+    get_object_or_404(Skill, pk=pk, user=request.user).delete()
+    return JsonResponse({"ok": True})
+
+
+# ?? Languages ????????????????????????????????????????????????????????????????
+
+@login_required
+@require_POST
+def language_save(request, pk=None):
+    name        = request.POST.get("name", "").strip()
+    proficiency = request.POST.get("proficiency", "professional")
+
+    if not name:
+        return JsonResponse({"ok": False, "error": "Language name is required."})
+
+    if pk:
+        lang = get_object_or_404(Language, pk=pk, user=request.user)
+        lang.name = name; lang.proficiency = proficiency
+        lang.save()
+    else:
+        lang = Language.objects.create(user=request.user, name=name, proficiency=proficiency)
+
+    return JsonResponse({
+        "ok": True, "id": lang.pk,
+        "name": lang.name, "proficiency": lang.proficiency,
+        "proficiency_display": lang.get_proficiency_display(),
+    })
+
+
+@login_required
+@require_POST
+def language_delete(request, pk):
+    get_object_or_404(Language, pk=pk, user=request.user).delete()
+    return JsonResponse({"ok": True})
+
+
+# ?? References ???????????????????????????????????????????????????????????????
+
+@login_required
+@require_POST
+def reference_save(request, pk=None):
+    data = {
+        "name":     request.POST.get("name", "").strip(),
+        "company":  request.POST.get("company", "").strip(),
+        "position": request.POST.get("position", "").strip(),
+        "email":    request.POST.get("email", "").strip(),
+        "phone":    request.POST.get("phone", "").strip(),
+    }
+    if not data["name"]:
+        return JsonResponse({"ok": False, "error": "Reference name is required."})
+
+    if pk:
+        ref = get_object_or_404(Reference, pk=pk, user=request.user)
+        for k, v in data.items():
+            setattr(ref, k, v)
+        ref.save()
+    else:
+        ref = Reference.objects.create(user=request.user, **data)
+
+    return JsonResponse({"ok": True, "id": ref.pk, **data})
+
+
+@login_required
+@require_POST
+def reference_delete(request, pk):
+    get_object_or_404(Reference, pk=pk, user=request.user).delete()
+    return JsonResponse({"ok": True})
+
+
+# ?? Documents ????????????????????????????????????????????????????????????????
 
 @login_required
 def documents_view(request):
@@ -154,7 +358,6 @@ def documents_view(request):
             mime_type=f.content_type or "application/octet-stream",
             file_size=len(data),
         )
-
         if doc_type == "cv":
             if not UserDocument.objects.filter(
                 user=request.user, doc_type="cv", is_primary=True
@@ -167,9 +370,7 @@ def documents_view(request):
         return redirect("accounts:documents")
 
     docs = UserDocument.objects.filter(user=request.user)
-    grouped = {}
-    for dt, dt_label in DOC_TYPES:
-        grouped[dt] = {"label": dt_label, "docs": docs.filter(doc_type=dt)}
+    grouped = {dt: {"label": dt_label, "docs": docs.filter(doc_type=dt)} for dt, dt_label in DOC_TYPES}
 
     return render(request, "accounts/documents.html", {
         "grouped":   grouped,
@@ -189,8 +390,7 @@ def document_download(request, doc_id):
 @login_required
 @require_POST
 def document_delete(request, doc_id):
-    doc = get_object_or_404(UserDocument, pk=doc_id, user=request.user)
-    doc.delete()
+    get_object_or_404(UserDocument, pk=doc_id, user=request.user).delete()
     return JsonResponse({"ok": True})
 
 
