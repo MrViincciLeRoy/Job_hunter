@@ -1,1550 +1,1171 @@
-{% load static account_tags %} <!DOCTYPE html>
+{% load static account_tags %}
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Profile — Job Hunter</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="{% static 'css/base.css' %}" />
-    <style>
-      .page {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 2rem 1.5rem 4rem;
-      }
-      .profile-header {
-        display: flex;
-        align-items: flex-start;
-        gap: 1.5rem;
-        padding: 2rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        margin-bottom: 1.5rem;
-        position: relative;
-        flex-wrap: wrap;
-      }
-      .profile-header::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, var(--accent), var(--accent2));
-      }
-      .avatar {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        border: 2px solid var(--border);
-        object-fit: cover;
-      }
-      .avatar-placeholder {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        border: 2px solid var(--border);
-        background: var(--card);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: "Space Mono", monospace;
-        font-size: 1.4rem;
-        color: var(--accent);
-        flex-shrink: 0;
-      }
-      .profile-info {
-        flex: 1;
-        min-width: 0;
-      }
-      .profile-name {
-        font-size: 1.3rem;
-        font-weight: 600;
-        margin-bottom: 0.2rem;
-      }
-      .profile-email {
-        font-size: 0.82rem;
-        color: var(--muted);
-        margin-bottom: 0.5rem;
-      }
-      .profile-badges {
-        display: flex;
-        gap: 0.4rem;
-        flex-wrap: wrap;
-      }
-      .badge {
-        font-family: "Space Mono", monospace;
-        font-size: 0.55rem;
-        padding: 0.18rem 0.5rem;
-        border: 1px solid var(--border);
-        color: var(--muted);
-      }
-      .badge.green {
-        border-color: rgba(0, 255, 136, 0.4);
-        color: var(--accent);
-      }
-      .doc-summary {
-        display: flex;
-        gap: 1px;
-        background: var(--border);
-        border: 1px solid var(--border);
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-      }
-      .doc-stat {
-        flex: 1 1 80px;
-        background: var(--surface);
-        padding: 0.9rem 1rem;
-      }
-      .doc-stat-val {
-        font-family: "Space Mono", monospace;
-        font-size: 1.4rem;
-        color: var(--accent);
-      }
-      .doc-stat-label {
-        font-size: 0.62rem;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-top: 0.1rem;
-      }
-      .tabs {
-        display: flex;
-        gap: 0;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 1.5rem;
-        overflow-x: auto;
-      }
-      .tab-btn {
-        font-family: "Space Mono", monospace;
-        font-size: 0.63rem;
-        font-weight: 700;
-        padding: 0.7rem 1.1rem;
-        background: none;
-        border: none;
-        border-bottom: 2px solid transparent;
-        color: var(--muted);
-        cursor: pointer;
-        white-space: nowrap;
-        transition: all 0.15s;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        margin-bottom: -1px;
-      }
-      .tab-btn:hover {
-        color: var(--text);
-      }
-      .tab-btn.active {
-        color: var(--accent);
-        border-bottom-color: var(--accent);
-      }
-      .tab-pane {
-        display: none;
-      }
-      .tab-pane.active {
-        display: block;
-      }
-      .section {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        margin-bottom: 1.25rem;
-      }
-      .section-header {
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .section-title {
-        font-family: "Space Mono", monospace;
-        font-size: 0.7rem;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-      }
-      .section-body {
-        padding: 1.25rem 1.5rem;
-      }
-      .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.85rem;
-      }
-      .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-      }
-      .form-group.full {
-        grid-column: 1/-1;
-      }
-      .form-label {
-        font-family: "Space Mono", monospace;
-        font-size: 0.58rem;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
-      .form-input,
-      .form-textarea,
-      .form-select {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        color: var(--text);
-        padding: 0.6rem 0.75rem;
-        font-family: "DM Sans", sans-serif;
-        font-size: 0.84rem;
-        outline: none;
-        transition: border-color 0.15s;
-        width: 100%;
-      }
-      .form-input:focus,
-      .form-textarea:focus,
-      .form-select:focus {
-        border-color: var(--accent2);
-      }
-      .form-textarea {
-        resize: vertical;
-        min-height: 72px;
-      }
-      .form-select {
-        appearance: none;
-        cursor: pointer;
-      }
-      .check-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-top: 0.25rem;
-      }
-      .check-row input {
-        accent-color: var(--accent);
-        width: 15px;
-        height: 15px;
-      }
-      .check-row label {
-        font-size: 0.8rem;
-        color: var(--muted);
-        cursor: pointer;
-      }
-      .btn-primary {
-        font-family: "Space Mono", monospace;
-        font-size: 0.68rem;
-        font-weight: 700;
-        padding: 0.6rem 1.4rem;
-        background: var(--accent);
-        color: #000;
-        border: none;
-        cursor: pointer;
-        transition: opacity 0.15s;
-      }
-      .btn-primary:hover {
-        opacity: 0.85;
-      }
-      .btn-outline-sm {
-        font-family: "Space Mono", monospace;
-        font-size: 0.6rem;
-        padding: 0.35rem 0.85rem;
-        border: 1px solid var(--border);
-        background: none;
-        color: var(--muted);
-        cursor: pointer;
-        transition: all 0.15s;
-      }
-      .btn-outline-sm:hover {
-        border-color: var(--accent2);
-        color: var(--accent2);
-      }
-      .btn-add {
-        font-family: "Space Mono", monospace;
-        font-size: 0.62rem;
-        padding: 0.38rem 0.9rem;
-        border: 1px dashed var(--border);
-        background: none;
-        color: var(--accent);
-        cursor: pointer;
-        transition: all 0.15s;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-      }
-      .btn-add:hover {
-        border-color: var(--accent);
-      }
-      .btn-danger-sm {
-        font-family: "Space Mono", monospace;
-        font-size: 0.58rem;
-        padding: 0.28rem 0.6rem;
-        border: 1px solid var(--border);
-        background: none;
-        color: var(--muted);
-        cursor: pointer;
-        transition: all 0.15s;
-      }
-      .btn-danger-sm:hover {
-        border-color: #ff4466;
-        color: #ff4466;
-      }
-      .entry-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      .entry-card {
-        border: 1px solid var(--border);
-        background: var(--bg);
-        padding: 1rem 1.25rem;
-        position: relative;
-      }
-      .entry-card.editing {
-        border-color: var(--accent2);
-      }
-      .entry-top {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
-      }
-      .entry-title {
-        font-size: 0.9rem;
-        font-weight: 600;
-      }
-      .entry-sub {
-        font-size: 0.8rem;
-        color: var(--muted);
-        margin-top: 0.15rem;
-      }
-      .entry-meta {
-        font-family: "Space Mono", monospace;
-        font-size: 0.6rem;
-        color: var(--muted);
-        margin-top: 0.35rem;
-      }
-      .entry-desc {
-        font-size: 0.8rem;
-        color: var(--muted);
-        margin-top: 0.5rem;
-        line-height: 1.6;
-      }
-      .entry-actions {
-        display: flex;
-        gap: 0.35rem;
-        flex-shrink: 0;
-      }
-      .current-badge {
-        font-family: "Space Mono", monospace;
-        font-size: 0.52rem;
-        padding: 0.1rem 0.4rem;
-        border: 1px solid rgba(0, 255, 136, 0.35);
-        color: var(--accent);
-        margin-left: 0.5rem;
-      }
-      .entry-edit-form {
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border);
-        display: none;
-      }
-      .entry-edit-form.open {
-        display: block;
-      }
-      .form-row-actions {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-      }
-      .skill-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-      }
-      .skill-tag {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        border: 1px solid var(--border);
-        padding: 0.25rem 0.6rem 0.25rem 0.75rem;
-        background: var(--bg);
-        font-size: 0.78rem;
-      }
-      .skill-tag .level-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        flex-shrink: 0;
-      }
-      .skill-tag .level-dot.beginner {
-        background: var(--muted);
-      }
-      .skill-tag .level-dot.intermediate {
-        background: var(--accent2);
-      }
-      .skill-tag .level-dot.advanced {
-        background: #f5a623;
-      }
-      .skill-tag .level-dot.expert {
-        background: var(--accent);
-      }
-      .skill-tag button {
-        background: none;
-        border: none;
-        color: var(--muted);
-        cursor: pointer;
-        font-size: 0.65rem;
-        padding: 0 0.1rem;
-        line-height: 1;
-        transition: color 0.15s;
-      }
-      .skill-tag button:hover {
-        color: #ff4466;
-      }
-      .add-skill-row {
-        display: flex;
-        gap: 0.5rem;
-        align-items: flex-end;
-        flex-wrap: wrap;
-      }
-      .add-skill-row .form-group {
-        flex: 1;
-        min-width: 120px;
-      }
-      .lang-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-      }
-      .lang-row {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        padding: 0.6rem 0.9rem;
-        border: 1px solid var(--border);
-        background: var(--bg);
-      }
-      .lang-name {
-        font-size: 0.84rem;
-        font-weight: 500;
-        flex: 1;
-      }
-      .lang-level {
-        font-family: "Space Mono", monospace;
-        font-size: 0.58rem;
-        padding: 0.1rem 0.4rem;
-        border: 1px solid var(--border);
-        color: var(--muted);
-      }
-      .ref-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-      }
-      .ref-card {
-        border: 1px solid var(--border);
-        background: var(--bg);
-        padding: 1rem 1.1rem;
-      }
-      .ref-name {
-        font-size: 0.88rem;
-        font-weight: 600;
-        margin-bottom: 0.2rem;
-      }
-      .ref-pos {
-        font-size: 0.75rem;
-        color: var(--muted);
-      }
-      .ref-contact {
-        font-family: "Space Mono", monospace;
-        font-size: 0.6rem;
-        color: var(--muted);
-        margin-top: 0.5rem;
-      }
-      .msg {
-        padding: 0.6rem 1rem;
-        margin-bottom: 1rem;
-        font-size: 0.82rem;
-        border-left: 3px solid;
-      }
-      .msg.success {
-        border-color: var(--accent);
-        background: rgba(0, 255, 136, 0.05);
-      }
-      .msg.error {
-        border-color: #ff4466;
-        background: rgba(255, 68, 102, 0.05);
-      }
-      .toast {
-        position: fixed;
-        bottom: 1.5rem;
-        right: 1.5rem;
-        z-index: 300;
-        font-family: "Space Mono", monospace;
-        font-size: 0.68rem;
-        padding: 0.65rem 1.1rem;
-        border: 1px solid;
-        max-width: 300px;
-        opacity: 0;
-        transform: translateY(8px);
-        transition:
-          opacity 0.25s,
-          transform 0.25s;
-        pointer-events: none;
-      }
-      .toast.show {
-        opacity: 1;
-        transform: translateY(0);
-      }
-      .toast.ok {
-        background: rgba(0, 255, 136, 0.1);
-        border-color: rgba(0, 255, 136, 0.4);
-        color: var(--accent);
-      }
-      .toast.err {
-        background: rgba(255, 68, 102, 0.1);
-        border-color: rgba(255, 68, 102, 0.4);
-        color: #ff4466;
-      }
-      .empty-state {
-        font-family: "Space Mono", monospace;
-        font-size: 0.65rem;
-        color: var(--muted);
-        padding: 1.5rem 0;
-        text-align: center;
-        border: 1px dashed var(--border);
-        margin-bottom: 1rem;
-      }
-      @media (max-width: 620px) {
-        .form-grid {
-          grid-template-columns: 1fr;
-        }
-        .profile-header {
-          flex-direction: column;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="top-bar">
-      <a
-        href="{% url 'dashboard' %}"
-        class="logo"
-        style="text-decoration: none; color: inherit"
-        >job<span>/</span>hunter</a
-      >
-      <div class="nav">
-        <a href="{% url 'dashboard' %}" class="btn btn-outline btn-sm"
-          >← Dashboard</a
-        >
-        <a href="{% url 'accounts:documents' %}" class="btn btn-outline btn-sm"
-          >📁 Documents</a
-        >
-        <a href="{% url 'accounts:logout' %}" class="btn btn-outline btn-sm"
-          >Sign out</a
-        >
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Profile — Job Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{% static 'css/base.css' %}"/>
+<style>
+/* ── Layout ──────────────────────────────────────────────────────────── */
+.page { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+
+/* ── Profile header ──────────────────────────────────────────────────── */
+.profile-header {
+  display: flex; align-items: flex-start; gap: 1.5rem;
+  padding: 2rem; background: var(--surface); border: 1px solid var(--border);
+  margin-bottom: 1.5rem; position: relative; flex-wrap: wrap;
+}
+.profile-header::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.avatar { width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--border); object-fit: cover; flex-shrink: 0; }
+.avatar-placeholder {
+  width: 80px; height: 80px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Mono', monospace; font-size: 1.4rem;
+  color: var(--accent); flex-shrink: 0;
+}
+.profile-info { flex: 1; min-width: 0; }
+.profile-name  { font-size: 1.3rem; font-weight: 600; margin-bottom: 0.2rem; }
+.profile-email { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
+.profile-badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.badge {
+  font-family: 'Space Mono', monospace; font-size: 0.55rem;
+  padding: 0.18rem 0.5rem; border: 1px solid var(--border); color: var(--muted);
+}
+.badge.green { border-color: rgba(0,255,136,0.4); color: var(--accent); }
+
+/* ── Doc summary strip ───────────────────────────────────────────────── */
+.doc-summary { display: flex; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 1.5rem; flex-wrap: wrap; }
+.doc-stat { flex: 1 1 80px; background: var(--surface); padding: 0.9rem 1rem; }
+.doc-stat-val   { font-family: 'Space Mono', monospace; font-size: 1.4rem; color: var(--accent); }
+.doc-stat-label { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.1rem; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem; overflow-x: auto; gap: 0;
+}
+.tab-btn {
+  font-family: 'Space Mono', monospace; font-size: 0.63rem; font-weight: 700;
+  padding: 0.7rem 1.1rem; background: none; border: none;
+  border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer;
+  white-space: nowrap; transition: all 0.15s;
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: -1px;
+}
+.tab-btn:hover  { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── Shared section chrome ───────────────────────────────────────────── */
+.section { background: var(--surface); border: 1px solid var(--border); margin-bottom: 1.25rem; }
+.section-header {
+  padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.section-title { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.section-body  { padding: 1.25rem 1.5rem; }
+
+/* ── Form primitives ─────────────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+.form-group.full { grid-column: 1/-1; }
+.form-label {
+  font-family: 'Space Mono', monospace; font-size: 0.58rem;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.form-input, .form-textarea, .form-select {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 0.6rem 0.75rem;
+  font-family: 'DM Sans', sans-serif; font-size: 0.84rem;
+  outline: none; transition: border-color 0.15s; width: 100%;
+}
+.form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--accent2); }
+.form-textarea { resize: vertical; min-height: 72px; }
+.form-select   { appearance: none; cursor: pointer; }
+.check-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; }
+.check-row input { accent-color: var(--accent); width: 15px; height: 15px; }
+.check-row label { font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.btn-primary {
+  font-family: 'Space Mono', monospace; font-size: 0.68rem; font-weight: 700;
+  padding: 0.6rem 1.4rem; background: var(--accent); color: #000;
+  border: none; cursor: pointer; transition: opacity 0.15s;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-outline-sm {
+  font-family: 'Space Mono', monospace; font-size: 0.6rem;
+  padding: 0.35rem 0.85rem; border: 1px solid var(--border);
+  background: none; color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.btn-outline-sm:hover { border-color: var(--accent2); color: var(--accent2); }
+.btn-add {
+  font-family: 'Space Mono', monospace; font-size: 0.62rem;
+  padding: 0.38rem 0.9rem; border: 1px dashed var(--border);
+  background: none; color: var(--accent); cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.btn-add:hover { border-color: var(--accent); }
+.btn-danger-sm {
+  font-family: 'Space Mono', monospace; font-size: 0.58rem;
+  padding: 0.28rem 0.6rem; border: 1px solid var(--border);
+  background: none; color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.btn-danger-sm:hover { border-color: #ff4466; color: #ff4466; }
+.form-row-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+
+/* ── Entry cards (experience / education / references) ───────────────── */
+.entry-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.entry-card { border: 1px solid var(--border); background: var(--bg); padding: 1rem 1.25rem; position: relative; }
+.entry-card.editing { border-color: var(--accent2); }
+.entry-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.entry-title { font-size: 0.9rem; font-weight: 600; }
+.entry-sub   { font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem; }
+.entry-meta  { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); margin-top: 0.35rem; }
+.entry-desc  { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; line-height: 1.6; }
+.entry-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+.current-badge {
+  font-family: 'Space Mono', monospace; font-size: 0.52rem;
+  padding: 0.1rem 0.4rem; border: 1px solid rgba(0,255,136,0.35);
+  color: var(--accent); margin-left: 0.5rem;
+}
+.entry-edit-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: none; }
+.entry-edit-form.open { display: block; }
+
+/* ── Skills ──────────────────────────────────────────────────────────── */
+.skill-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.skill-tag {
+  display: flex; align-items: center; gap: 0.4rem;
+  border: 1px solid var(--border); padding: 0.25rem 0.6rem 0.25rem 0.75rem;
+  background: var(--bg); font-size: 0.78rem;
+}
+.skill-tag .level-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.level-dot.beginner    { background: var(--muted); }
+.level-dot.intermediate{ background: var(--accent2); }
+.level-dot.advanced    { background: #f5a623; }
+.level-dot.expert      { background: var(--accent); }
+.skill-tag button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.65rem; padding: 0 0.1rem; line-height: 1; transition: color 0.15s; }
+.skill-tag button:hover { color: #ff4466; }
+.add-row { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; }
+.add-row .form-group { flex: 1; min-width: 120px; }
+
+/* ── Languages ───────────────────────────────────────────────────────── */
+.lang-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.lang-row {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.6rem 0.9rem; border: 1px solid var(--border); background: var(--bg);
+}
+.lang-name  { font-size: 0.84rem; font-weight: 500; flex: 1; }
+.lang-level { font-family: 'Space Mono', monospace; font-size: 0.58rem; padding: 0.1rem 0.4rem; border: 1px solid var(--border); color: var(--muted); }
+
+/* ── References ──────────────────────────────────────────────────────── */
+.ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.ref-card { border: 1px solid var(--border); background: var(--bg); padding: 1rem 1.1rem; }
+.ref-name    { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.2rem; }
+.ref-pos     { font-size: 0.75rem; color: var(--muted); }
+.ref-contact { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); margin-top: 0.5rem; }
+
+/* ── Social Links ────────────────────────────────────────────────────── */
+.links-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+.link-row {
+  display: grid; grid-template-columns: 2rem 1fr auto auto;
+  align-items: center; gap: 0.75rem;
+  padding: 0.7rem 1rem; border: 1px solid var(--border); background: var(--bg);
+  transition: border-color 0.15s;
+}
+.link-row:hover { border-color: rgba(124,106,255,0.35); }
+.link-icon { font-size: 1.1rem; text-align: center; }
+.link-info { min-width: 0; }
+.link-platform { font-size: 0.82rem; font-weight: 500; }
+.link-url {
+  font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.1rem;
+}
+.link-url a { color: var(--accent2); text-decoration: none; }
+.link-url a:hover { text-decoration: underline; }
+.link-actions { display: flex; gap: 0.35rem; }
+
+/* Add / edit link form */
+.link-add-form {
+  border: 1px dashed var(--border); background: var(--bg);
+  padding: 1.1rem 1.25rem; margin-bottom: 1rem; display: none;
+}
+.link-add-form.open { display: block; }
+.link-add-form .form-grid { grid-template-columns: 1fr 2fr 2.5rem; align-items: end; gap: 0.65rem; }
+.icon-preview {
+  font-size: 1.3rem; text-align: center; border: 1px solid var(--border);
+  background: var(--surface); display: flex; align-items: center;
+  justify-content: center; height: 38px;
+}
+.platform-hints { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+.hint-chip {
+  font-family: 'Space Mono', monospace; font-size: 0.55rem;
+  padding: 0.15rem 0.45rem; border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer; transition: all 0.12s;
+}
+.hint-chip:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* edit-in-place for a link row */
+.link-edit-area { display: none; grid-column: 1/-1; padding-top: 0.75rem; border-top: 1px solid var(--border); margin-top: 0.5rem; }
+.link-edit-area.open { display: block; }
+
+/* ── Shared empty state ───────────────────────────────────────────────── */
+.empty-state {
+  font-family: 'Space Mono', monospace; font-size: 0.65rem;
+  color: var(--muted); padding: 1.5rem 0; text-align: center;
+  border: 1px dashed var(--border); margin-bottom: 1rem;
+}
+
+/* ── Messages / Toast ────────────────────────────────────────────────── */
+.msg { padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.82rem; border-left: 3px solid; }
+.msg.success { border-color: var(--accent); background: rgba(0,255,136,0.05); }
+.msg.error   { border-color: #ff4466; background: rgba(255,68,102,0.05); }
+.toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 300;
+  font-family: 'Space Mono', monospace; font-size: 0.68rem;
+  padding: 0.65rem 1.1rem; border: 1px solid; max-width: 300px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.ok  { background: rgba(0,255,136,0.1); border-color: rgba(0,255,136,0.4); color: var(--accent); }
+.toast.err { background: rgba(255,68,102,0.1); border-color: rgba(255,68,102,0.4); color: #ff4466; }
+.err-msg { color: #ff4466; font-size: 0.75rem; margin-top: 0.5rem; display: none; }
+
+@media (max-width: 620px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .profile-header { flex-direction: column; }
+  .link-add-form .form-grid { grid-template-columns: 1fr; }
+  .link-row { grid-template-columns: 2rem 1fr auto; }
+  .link-row .link-actions { grid-column: 3; }
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a href="{% url 'dashboard' %}" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
+  <div class="nav">
+    <a href="{% url 'dashboard' %}"           class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="{% url 'accounts:documents' %}"  class="btn btn-outline btn-sm">📁 Documents</a>
+    <a href="{% url 'accounts:logout' %}"     class="btn btn-outline btn-sm">Sign out</a>
+  </div>
+</div>
+
+<div class="page">
+  {% if messages %}{% for message in messages %}
+  <div class="msg {{ message.tags }}">{{ message }}</div>
+  {% endfor %}{% endif %}
+
+  <!-- ── Profile header ── -->
+  <div class="profile-header">
+    <div style="flex-shrink:0">
+      {% if profile.photo %}
+      <img class="avatar" src="{% url 'accounts:user_photo' %}" alt="photo"/>
+      {% else %}
+      <div class="avatar-placeholder">{{ request.user.first_name|first|default:request.user.email|first|upper }}</div>
+      {% endif %}
+    </div>
+    <div class="profile-info">
+      <div class="profile-name">{{ request.user.get_full_name|default:request.user.email }}</div>
+      <div class="profile-email">{{ request.user.email }}</div>
+      <div class="profile-badges">
+        <span class="badge green">✓ Active</span>
+        {% if profile.location    %}<span class="badge">📍 {{ profile.location }}</span>{% endif %}
+        {% if profile.occupation  %}<span class="badge">💼 {{ profile.occupation }}</span>{% endif %}
+        {% if work_experiences    %}<span class="badge">{{ work_experiences|length }} job{{ work_experiences|length|pluralize }}</span>{% endif %}
+        {% if educations          %}<span class="badge">{{ educations|length }} qualification{{ educations|length|pluralize }}</span>{% endif %}
+        {% if skills              %}<span class="badge">{{ skills|length }} skill{{ skills|length|pluralize }}</span>{% endif %}
+        {% if social_links        %}<span class="badge">{{ social_links|length }} link{{ social_links|length|pluralize }}</span>{% endif %}
       </div>
     </div>
-    <div class="page">
-      {% if messages %}{% for message in messages %}
-      <div class="msg {{ message.tags }}">{{ message }}</div>
-      {% endfor %}{% endif %}
-      <div class="profile-header">
-        <div style="flex-shrink: 0">
-          {% if profile.photo %}
-          <img
-            class="avatar"
-            src="{% url 'accounts:user_photo' %}"
-            alt="photo"
-          />
-          {% else %}
-          <div class="avatar-placeholder">
-            {{
-            request.user.first_name|first|default:request.user.email|first|upper
-            }}
-          </div>
-          {% endif %}
-        </div>
-        <div class="profile-info">
-          <div class="profile-name">
-            {{ request.user.get_full_name|default:request.user.email }}
-          </div>
-          <div class="profile-email">{{ request.user.email }}</div>
-          <div class="profile-badges">
-            <span class="badge green">✓ Active</span> {% if profile.location
-            %}<span class="badge">📍 {{ profile.location }}</span>{% endif %} {%
-            if profile.occupation %}<span class="badge"
-              >💼 {{ profile.occupation }}</span
-            >{% endif %} {% if work_experiences %}<span class="badge"
-              >{{ work_experiences|length }} job{{
-              work_experiences|length|pluralize }}</span
-            >{% endif %} {% if educations %}<span class="badge"
-              >{{ educations|length }} qualification{{
-              educations|length|pluralize }}</span
-            >{% endif %} {% if skills %}<span class="badge"
-              >{{ skills|length }} skill{{ skills|length|pluralize }}</span
-            >{% endif %}
-          </div>
-        </div>
-        <a
-          href="{% url 'accounts:documents' %}"
-          class="btn btn-outline btn-sm"
-          style="flex-shrink: 0"
-          >📁 Documents</a
-        >
-      </div>
-      <div class="doc-summary">
-        {% for dt, dt_label in doc_types %}
-        <div class="doc-stat">
-          <div class="doc-stat-val">{{ doc_counts|get_item:dt }}</div>
-          <div class="doc-stat-label">{{ dt_label }}</div>
-        </div>
-        {% endfor %}
-      </div>
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('personal', this)">
-          Personal
-        </button>
-        <button class="tab-btn" onclick="switchTab('experience', this)">
-          Experience
-        </button>
-        <button class="tab-btn" onclick="switchTab('education', this)">
-          Education
-        </button>
-        <button class="tab-btn" onclick="switchTab('skills', this)">
-          Skills
-        </button>
-        <button class="tab-btn" onclick="switchTab('languages', this)">
-          Languages
-        </button>
-        <button class="tab-btn" onclick="switchTab('references', this)">
-          References
-        </button>
-      </div>
-      <!-- TAB: Personal -->
-      <div class="tab-pane active" id="tab-personal">
-        <form
-          method="POST"
-          enctype="multipart/form-data"
-          action="{% url 'accounts:profile' %}"
-        >
-          {% csrf_token %}
-          <div class="section">
-            <div class="section-header">
-              <span class="section-title">Personal Info</span>
+    <a href="{% url 'accounts:documents' %}" class="btn btn-outline btn-sm" style="flex-shrink:0">📁 Documents</a>
+  </div>
+
+  <!-- ── Document count strip ── -->
+  <div class="doc-summary">
+    {% for dt, dt_label in doc_types %}
+    <div class="doc-stat">
+      <div class="doc-stat-val">{{ doc_counts|get_item:dt }}</div>
+      <div class="doc-stat-label">{{ dt_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ── Tabs ── -->
+  <div class="tabs">
+    <button class="tab-btn active"  onclick="switchTab('personal',   this)">Personal</button>
+    <button class="tab-btn"         onclick="switchTab('experience',  this)">Experience</button>
+    <button class="tab-btn"         onclick="switchTab('education',   this)">Education</button>
+    <button class="tab-btn"         onclick="switchTab('skills',      this)">Skills</button>
+    <button class="tab-btn"         onclick="switchTab('languages',   this)">Languages</button>
+    <button class="tab-btn"         onclick="switchTab('references',  this)">References</button>
+    <button class="tab-btn"         onclick="switchTab('links',       this)">🔗 Links</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — Personal
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane active" id="tab-personal">
+    <form method="POST" enctype="multipart/form-data" action="{% url 'accounts:profile' %}">
+      {% csrf_token %}
+      <div class="section">
+        <div class="section-header"><span class="section-title">Personal Info</span></div>
+        <div class="section-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">First Name</label>
+              <input class="form-input" type="text" name="first_name" value="{{ request.user.first_name }}"/>
             </div>
-            <div class="section-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label class="form-label">First Name</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="first_name"
-                    value="{{ request.user.first_name }}"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Last Name</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="last_name"
-                    value="{{ request.user.last_name }}"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Phone</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="phone"
-                    value="{{ profile.phone }}"
-                    placeholder="+27 ..."
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">SA ID Number</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="id_number"
-                    value="{{ profile.id_number }}"
-                    placeholder="13-digit ID"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Location</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="location"
-                    value="{{ profile.location }}"
-                    placeholder="City, Province"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Occupation / Job Title</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="occupation"
-                    value="{{ profile.occupation }}"
-                    placeholder="e.g. Software Developer"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Total Years Experience</label
-                  ><input
-                    class="form-input"
-                    type="text"
-                    name="years_experience"
-                    value="{{ profile.years_experience }}"
-                    placeholder="e.g. 3–5"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Profile Photo</label
-                  ><input
-                    class="form-input"
-                    type="file"
-                    name="photo"
-                    accept="image/*"
-                  />
-                </div>
-                <div class="form-group full">
-                  <label class="form-label">Professional Summary</label
-                  ><textarea
-                    class="form-textarea"
-                    name="bio"
-                    rows="4"
-                    placeholder="Brief summary for recruiters..."
-                  >
-{{ profile.bio }}</textarea
-                  >
-                </div>
+            <div class="form-group">
+              <label class="form-label">Last Name</label>
+              <input class="form-input" type="text" name="last_name" value="{{ request.user.last_name }}"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input class="form-input" type="text" name="phone" value="{{ profile.phone }}" placeholder="+27 ..."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">SA ID Number</label>
+              <input class="form-input" type="text" name="id_number" value="{{ profile.id_number }}" placeholder="13-digit ID"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location</label>
+              <input class="form-input" type="text" name="location" value="{{ profile.location }}" placeholder="City, Province"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Occupation / Job Title</label>
+              <input class="form-input" type="text" name="occupation" value="{{ profile.occupation }}" placeholder="e.g. Software Developer"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Years of Experience</label>
+              <input class="form-input" type="text" name="years_experience" value="{{ profile.years_experience }}" placeholder="e.g. 3–5"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Profile Photo</label>
+              <input class="form-input" type="file" name="photo" accept="image/*"/>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Professional Summary</label>
+              <textarea class="form-textarea" name="bio" rows="4" placeholder="Brief summary for recruiters...">{{ profile.bio }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header"><span class="section-title">Online Presence</span></div>
+        <div class="section-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">GitHub URL</label>
+              <input class="form-input" type="url" name="github_url" value="{{ profile.github_url }}" placeholder="https://github.com/..."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">LinkedIn URL</label>
+              <input class="form-input" type="url" name="linkedin_url" value="{{ profile.linkedin_url }}" placeholder="https://linkedin.com/in/..."/>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Portfolio / Website</label>
+              <input class="form-input" type="url" name="portfolio_url" value="{{ profile.portfolio_url }}" placeholder="https://..."/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary">SAVE PROFILE →</button>
+    </form>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — Work Experience
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab-experience">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Work Experience</span>
+        <button class="btn-add" onclick="toggleForm('new-exp')">+ Add Position</button>
+      </div>
+      <div class="section-body">
+
+        <!-- New entry form -->
+        <div id="new-exp" class="entry-edit-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Job Title *</label>
+              <input class="form-input" id="ne-title" placeholder="e.g. Software Developer"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Company *</label>
+              <input class="form-input" id="ne-company" placeholder="e.g. Acme Corp"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location</label>
+              <input class="form-input" id="ne-location" placeholder="e.g. Johannesburg, GP"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Start Date *</label>
+              <input class="form-input" id="ne-start" type="date"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Date</label>
+              <input class="form-input" id="ne-end" type="date"/>
+            </div>
+            <div class="form-group" style="justify-content:flex-end">
+              <div class="check-row">
+                <input type="checkbox" id="ne-current"/>
+                <label for="ne-current">Currently working here</label>
               </div>
             </div>
-          </div>
-          <div class="section">
-            <div class="section-header">
-              <span class="section-title">Online Presence</span>
+            <div class="form-group full">
+              <label class="form-label">Description / Responsibilities</label>
+              <textarea class="form-textarea" id="ne-desc" rows="3" placeholder="Key responsibilities and achievements..."></textarea>
             </div>
-            <div class="section-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label class="form-label">GitHub URL</label
-                  ><input
-                    class="form-input"
-                    type="url"
-                    name="github_url"
-                    value="{{ profile.github_url }}"
-                    placeholder="https://github.com/..."
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">LinkedIn URL</label
-                  ><input
-                    class="form-input"
-                    type="url"
-                    name="linkedin_url"
-                    value="{{ profile.linkedin_url }}"
-                    placeholder="https://linkedin.com/in/..."
-                  />
-                </div>
-                <div class="form-group full">
-                  <label class="form-label">Portfolio / Website</label
-                  ><input
-                    class="form-input"
-                    type="url"
-                    name="portfolio_url"
-                    value="{{ profile.portfolio_url }}"
-                    placeholder="https://..."
-                  />
-                </div>
+          </div>
+          <div class="form-row-actions">
+            <button class="btn-primary" onclick="saveExp(null)">Save Position</button>
+            <button class="btn-outline-sm" onclick="toggleForm('new-exp')">Cancel</button>
+          </div>
+          <div id="ne-error" class="err-msg"></div>
+        </div>
+
+        <div class="entry-list" id="exp-list">
+          {% if work_experiences %}{% for exp in work_experiences %}
+          <div class="entry-card" id="exp-{{ exp.pk }}">
+            <div class="entry-top">
+              <div>
+                <div class="entry-title">{{ exp.job_title }}{% if exp.is_current %}<span class="current-badge">current</span>{% endif %}</div>
+                <div class="entry-sub">{{ exp.company }}{% if exp.location %} · {{ exp.location }}{% endif %}</div>
+                <div class="entry-meta">{{ exp.start_date|date:"M Y" }} → {% if exp.is_current %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif %}{% if exp.duration %} · {{ exp.duration }}{% endif %}</div>
+                {% if exp.description %}<div class="entry-desc">{{ exp.description }}</div>{% endif %}
+              </div>
+              <div class="entry-actions">
+                <button class="btn-outline-sm" onclick="toggleEditCard('exp',{{ exp.pk }})">Edit</button>
+                <button class="btn-danger-sm"  onclick="delExp({{ exp.pk }})">✕</button>
               </div>
             </div>
-          </div>
-          <button type="submit" class="btn-primary">SAVE PROFILE →</button>
-        </form>
-      </div>
-      <!-- TAB: Experience -->
-      <div class="tab-pane" id="tab-experience">
-        <div class="section">
-          <div class="section-header">
-            <span class="section-title">Work Experience</span>
-            <button class="btn-add" onclick="toggleForm('new-exp')">
-              + Add Position
-            </button>
-          </div>
-          <div class="section-body">
-            <div id="new-exp" class="entry-edit-form">
+            <div class="entry-edit-form" id="exp-edit-{{ exp.pk }}">
               <div class="form-grid">
-                <div class="form-group">
-                  <label class="form-label">Job Title *</label
-                  ><input
-                    class="form-input"
-                    id="ne-title"
-                    placeholder="e.g. Software Developer"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Company *</label
-                  ><input
-                    class="form-input"
-                    id="ne-company"
-                    placeholder="e.g. Acme Corp"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Location</label
-                  ><input
-                    class="form-input"
-                    id="ne-location"
-                    placeholder="e.g. Johannesburg, GP"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Start Date *</label
-                  ><input class="form-input" id="ne-start" type="date" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">End Date</label
-                  ><input class="form-input" id="ne-end" type="date" />
-                </div>
-                <div class="form-group" style="justify-content: flex-end">
+                <div class="form-group"><label class="form-label">Job Title *</label><input class="form-input" id="ee-title-{{ exp.pk }}" value="{{ exp.job_title }}"/></div>
+                <div class="form-group"><label class="form-label">Company *</label><input class="form-input" id="ee-company-{{ exp.pk }}" value="{{ exp.company }}"/></div>
+                <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ee-location-{{ exp.pk }}" value="{{ exp.location }}"/></div>
+                <div class="form-group"><label class="form-label">Start Date *</label><input class="form-input" id="ee-start-{{ exp.pk }}" type="date" value="{{ exp.start_date|date:'Y-m-d' }}"/></div>
+                <div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="ee-end-{{ exp.pk }}" type="date" value="{{ exp.end_date|date:'Y-m-d'|default:'' }}"/></div>
+                <div class="form-group" style="justify-content:flex-end">
                   <div class="check-row">
-                    <input type="checkbox" id="ne-current" /><label
-                      for="ne-current"
-                      >Currently working here</label
-                    >
+                    <input type="checkbox" id="ee-current-{{ exp.pk }}" {% if exp.is_current %}checked{% endif %}/>
+                    <label for="ee-current-{{ exp.pk }}">Currently working here</label>
                   </div>
                 </div>
                 <div class="form-group full">
-                  <label class="form-label">Description</label
-                  ><textarea
-                    class="form-textarea"
-                    id="ne-desc"
-                    placeholder="Key responsibilities and achievements..."
-                  ></textarea>
+                  <label class="form-label">Description</label>
+                  <textarea class="form-textarea" id="ee-desc-{{ exp.pk }}">{{ exp.description }}</textarea>
                 </div>
               </div>
               <div class="form-row-actions">
-                <button class="btn-primary" onclick="saveExp(null)">
-                  Save Position
-                </button>
-                <button class="btn-outline-sm" onclick="toggleForm('new-exp')">
-                  Cancel
-                </button>
+                <button class="btn-primary" onclick="saveExp({{ exp.pk }})">Save</button>
+                <button class="btn-outline-sm" onclick="toggleEditCard('exp',{{ exp.pk }})">Cancel</button>
               </div>
-              <div id="ne-error" class="err-msg"></div>
-            </div>
-            <div class="entry-list" id="exp-list">
-              {% if work_experiences %} {% for exp in work_experiences %}
-              <div class="entry-card" id="exp-{{ exp.pk }}">
-                <div class="entry-top">
-                  <div>
-                    <div class="entry-title">
-                      {{ exp.job_title }}{% if exp.is_current %}<span
-                        class="current-badge"
-                        >current</span
-                      >{% endif %}
-                    </div>
-                    <div class="entry-sub">
-                      {{ exp.company }}{% if exp.location %} · {{ exp.location
-                      }}{% endif %}
-                    </div>
-                    <div class="entry-meta">
-                      {{ exp.start_date|date:"M Y" }} → {% if exp.is_current
-                      %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif
-                      %}{% if exp.duration %} · {{ exp.duration }}{% endif %}
-                    </div>
-                    {% if exp.description %}
-                    <div class="entry-desc">{{ exp.description }}</div>
-                    {% endif %}
-                  </div>
-                  <div class="entry-actions">
-                    <button
-                      class="btn-outline-sm"
-                      onclick="toggleEditCard('exp',{{ exp.pk }})"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      class="btn-danger-sm"
-                      onclick="delExp({{ exp.pk }})"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-                <div class="entry-edit-form" id="exp-edit-{{ exp.pk }}">
-                  <div class="form-grid">
-                    <div class="form-group">
-                      <label class="form-label">Job Title *</label
-                      ><input
-                        class="form-input"
-                        id="ee-title-{{ exp.pk }}"
-                        value="{{ exp.job_title }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Company *</label
-                      ><input
-                        class="form-input"
-                        id="ee-company-{{ exp.pk }}"
-                        value="{{ exp.company }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Location</label
-                      ><input
-                        class="form-input"
-                        id="ee-location-{{ exp.pk }}"
-                        value="{{ exp.location }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Start Date *</label
-                      ><input
-                        class="form-input"
-                        id="ee-start-{{ exp.pk }}"
-                        type="date"
-                        value="{{ exp.start_date|date:'Y-m-d' }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">End Date</label
-                      ><input
-                        class="form-input"
-                        id="ee-end-{{ exp.pk }}"
-                        type="date"
-                        value="{{ exp.end_date|date:'Y-m-d'|default:'' }}"
-                      />
-                    </div>
-                    <div class="form-group" style="justify-content: flex-end">
-                      <div class="check-row">
-                        <input
-                          type="checkbox"
-                          id="ee-current-{{ exp.pk }}"
-                          {%
-                          if
-                          exp.is_current
-                          %}checked{%
-                          endif
-                          %}
-                        /><label for="ee-current-{{ exp.pk }}"
-                          >Currently working here</label
-                        >
-                      </div>
-                    </div>
-                    <div class="form-group full">
-                      <label class="form-label">Description</label
-                      ><textarea
-                        class="form-textarea"
-                        id="ee-desc-{{ exp.pk }}"
-                      >
-{{ exp.description }}</textarea
-                      >
-                    </div>
-                  </div>
-                  <div class="form-row-actions">
-                    <button class="btn-primary" onclick="saveExp({{ exp.pk }})">
-                      Save
-                    </button>
-                    <button
-                      class="btn-outline-sm"
-                      onclick="toggleEditCard('exp',{{ exp.pk }})"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div id="ee-error-{{ exp.pk }}" class="err-msg"></div>
-                </div>
-              </div>
-              {% endfor %} {% else %}
-              <div class="empty-state" id="exp-empty">
-                No work experience added yet.
-              </div>
-              {% endif %}
+              <div id="ee-error-{{ exp.pk }}" class="err-msg"></div>
             </div>
           </div>
+          {% endfor %}{% else %}
+          <div class="empty-state" id="exp-empty">No work experience added yet. Click "+ Add Position" to start.</div>
+          {% endif %}
         </div>
       </div>
-      <!-- TAB: Education -->
-      <div class="tab-pane" id="tab-education">
-        <div class="section">
-          <div class="section-header">
-            <span class="section-title">Education &amp; Qualifications</span>
-            <button class="btn-add" onclick="toggleForm('new-edu')">
-              + Add Qualification
-            </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — Education
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab-education">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Education &amp; Qualifications</span>
+        <button class="btn-add" onclick="toggleForm('new-edu')">+ Add Qualification</button>
+      </div>
+      <div class="section-body">
+
+        <div id="new-edu" class="entry-edit-form">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label class="form-label">Institution *</label>
+              <input class="form-input" id="nee-inst" placeholder="e.g. University of Johannesburg"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Qualification *</label>
+              <input class="form-input" id="nee-qual" placeholder="e.g. BSc Computer Science"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Field of Study</label>
+              <input class="form-input" id="nee-field" placeholder="e.g. Information Systems"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">NQF Level</label>
+              <select class="form-select" id="nee-nqf">
+                {% for val, label in nqf_levels %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="form-group"></div>
+            <div class="form-group">
+              <label class="form-label">Start Year *</label>
+              <input class="form-input" id="nee-start" type="number" min="1950" max="2030" placeholder="2018"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Year</label>
+              <input class="form-input" id="nee-end" type="number" min="1950" max="2030" placeholder="2022"/>
+            </div>
+            <div class="form-group">
+              <div class="check-row" style="margin-top:1.5rem">
+                <input type="checkbox" id="nee-current"/>
+                <label for="nee-current">Currently studying</label>
+              </div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Notes / Distinctions</label>
+              <textarea class="form-textarea" id="nee-desc" placeholder="Awards, distinctions, relevant modules..."></textarea>
+            </div>
           </div>
-          <div class="section-body">
-            <div id="new-edu" class="entry-edit-form">
+          <div class="form-row-actions">
+            <button class="btn-primary" onclick="saveEdu(null)">Save Qualification</button>
+            <button class="btn-outline-sm" onclick="toggleForm('new-edu')">Cancel</button>
+          </div>
+          <div id="nee-error" class="err-msg"></div>
+        </div>
+
+        <div class="entry-list" id="edu-list">
+          {% if educations %}{% for edu in educations %}
+          <div class="entry-card" id="edu-{{ edu.pk }}">
+            <div class="entry-top">
+              <div>
+                <div class="entry-title">{{ edu.qualification }}{% if edu.is_current %}<span class="current-badge">studying</span>{% endif %}</div>
+                <div class="entry-sub">{{ edu.institution }}{% if edu.field_of_study %} · {{ edu.field_of_study }}{% endif %}</div>
+                <div class="entry-meta">{{ edu.start_year }} → {% if edu.is_current %}Present{% else %}{{ edu.end_year|default:"?" }}{% endif %}{% if edu.nqf_level %} · {{ edu.get_nqf_level_display }}{% endif %}</div>
+                {% if edu.description %}<div class="entry-desc">{{ edu.description }}</div>{% endif %}
+              </div>
+              <div class="entry-actions">
+                <button class="btn-outline-sm" onclick="toggleEditCard('edu',{{ edu.pk }})">Edit</button>
+                <button class="btn-danger-sm"  onclick="delEdu({{ edu.pk }})">✕</button>
+              </div>
+            </div>
+            <div class="entry-edit-form" id="edu-edit-{{ edu.pk }}">
               <div class="form-grid">
-                <div class="form-group full">
-                  <label class="form-label">Institution *</label
-                  ><input
-                    class="form-input"
-                    id="nee-inst"
-                    placeholder="e.g. University of Johannesburg"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Qualification *</label
-                  ><input
-                    class="form-input"
-                    id="nee-qual"
-                    placeholder="e.g. BSc Computer Science"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Field of Study</label
-                  ><input
-                    class="form-input"
-                    id="nee-field"
-                    placeholder="e.g. Information Systems"
-                  />
-                </div>
+                <div class="form-group full"><label class="form-label">Institution *</label><input class="form-input" id="eee-inst-{{ edu.pk }}" value="{{ edu.institution }}"/></div>
+                <div class="form-group"><label class="form-label">Qualification *</label><input class="form-input" id="eee-qual-{{ edu.pk }}" value="{{ edu.qualification }}"/></div>
+                <div class="form-group"><label class="form-label">Field of Study</label><input class="form-input" id="eee-field-{{ edu.pk }}" value="{{ edu.field_of_study }}"/></div>
                 <div class="form-group">
                   <label class="form-label">NQF Level</label>
-                  <select class="form-select" id="nee-nqf">
-                    {% for val, label in nqf_levels %}
-                    <option value="{{ val }}">{{ label }}</option>
-                    {% endfor %}
+                  <select class="form-select" id="eee-nqf-{{ edu.pk }}">
+                    {% for val, label in nqf_levels %}<option value="{{ val }}" {% if edu.nqf_level == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
                   </select>
                 </div>
                 <div class="form-group"></div>
+                <div class="form-group"><label class="form-label">Start Year *</label><input class="form-input" id="eee-start-{{ edu.pk }}" type="number" value="{{ edu.start_year }}"/></div>
+                <div class="form-group"><label class="form-label">End Year</label><input class="form-input" id="eee-end-{{ edu.pk }}" type="number" value="{{ edu.end_year|default:'' }}"/></div>
                 <div class="form-group">
-                  <label class="form-label">Start Year *</label
-                  ><input
-                    class="form-input"
-                    id="nee-start"
-                    type="number"
-                    min="1980"
-                    max="2030"
-                    placeholder="2018"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">End Year</label
-                  ><input
-                    class="form-input"
-                    id="nee-end"
-                    type="number"
-                    min="1980"
-                    max="2030"
-                    placeholder="2022"
-                  />
-                </div>
-                <div class="form-group">
-                  <div class="check-row" style="margin-top: 1.5rem">
-                    <input type="checkbox" id="nee-current" /><label
-                      for="nee-current"
-                      >Currently studying</label
-                    >
+                  <div class="check-row" style="margin-top:1.5rem">
+                    <input type="checkbox" id="eee-current-{{ edu.pk }}" {% if edu.is_current %}checked{% endif %}/>
+                    <label for="eee-current-{{ edu.pk }}">Currently studying</label>
                   </div>
                 </div>
-                <div class="form-group full">
-                  <label class="form-label">Notes</label
-                  ><textarea
-                    class="form-textarea"
-                    id="nee-desc"
-                    placeholder="Awards, distinctions, relevant modules..."
-                  ></textarea>
-                </div>
+                <div class="form-group full"><label class="form-label">Notes</label><textarea class="form-textarea" id="eee-desc-{{ edu.pk }}">{{ edu.description }}</textarea></div>
               </div>
               <div class="form-row-actions">
-                <button class="btn-primary" onclick="saveEdu(null)">
-                  Save Qualification
-                </button>
-                <button class="btn-outline-sm" onclick="toggleForm('new-edu')">
-                  Cancel
-                </button>
+                <button class="btn-primary" onclick="saveEdu({{ edu.pk }})">Save</button>
+                <button class="btn-outline-sm" onclick="toggleEditCard('edu',{{ edu.pk }})">Cancel</button>
               </div>
-              <div id="nee-error" class="err-msg"></div>
-            </div>
-            <div class="entry-list" id="edu-list">
-              {% if educations %} {% for edu in educations %}
-              <div class="entry-card" id="edu-{{ edu.pk }}">
-                <div class="entry-top">
-                  <div>
-                    <div class="entry-title">
-                      {{ edu.qualification }}{% if edu.is_current %}<span
-                        class="current-badge"
-                        >studying</span
-                      >{% endif %}
-                    </div>
-                    <div class="entry-sub">
-                      {{ edu.institution }}{% if edu.field_of_study %} · {{
-                      edu.field_of_study }}{% endif %}
-                    </div>
-                    <div class="entry-meta">
-                      {{ edu.start_year }} → {% if edu.is_current %}Present{%
-                      else %}{{ edu.end_year|default:"?" }}{% endif %}{% if
-                      edu.nqf_level %} · {{ edu.get_nqf_level_display }}{% endif
-                      %}
-                    </div>
-                    {% if edu.description %}
-                    <div class="entry-desc">{{ edu.description }}</div>
-                    {% endif %}
-                  </div>
-                  <div class="entry-actions">
-                    <button
-                      class="btn-outline-sm"
-                      onclick="toggleEditCard('edu',{{ edu.pk }})"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      class="btn-danger-sm"
-                      onclick="delEdu({{ edu.pk }})"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-                <div class="entry-edit-form" id="edu-edit-{{ edu.pk }}">
-                  <div class="form-grid">
-                    <div class="form-group full">
-                      <label class="form-label">Institution *</label
-                      ><input
-                        class="form-input"
-                        id="eee-inst-{{ edu.pk }}"
-                        value="{{ edu.institution }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Qualification *</label
-                      ><input
-                        class="form-input"
-                        id="eee-qual-{{ edu.pk }}"
-                        value="{{ edu.qualification }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Field of Study</label
-                      ><input
-                        class="form-input"
-                        id="eee-field-{{ edu.pk }}"
-                        value="{{ edu.field_of_study }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">NQF Level</label>
-                      <select class="form-select" id="eee-nqf-{{ edu.pk }}">
-                        {% for val, label in nqf_levels %}
-                        <option
-                          value="{{ val }}"
-                          {%
-                          if
-                          edu.nqf_level=""
-                          ="val"
-                          %}selected{%
-                          endif
-                          %}
-                        >
-                          {{ label }}
-                        </option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Start Year *</label
-                      ><input
-                        class="form-input"
-                        id="eee-start-{{ edu.pk }}"
-                        type="number"
-                        value="{{ edu.start_year }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">End Year</label
-                      ><input
-                        class="form-input"
-                        id="eee-end-{{ edu.pk }}"
-                        type="number"
-                        value="{{ edu.end_year|default:'' }}"
-                      />
-                    </div>
-                    <div class="form-group">
-                      <div class="check-row" style="margin-top: 1.5rem">
-                        <input
-                          type="checkbox"
-                          id="eee-current-{{ edu.pk }}"
-                          {%
-                          if
-                          edu.is_current
-                          %}checked{%
-                          endif
-                          %}
-                        /><label for="eee-current-{{ edu.pk }}"
-                          >Currently studying</label
-                        >
-                      </div>
-                    </div>
-                    <div class="form-group full">
-                      <label class="form-label">Notes</label
-                      ><textarea
-                        class="form-textarea"
-                        id="eee-desc-{{ edu.pk }}"
-                      >
-{{ edu.description }}</textarea
-                      >
-                    </div>
-                  </div>
-                  <div class="form-row-actions">
-                    <button class="btn-primary" onclick="saveEdu({{ edu.pk }})">
-                      Save
-                    </button>
-                    <button
-                      class="btn-outline-sm"
-                      onclick="toggleEditCard('edu',{{ edu.pk }})"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div id="eee-error-{{ edu.pk }}" class="err-msg"></div>
-                </div>
-              </div>
-              {% endfor %} {% else %}
-              <div class="empty-state" id="edu-empty">
-                No education added yet.
-              </div>
-              {% endif %}
+              <div id="eee-error-{{ edu.pk }}" class="err-msg"></div>
             </div>
           </div>
-        </div>
-      </div>
-      <!-- TAB: Skills -->
-      <div class="tab-pane" id="tab-skills">
-        <div class="section">
-          <div class="section-header">
-            <span class="section-title">Skills</span>
-          </div>
-          <div class="section-body">
-            <div class="skill-grid" id="skill-grid">
-              {% for skill in skills %}
-              <div class="skill-tag" id="skill-{{ skill.pk }}">
-                <span class="level-dot {{ skill.level }}"></span>
-                <span>{{ skill.name }}</span>
-                <span style="color: var(--muted); font-size: 0.65rem"
-                  >({{ skill.get_level_display }})</span
-                >
-                <button onclick="delSkill({{ skill.pk }})" title="Remove">
-                  ✕
-                </button>
-              </div>
-              {% endfor %}
-            </div>
-            {% if not skills %}
-            <div class="empty-state" id="skill-empty">No skills added yet.</div>
-            {% endif %}
-            <div class="add-skill-row">
-              <div class="form-group" style="flex: 2">
-                <label class="form-label">Skill Name</label
-                ><input
-                  class="form-input"
-                  id="sk-name"
-                  placeholder="e.g. Python, AutoCAD, MS Excel"
-                />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Category</label
-                ><input
-                  class="form-input"
-                  id="sk-cat"
-                  placeholder="Technical / Soft"
-                />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Level</label>
-                <select class="form-select" id="sk-level">
-                  {% for val, label in skill_levels %}
-                  <option value="{{ val }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <button
-                class="btn-primary"
-                style="align-self: flex-end; white-space: nowrap"
-                onclick="addSkill()"
-              >
-                + Add
-              </button>
-            </div>
-            <div id="sk-error" class="err-msg"></div>
-          </div>
-        </div>
-      </div>
-      <!-- TAB: Languages -->
-      <div class="tab-pane" id="tab-languages">
-        <div class="section">
-          <div class="section-header">
-            <span class="section-title">Languages</span>
-          </div>
-          <div class="section-body">
-            <div class="lang-list" id="lang-list">
-              {% for lang in languages %}
-              <div class="lang-row" id="lang-{{ lang.pk }}">
-                <span class="lang-name">{{ lang.name }}</span>
-                <span class="lang-level"
-                  >{{ lang.get_proficiency_display }}</span
-                >
-                <button class="btn-danger-sm" onclick="delLang({{ lang.pk }})">
-                  ✕
-                </button>
-              </div>
-              {% endfor %}
-            </div>
-            {% if not languages %}
-            <div class="empty-state" id="lang-empty">
-              No languages added yet.
-            </div>
-            {% endif %}
-            <div class="add-skill-row">
-              <div class="form-group" style="flex: 2">
-                <label class="form-label">Language</label
-                ><input
-                  class="form-input"
-                  id="ln-name"
-                  placeholder="e.g. Zulu, Afrikaans, English"
-                />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Proficiency</label>
-                <select class="form-select" id="ln-level">
-                  {% for val, label in proficiency_levels %}
-                  <option value="{{ val }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <button
-                class="btn-primary"
-                style="align-self: flex-end; white-space: nowrap"
-                onclick="addLang()"
-              >
-                + Add
-              </button>
-            </div>
-            <div id="ln-error" class="err-msg"></div>
-          </div>
-        </div>
-      </div>
-      <!-- TAB: References -->
-      <div class="tab-pane" id="tab-references">
-        <div class="section">
-          <div class="section-header">
-            <span class="section-title">References</span>
-            <button class="btn-add" onclick="toggleForm('new-ref')">
-              + Add Reference
-            </button>
-          </div>
-          <div class="section-body">
-            <div id="new-ref" class="entry-edit-form">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label class="form-label">Full Name *</label
-                  ><input
-                    class="form-input"
-                    id="nr-name"
-                    placeholder="e.g. Jane Dlamini"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Company</label
-                  ><input
-                    class="form-input"
-                    id="nr-company"
-                    placeholder="e.g. Acme Corp"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Position / Title</label
-                  ><input
-                    class="form-input"
-                    id="nr-pos"
-                    placeholder="e.g. Senior Manager"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Email</label
-                  ><input
-                    class="form-input"
-                    id="nr-email"
-                    type="email"
-                    placeholder="jane@example.com"
-                  />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Phone</label
-                  ><input
-                    class="form-input"
-                    id="nr-phone"
-                    placeholder="+27 ..."
-                  />
-                </div>
-              </div>
-              <div class="form-row-actions">
-                <button class="btn-primary" onclick="saveRef()">
-                  Save Reference
-                </button>
-                <button class="btn-outline-sm" onclick="toggleForm('new-ref')">
-                  Cancel
-                </button>
-              </div>
-              <div id="nr-error" class="err-msg"></div>
-            </div>
-            <div class="ref-grid" id="ref-grid">
-              {% for ref in references %}
-              <div class="ref-card" id="ref-{{ ref.pk }}">
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                  "
-                >
-                  <div>
-                    <div class="ref-name">{{ ref.name }}</div>
-                    <div class="ref-pos">
-                      {% if ref.position %}{{ ref.position }}{% endif %}{% if
-                      ref.company %}{% if ref.position %} · {% endif %}{{
-                      ref.company }}{% endif %}
-                    </div>
-                    <div class="ref-contact">
-                      {% if ref.email %}{{ ref.email }}<br />{% endif %}{{
-                      ref.phone }}
-                    </div>
-                  </div>
-                  <button class="btn-danger-sm" onclick="delRef({{ ref.pk }})">
-                    ✕
-                  </button>
-                </div>
-              </div>
-              {% endfor %}
-            </div>
-            {% if not references %}
-            <div class="empty-state" id="ref-empty">
-              No references added yet.
-            </div>
-            {% endif %}
-          </div>
+          {% endfor %}{% else %}
+          <div class="empty-state" id="edu-empty">No education added yet. Click "+ Add Qualification" to start.</div>
+          {% endif %}
         </div>
       </div>
     </div>
-    <div class="toast" id="toast"></div>
-    <style>
-      .err-msg {
-        color: #ff4466;
-        font-size: 0.75rem;
-        margin-top: 0.5rem;
-        display: none;
-      }
-    </style>
-    <script>
-      const CSRF = "{{ csrf_token }}";
-      const U = {
-        expAdd: '{% url "accounts:experience_add" %}',
-        expEdit: (id) =>
-          '{% url "accounts:experience_edit" 0 %}'.replace(
-            "/0/",
-            "/" + id + "/",
-          ),
-        expDel: (id) =>
-          '{% url "accounts:experience_delete" 0 %}'.replace(
-            "/0/",
-            "/" + id + "/",
-          ),
-        eduAdd: '{% url "accounts:education_add" %}',
-        eduEdit: (id) =>
-          '{% url "accounts:education_edit" 0 %}'.replace(
-            "/0/",
-            "/" + id + "/",
-          ),
-        eduDel: (id) =>
-          '{% url "accounts:education_delete" 0 %}'.replace(
-            "/0/",
-            "/" + id + "/",
-          ),
-        skillAdd: '{% url "accounts:skill_add" %}',
-        skillDel: (id) =>
-          '{% url "accounts:skill_delete" 0 %}'.replace("/0/", "/" + id + "/"),
-        langAdd: '{% url "accounts:language_add" %}',
-        langDel: (id) =>
-          '{% url "accounts:language_delete" 0 %}'.replace(
-            "/0/",
-            "/" + id + "/",
-          ),
-        refAdd: '{% url "accounts:reference_add" %}',
-        refDel: (id) =>
-          '{% url "accounts:reference_delete" 0 %}'.replace(
-            "/0/",
-            "/" + id + "/",
-          ),
-      };
-      function toast(msg, ok = true) {
-        const t = document.getElementById("toast");
-        t.textContent = msg;
-        t.className = "toast show " + (ok ? "ok" : "err");
-        clearTimeout(t._t);
-        t._t = setTimeout(() => t.classList.remove("show"), 3200);
-      }
-      function post(url, data) {
-        const fd = new FormData();
-        fd.append("csrfmiddlewaretoken", CSRF);
-        for (const [k, v] of Object.entries(data)) fd.append(k, v);
-        return fetch(url, { method: "POST", body: fd }).then((r) => r.json());
-      }
-      function v(id) {
-        return (document.getElementById(id)?.value || "").trim();
-      }
-      function c(id) {
-        return document.getElementById(id)?.checked || false;
-      }
-      function err(id, msg) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = msg;
-        el.style.display = msg ? "block" : "none";
-      }
-      function clear(...ids) {
-        ids.forEach((id) => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.type === "checkbox" ? (el.checked = false) : (el.value = "");
-        });
-      }
-      function switchTab(name, btn) {
-        document
-          .querySelectorAll(".tab-pane")
-          .forEach((p) => p.classList.remove("active"));
-        document
-          .querySelectorAll(".tab-btn")
-          .forEach((b) => b.classList.remove("active"));
-        document.getElementById("tab-" + name).classList.add("active");
-        btn.classList.add("active");
-      }
-      function toggleForm(id) {
-        document.getElementById(id).classList.toggle("open");
-      }
-      function toggleEditCard(type, pk) {
-        document.getElementById(`${type}-edit-${pk}`).classList.toggle("open");
-        document.getElementById(`${type}-${pk}`).classList.toggle("editing");
-      }
-      function fmtDate(s) {
-        if (!s) return "";
-        const d = new Date(s);
-        return d.toLocaleDateString("en-ZA", {
-          month: "short",
-          year: "numeric",
-        });
-      } // ── Experience ───────────────────────────────────────────────────────────── async function saveExp(pk){ const p=pk?'ee':'ne', s=pk?`-${pk}`:''; const payload={job_title:v(`${p}-title${s}`),company:v(`${p}-company${s}`),location:v(`${p}-location${s}`),start_date:v(`${p}-start${s}`),end_date:v(`${p}-end${s}`),description:v(`${p}-desc${s}`),is_current:c(`${p}-current${s}`)?'on':''}; const eid=pk?`ee-error-${pk}`:'ne-error';err(eid,''); const d=await post(pk?U.expEdit(pk):U.expAdd,payload); if(!d.ok){err(eid,d.error||'Failed.');return} if(pk){ const card=document.getElementById(`exp-${pk}`); card.querySelector('.entry-title').innerHTML=d.job_title+(d.is_current?' <span class="current-badge">current</span>':''); card.querySelector('.entry-sub').textContent=d.company+(d.location?' · '+d.location:''); card.querySelector('.entry-meta').textContent=`${fmtDate(d.start_date)} → ${d.is_current?'Present':fmtDate(d.end_date)}${d.duration?' · '+d.duration:''}`; const de=card.querySelector('.entry-desc');if(d.description){if(de)de.textContent=d.description;else card.querySelector('.entry-top>div').insertAdjacentHTML('beforeend',`<div class="entry-desc">${d.description}</div>`)}else if(de)de.remove(); toggleEditCard('exp',pk); }else{ document.getElementById('exp-empty')?.remove(); document.getElementById('exp-list').insertAdjacentHTML('beforeend',expCard(d)); document.getElementById('new-exp').classList.remove('open'); clear('ne-title','ne-company','ne-location','ne-start','ne-end','ne-desc','ne-current'); } toast('Experience saved.'); } async function delExp(pk){if(!confirm('Delete this position?'))return;const d=await post(U.expDel(pk),{});if(d.ok){document.getElementById(`exp-${pk}`)?.remove();toast('Deleted.')}else toast('Failed.',false)} function expCard(d){return`<div class="entry-card" id="exp-${d.id}"><div class="entry-top"><div><div class="entry-title">${d.job_title}${d.is_current?' <span class="current-badge">current</span>':''}</div><div class="entry-sub">${d.company}${d.location?' · '+d.location:''}</div><div class="entry-meta">${fmtDate(d.start_date)} → ${d.is_current?'Present':fmtDate(d.end_date)}${d.duration?' · '+d.duration:''}</div>${d.description?`<div class="entry-desc">${d.description}</div>`:''}</div><div class="entry-actions"><button class="btn-outline-sm" onclick="toggleEditCard('exp',${d.id})">Edit</button><button class="btn-danger-sm" onclick="delExp(${d.id})">✕</button></div></div><div class="entry-edit-form" id="exp-edit-${d.id}"><div class="form-grid"><div class="form-group"><label class="form-label">Job Title *</label><input class="form-input" id="ee-title-${d.id}" value="${d.job_title}"></div><div class="form-group"><label class="form-label">Company *</label><input class="form-input" id="ee-company-${d.id}" value="${d.company}"></div><div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ee-location-${d.id}" value="${d.location}"></div><div class="form-group"><label class="form-label">Start Date *</label><input class="form-input" id="ee-start-${d.id}" type="date" value="${d.start_date}"></div><div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="ee-end-${d.id}" type="date" value="${d.end_date}"></div><div class="form-group" style="justify-content:flex-end"><div class="check-row"><input type="checkbox" id="ee-current-${d.id}" ${d.is_current?'checked':''}><label for="ee-current-${d.id}">Currently working here</label></div></div><div class="form-group full"><label class="form-label">Description</label><textarea class="form-textarea" id="ee-desc-${d.id}">${d.description}</textarea></div></div><div class="form-row-actions"><button class="btn-primary" onclick="saveExp(${d.id})">Save</button><button class="btn-outline-sm" onclick="toggleEditCard('exp',${d.id})">Cancel</button></div><div id="ee-error-${d.id}" class="err-msg"></div></div></div>`} // ── Education ────────────────────────────────────────────────────────────── async function saveEdu(pk){ const p=pk?'eee':'nee', s=pk?`-${pk}`:''; const payload={institution:v(`${p}-inst${s}`),qualification:v(`${p}-qual${s}`),field_of_study:v(`${p}-field${s}`),nqf_level:v(`${p}-nqf${s}`),start_year:v(`${p}-start${s}`),end_year:v(`${p}-end${s}`),description:v(`${p}-desc${s}`),is_current:c(`${p}-current${s}`)?'on':''}; const eid=pk?`eee-error-${pk}`:'nee-error';err(eid,''); const d=await post(pk?U.eduEdit(pk):U.eduAdd,payload); if(!d.ok){err(eid,d.error||'Failed.');return} if(pk){ const card=document.getElementById(`edu-${pk}`); card.querySelector('.entry-title').innerHTML=d.qualification+(d.is_current?' <span class="current-badge">studying</span>':''); card.querySelector('.entry-sub').textContent=d.institution+(d.field_of_study?' · '+d.field_of_study:''); card.querySelector('.entry-meta').textContent=`${d.start_year} → ${d.is_current?'Present':d.end_year||'?'}${d.nqf_level?' · '+d.nqf_level:''}`; toggleEditCard('edu',pk); }else{ document.getElementById('edu-empty')?.remove(); document.getElementById('edu-list').insertAdjacentHTML('beforeend',eduCard(d)); document.getElementById('new-edu').classList.remove('open'); clear('nee-inst','nee-qual','nee-field','nee-start','nee-end','nee-desc','nee-current'); } toast('Education saved.'); } async function delEdu(pk){if(!confirm('Delete this entry?'))return;const d=await post(U.eduDel(pk),{});if(d.ok){document.getElementById(`edu-${pk}`)?.remove();toast('Deleted.')}else toast('Failed.',false)} function eduCard(d){return`<div class="entry-card" id="edu-${d.id}"><div class="entry-top"><div><div class="entry-title">${d.qualification}${d.is_current?' <span class="current-badge">studying</span>':''}</div><div class="entry-sub">${d.institution}${d.field_of_study?' · '+d.field_of_study:''}</div><div class="entry-meta">${d.start_year} → ${d.is_current?'Present':d.end_year||'?'}${d.nqf_level?' · '+d.nqf_level:''}</div>${d.description?`<div class="entry-desc">${d.description}</div>`:''}</div><div class="entry-actions"><button class="btn-outline-sm" onclick="toggleEditCard('edu',${d.id})">Edit</button><button class="btn-danger-sm" onclick="delEdu(${d.id})">✕</button></div></div><div class="entry-edit-form" id="edu-edit-${d.id}"><p style="color:var(--muted);font-size:.78rem">Reload page to edit inline.</p></div></div>`} // ── Skills ───────────────────────────────────────────────────────────────── async function addSkill(){ const name=v('sk-name');if(!name){err('sk-error','Skill name required.');return}err('sk-error',''); const d=await post(U.skillAdd,{name,level:v('sk-level'),category:v('sk-cat')}); if(!d.ok){err('sk-error',d.error||'Failed.');return} document.getElementById('skill-empty')?.remove(); document.getElementById('skill-grid').insertAdjacentHTML('beforeend',`<div class="skill-tag" id="skill-${d.id}"><span class="level-dot ${d.level}"></span><span>${d.name}</span><span style="color:var(--muted);font-size:.65rem">(${d.level_display})</span><button onclick="delSkill(${d.id})" title="Remove">✕</button></div>`); document.getElementById('sk-name').value='';document.getElementById('sk-cat').value=''; toast('Skill added.'); } async function delSkill(pk){const d=await post(U.skillDel(pk),{});if(d.ok){document.getElementById(`skill-${pk}`)?.remove();toast('Removed.')}} // ── Languages ────────────────────────────────────────────────────────────── async function addLang(){ const name=v('ln-name');if(!name){err('ln-error','Language name required.');return}err('ln-error',''); const d=await post(U.langAdd,{name,proficiency:v('ln-level')}); if(!d.ok){err('ln-error',d.error||'Failed.');return} document.getElementById('lang-empty')?.remove(); document.getElementById('lang-list').insertAdjacentHTML('beforeend',`<div class="lang-row" id="lang-${d.id}"><span class="lang-name">${d.name}</span><span class="lang-level">${d.proficiency_display}</span><button class="btn-danger-sm" onclick="delLang(${d.id})">✕</button></div>`); document.getElementById('ln-name').value=''; toast('Language added.'); } async function delLang(pk){const d=await post(U.langDel(pk),{});if(d.ok){document.getElementById(`lang-${pk}`)?.remove();toast('Removed.')}} // ── References ───────────────────────────────────────────────────────────── async function saveRef(){ const name=v('nr-name');if(!name){err('nr-error','Name required.');return}err('nr-error',''); const payload={name,company:v('nr-company'),position:v('nr-pos'),email:v('nr-email'),phone:v('nr-phone')}; const d=await post(U.refAdd,payload); if(!d.ok){err('nr-error',d.error||'Failed.');return} document.getElementById('ref-empty')?.remove(); document.getElementById('ref-grid').insertAdjacentHTML('beforeend',`<div class="ref-card" id="ref-${d.id}"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="ref-name">${d.name}</div><div class="ref-pos">${d.position||''}${d.company?(d.position?' · ':'')+d.company:''}</div><div class="ref-contact">${d.email?d.email+'<br>':''}${d.phone||''}</div></div><button class="btn-danger-sm" onclick="delRef(${d.id})">✕</button></div></div>`); document.getElementById('new-ref').classList.remove('open'); clear('nr-name','nr-company','nr-pos','nr-email','nr-phone'); toast('Reference saved.'); } async function delRef(pk){if(!confirm('Remove this reference?'))return;const d=await post(U.refDel(pk),{});if(d.ok){document.getElementById(`ref-${pk}`)?.remove();toast('Removed.')}}
-    </script>
-  </body>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — Skills
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab-skills">
+    <div class="section">
+      <div class="section-header"><span class="section-title">Skills</span></div>
+      <div class="section-body">
+        <div class="skill-grid" id="skill-grid">
+          {% for skill in skills %}
+          <div class="skill-tag" id="skill-{{ skill.pk }}">
+            <span class="level-dot {{ skill.level }}"></span>
+            <span>{{ skill.name }}</span>
+            <span style="color:var(--muted);font-size:.65rem">({{ skill.get_level_display }})</span>
+            <button onclick="delSkill({{ skill.pk }})" title="Remove">✕</button>
+          </div>
+          {% endfor %}
+        </div>
+        {% if not skills %}<div class="empty-state" id="skill-empty">No skills added yet.</div>{% endif %}
+
+        <div class="add-row">
+          <div class="form-group" style="flex:2">
+            <label class="form-label">Skill Name</label>
+            <input class="form-input" id="sk-name" placeholder="e.g. Python, AutoCAD, MS Excel"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <input class="form-input" id="sk-cat" placeholder="Technical / Soft"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Level</label>
+            <select class="form-select" id="sk-level">
+              {% for val, label in skill_levels %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <button class="btn-primary" style="align-self:flex-end;white-space:nowrap" onclick="addSkill()">+ Add</button>
+        </div>
+        <div id="sk-error" class="err-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — Languages
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab-languages">
+    <div class="section">
+      <div class="section-header"><span class="section-title">Languages</span></div>
+      <div class="section-body">
+        <div class="lang-list" id="lang-list">
+          {% for lang in languages %}
+          <div class="lang-row" id="lang-{{ lang.pk }}">
+            <span class="lang-name">{{ lang.name }}</span>
+            <span class="lang-level">{{ lang.get_proficiency_display }}</span>
+            <button class="btn-danger-sm" onclick="delLang({{ lang.pk }})">✕</button>
+          </div>
+          {% endfor %}
+        </div>
+        {% if not languages %}<div class="empty-state" id="lang-empty">No languages added yet.</div>{% endif %}
+
+        <div class="add-row">
+          <div class="form-group" style="flex:2">
+            <label class="form-label">Language</label>
+            <input class="form-input" id="ln-name" placeholder="e.g. Zulu, Afrikaans, English"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Proficiency</label>
+            <select class="form-select" id="ln-level">
+              {% for val, label in proficiency_levels %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <button class="btn-primary" style="align-self:flex-end;white-space:nowrap" onclick="addLang()">+ Add</button>
+        </div>
+        <div id="ln-error" class="err-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — References
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab-references">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">References</span>
+        <button class="btn-add" onclick="toggleForm('new-ref')">+ Add Reference</button>
+      </div>
+      <div class="section-body">
+
+        <div id="new-ref" class="entry-edit-form">
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="nr-name" placeholder="e.g. Jane Dlamini"/></div>
+            <div class="form-group"><label class="form-label">Company</label><input class="form-input" id="nr-company" placeholder="e.g. Acme Corp"/></div>
+            <div class="form-group"><label class="form-label">Position / Title</label><input class="form-input" id="nr-pos" placeholder="e.g. Senior Manager"/></div>
+            <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="nr-email" type="email" placeholder="jane@example.com"/></div>
+            <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="nr-phone" placeholder="+27 ..."/></div>
+          </div>
+          <div class="form-row-actions">
+            <button class="btn-primary" onclick="saveRef()">Save Reference</button>
+            <button class="btn-outline-sm" onclick="toggleForm('new-ref')">Cancel</button>
+          </div>
+          <div id="nr-error" class="err-msg"></div>
+        </div>
+
+        <div class="ref-grid" id="ref-grid">
+          {% for ref in references %}
+          <div class="ref-card" id="ref-{{ ref.pk }}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div class="ref-name">{{ ref.name }}</div>
+                <div class="ref-pos">{% if ref.position %}{{ ref.position }}{% endif %}{% if ref.company %}{% if ref.position %} · {% endif %}{{ ref.company }}{% endif %}</div>
+                <div class="ref-contact">{% if ref.email %}{{ ref.email }}<br/>{% endif %}{{ ref.phone }}</div>
+              </div>
+              <button class="btn-danger-sm" onclick="delRef({{ ref.pk }})">✕</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if not references %}<div class="empty-state" id="ref-empty">No references added yet.</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB — Social Links
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab-links">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Links &amp; Online Profiles</span>
+        <button class="btn-add" onclick="toggleForm('new-link')">+ Add Link</button>
+      </div>
+      <div class="section-body">
+
+        <!-- Add new link form -->
+        <div id="new-link" class="link-add-form">
+          <div style="margin-bottom:.75rem">
+            <div class="form-label" style="margin-bottom:.4rem">Quick-pick platform</div>
+            <div class="platform-hints" id="platform-hints">
+              {% for p in platform_suggestions %}
+              <span class="hint-chip" onclick="pickPlatform('{{ p }}')">{{ p }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="form-grid" style="grid-template-columns:1fr 2fr 2.5rem;align-items:end;gap:.65rem">
+            <div class="form-group">
+              <label class="form-label">Platform *</label>
+              <input class="form-input" id="nl-platform" placeholder="LinkedIn" oninput="previewIcon()"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">URL *</label>
+              <input class="form-input" id="nl-url" type="url" placeholder="https://..." oninput="previewIcon()"/>
+            </div>
+            <div class="icon-preview" id="nl-icon-preview">🔗</div>
+          </div>
+          <div class="form-row-actions">
+            <button class="btn-primary" onclick="saveLink(null)">Save Link</button>
+            <button class="btn-outline-sm" onclick="toggleForm('new-link')">Cancel</button>
+          </div>
+          <div id="nl-error" class="err-msg"></div>
+        </div>
+
+        <!-- Existing links -->
+        <div class="links-list" id="links-list">
+          {% if social_links %}{% for link in social_links %}
+          <div class="link-row" id="link-{{ link.pk }}">
+            <div class="link-icon">{{ link.get_icon }}</div>
+            <div class="link-info">
+              <div class="link-platform">{{ link.platform }}</div>
+              <div class="link-url"><a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.url }}</a></div>
+            </div>
+            <button class="btn-outline-sm" onclick="openLinkEdit({{ link.pk }})">Edit</button>
+            <button class="btn-danger-sm"  onclick="delLink({{ link.pk }})">✕</button>
+          </div>
+          <!-- Inline edit area (hidden by default) -->
+          <div class="link-edit-area" id="link-edit-{{ link.pk }}">
+            <div class="form-grid" style="grid-template-columns:1fr 2fr 2.5rem;align-items:end;gap:.65rem">
+              <div class="form-group">
+                <label class="form-label">Platform</label>
+                <input class="form-input" id="le-platform-{{ link.pk }}" value="{{ link.platform }}" oninput="previewEditIcon({{ link.pk }})"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">URL</label>
+                <input class="form-input" id="le-url-{{ link.pk }}" type="url" value="{{ link.url }}" oninput="previewEditIcon({{ link.pk }})"/>
+              </div>
+              <div class="icon-preview" id="le-icon-{{ link.pk }}">{{ link.get_icon }}</div>
+            </div>
+            <div class="form-row-actions">
+              <button class="btn-primary"   onclick="saveLink({{ link.pk }})">Save</button>
+              <button class="btn-outline-sm" onclick="openLinkEdit({{ link.pk }})">Cancel</button>
+            </div>
+            <div id="le-error-{{ link.pk }}" class="err-msg"></div>
+          </div>
+          {% endfor %}{% else %}
+          <div class="empty-state" id="links-empty">No links added yet. Click "+ Add Link" to connect your online profiles.</div>
+          {% endif %}
+        </div>
+
+        <p style="font-size:.72rem;color:var(--muted);margin-top:1rem;line-height:1.6">
+          Add as many links as you like — LinkedIn, GitHub, portfolio, personal website, Behance, social media, etc.
+          These appear on your profile and can be included in job applications.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CSRF = "{{ csrf_token }}";
+
+/* ── URL map ── */
+const U = {
+  expAdd:   '{% url "accounts:experience_add" %}',
+  expEdit:  id => '{% url "accounts:experience_edit" 0 %}'.replace('/0/','/'+id+'/'),
+  expDel:   id => '{% url "accounts:experience_delete" 0 %}'.replace('/0/','/'+id+'/'),
+  eduAdd:   '{% url "accounts:education_add" %}',
+  eduEdit:  id => '{% url "accounts:education_edit" 0 %}'.replace('/0/','/'+id+'/'),
+  eduDel:   id => '{% url "accounts:education_delete" 0 %}'.replace('/0/','/'+id+'/'),
+  skillAdd: '{% url "accounts:skill_add" %}',
+  skillDel: id => '{% url "accounts:skill_delete" 0 %}'.replace('/0/','/'+id+'/'),
+  langAdd:  '{% url "accounts:language_add" %}',
+  langDel:  id => '{% url "accounts:language_delete" 0 %}'.replace('/0/','/'+id+'/'),
+  refAdd:   '{% url "accounts:reference_add" %}',
+  refDel:   id => '{% url "accounts:reference_delete" 0 %}'.replace('/0/','/'+id+'/'),
+  linkAdd:  '{% url "accounts:link_add" %}',
+  linkEdit: id => '{% url "accounts:link_edit" 0 %}'.replace('/0/','/'+id+'/'),
+  linkDel:  id => '{% url "accounts:link_delete" 0 %}'.replace('/0/','/'+id+'/'),
+};
+
+/* ── Helpers ── */
+function toast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (ok?'ok':'err');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3200);
+}
+function post(url, data) {
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  for (const [k,v] of Object.entries(data)) fd.append(k, v);
+  return fetch(url, {method:'POST', body:fd}).then(r=>r.json());
+}
+function v(id)   { return (document.getElementById(id)?.value||'').trim(); }
+function c(id)   { return document.getElementById(id)?.checked||false; }
+function err(id, msg) { const el=document.getElementById(id); if(!el)return; el.textContent=msg; el.style.display=msg?'block':'none'; }
+function clr(...ids) { ids.forEach(id=>{const el=document.getElementById(id);if(!el)return;el.type==='checkbox'?(el.checked=false):(el.value='');}); }
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+function toggleForm(id) { document.getElementById(id).classList.toggle('open'); }
+function toggleEditCard(type, pk) {
+  document.getElementById(`${type}-edit-${pk}`).classList.toggle('open');
+  document.getElementById(`${type}-${pk}`).classList.toggle('editing');
+}
+function fmtDate(s) {
+  if (!s) return '';
+  return new Date(s).toLocaleDateString('en-ZA',{month:'short',year:'numeric'});
+}
+
+/* ══ Experience ══════════════════════════════════════════════════════════ */
+async function saveExp(pk) {
+  const p=pk?'ee':'ne', s=pk?`-${pk}`:'';
+  const payload={
+    job_title:   v(`${p}-title${s}`),
+    company:     v(`${p}-company${s}`),
+    location:    v(`${p}-location${s}`),
+    start_date:  v(`${p}-start${s}`),
+    end_date:    v(`${p}-end${s}`),
+    description: v(`${p}-desc${s}`),
+    is_current:  c(`${p}-current${s}`)?'on':'',
+  };
+  const eid = pk?`ee-error-${pk}`:'ne-error'; err(eid,'');
+  const d = await post(pk?U.expEdit(pk):U.expAdd, payload);
+  if (!d.ok) { err(eid, d.error||'Failed.'); return; }
+  if (pk) {
+    const card = document.getElementById(`exp-${pk}`);
+    card.querySelector('.entry-title').innerHTML = d.job_title+(d.is_current?' <span class="current-badge">current</span>':'');
+    card.querySelector('.entry-sub').textContent = d.company+(d.location?' · '+d.location:'');
+    card.querySelector('.entry-meta').textContent = `${fmtDate(d.start_date)} → ${d.is_current?'Present':fmtDate(d.end_date)}${d.duration?' · '+d.duration:''}`;
+    const de=card.querySelector('.entry-desc');
+    if (d.description) { if(de)de.textContent=d.description; else card.querySelector('.entry-top>div').insertAdjacentHTML('beforeend',`<div class="entry-desc">${d.description}</div>`); }
+    else if(de) de.remove();
+    toggleEditCard('exp', pk);
+  } else {
+    document.getElementById('exp-empty')?.remove();
+    document.getElementById('exp-list').insertAdjacentHTML('beforeend', expCard(d));
+    document.getElementById('new-exp').classList.remove('open');
+    clr('ne-title','ne-company','ne-location','ne-start','ne-end','ne-desc','ne-current');
+  }
+  toast('Experience saved.');
+}
+async function delExp(pk) {
+  if (!confirm('Delete this position?')) return;
+  const d = await post(U.expDel(pk),{});
+  if (d.ok) { document.getElementById(`exp-${pk}`)?.remove(); toast('Deleted.'); }
+  else toast('Failed.',false);
+}
+function expCard(d) {
+  return `<div class="entry-card" id="exp-${d.id}">
+    <div class="entry-top"><div>
+      <div class="entry-title">${d.job_title}${d.is_current?' <span class="current-badge">current</span>':''}</div>
+      <div class="entry-sub">${d.company}${d.location?' · '+d.location:''}</div>
+      <div class="entry-meta">${fmtDate(d.start_date)} → ${d.is_current?'Present':fmtDate(d.end_date)}${d.duration?' · '+d.duration:''}</div>
+      ${d.description?`<div class="entry-desc">${d.description}</div>`:''}
+    </div>
+    <div class="entry-actions">
+      <button class="btn-outline-sm" onclick="toggleEditCard('exp',${d.id})">Edit</button>
+      <button class="btn-danger-sm"  onclick="delExp(${d.id})">✕</button>
+    </div></div>
+    <div class="entry-edit-form" id="exp-edit-${d.id}">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Job Title *</label><input class="form-input" id="ee-title-${d.id}" value="${d.job_title}"/></div>
+        <div class="form-group"><label class="form-label">Company *</label><input class="form-input" id="ee-company-${d.id}" value="${d.company}"/></div>
+        <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ee-location-${d.id}" value="${d.location}"/></div>
+        <div class="form-group"><label class="form-label">Start Date *</label><input class="form-input" id="ee-start-${d.id}" type="date" value="${d.start_date}"/></div>
+        <div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="ee-end-${d.id}" type="date" value="${d.end_date}"/></div>
+        <div class="form-group" style="justify-content:flex-end"><div class="check-row"><input type="checkbox" id="ee-current-${d.id}" ${d.is_current?'checked':''}><label for="ee-current-${d.id}">Currently working here</label></div></div>
+        <div class="form-group full"><label class="form-label">Description</label><textarea class="form-textarea" id="ee-desc-${d.id}">${d.description}</textarea></div>
+      </div>
+      <div class="form-row-actions">
+        <button class="btn-primary" onclick="saveExp(${d.id})">Save</button>
+        <button class="btn-outline-sm" onclick="toggleEditCard('exp',${d.id})">Cancel</button>
+      </div>
+      <div id="ee-error-${d.id}" class="err-msg"></div>
+    </div>
+  </div>`;
+}
+
+/* ══ Education ═══════════════════════════════════════════════════════════ */
+async function saveEdu(pk) {
+  const p=pk?'eee':'nee', s=pk?`-${pk}`:'';
+  const payload={
+    institution:   v(`${p}-inst${s}`),
+    qualification: v(`${p}-qual${s}`),
+    field_of_study:v(`${p}-field${s}`),
+    nqf_level:     v(`${p}-nqf${s}`),
+    start_year:    v(`${p}-start${s}`),
+    end_year:      v(`${p}-end${s}`),
+    description:   v(`${p}-desc${s}`),
+    is_current:    c(`${p}-current${s}`)?'on':'',
+  };
+  const eid = pk?`eee-error-${pk}`:'nee-error'; err(eid,'');
+  const d = await post(pk?U.eduEdit(pk):U.eduAdd, payload);
+  if (!d.ok) { err(eid, d.error||'Failed.'); return; }
+  if (pk) {
+    const card = document.getElementById(`edu-${pk}`);
+    card.querySelector('.entry-title').innerHTML = d.qualification+(d.is_current?' <span class="current-badge">studying</span>':'');
+    card.querySelector('.entry-sub').textContent = d.institution+(d.field_of_study?' · '+d.field_of_study:'');
+    card.querySelector('.entry-meta').textContent = `${d.start_year} → ${d.is_current?'Present':d.end_year||'?'}${d.nqf_level?' · '+d.nqf_level:''}`;
+    toggleEditCard('edu', pk);
+  } else {
+    document.getElementById('edu-empty')?.remove();
+    document.getElementById('edu-list').insertAdjacentHTML('beforeend', eduCard(d));
+    document.getElementById('new-edu').classList.remove('open');
+    clr('nee-inst','nee-qual','nee-field','nee-start','nee-end','nee-desc','nee-current');
+  }
+  toast('Education saved.');
+}
+async function delEdu(pk) {
+  if (!confirm('Delete this entry?')) return;
+  const d = await post(U.eduDel(pk),{});
+  if (d.ok) { document.getElementById(`edu-${pk}`)?.remove(); toast('Deleted.'); }
+  else toast('Failed.',false);
+}
+function eduCard(d) {
+  return `<div class="entry-card" id="edu-${d.id}">
+    <div class="entry-top"><div>
+      <div class="entry-title">${d.qualification}${d.is_current?' <span class="current-badge">studying</span>':''}</div>
+      <div class="entry-sub">${d.institution}${d.field_of_study?' · '+d.field_of_study:''}</div>
+      <div class="entry-meta">${d.start_year} → ${d.is_current?'Present':d.end_year||'?'}${d.nqf_level?' · '+d.nqf_level:''}</div>
+      ${d.description?`<div class="entry-desc">${d.description}</div>`:''}
+    </div>
+    <div class="entry-actions">
+      <button class="btn-outline-sm" onclick="toggleEditCard('edu',${d.id})">Edit</button>
+      <button class="btn-danger-sm"  onclick="delEdu(${d.id})">✕</button>
+    </div></div>
+    <div class="entry-edit-form" id="edu-edit-${d.id}">
+      <p style="color:var(--muted);font-size:.78rem">Reload page to edit inline.</p>
+    </div>
+  </div>`;
+}
+
+/* ══ Skills ══════════════════════════════════════════════════════════════ */
+async function addSkill() {
+  const name = v('sk-name');
+  if (!name) { err('sk-error','Skill name required.'); return; }
+  err('sk-error','');
+  const d = await post(U.skillAdd, {name, level:v('sk-level'), category:v('sk-cat')});
+  if (!d.ok) { err('sk-error', d.error||'Failed.'); return; }
+  document.getElementById('skill-empty')?.remove();
+  document.getElementById('skill-grid').insertAdjacentHTML('beforeend',
+    `<div class="skill-tag" id="skill-${d.id}">
+       <span class="level-dot ${d.level}"></span>
+       <span>${d.name}</span>
+       <span style="color:var(--muted);font-size:.65rem">(${d.level_display})</span>
+       <button onclick="delSkill(${d.id})" title="Remove">✕</button>
+     </div>`
+  );
+  document.getElementById('sk-name').value='';
+  document.getElementById('sk-cat').value='';
+  toast('Skill added.');
+}
+async function delSkill(pk) {
+  const d = await post(U.skillDel(pk),{});
+  if (d.ok) { document.getElementById(`skill-${pk}`)?.remove(); toast('Removed.'); }
+  else toast('Failed.',false);
+}
+
+/* ══ Languages ═══════════════════════════════════════════════════════════ */
+async function addLang() {
+  const name = v('ln-name');
+  if (!name) { err('ln-error','Language name required.'); return; }
+  err('ln-error','');
+  const d = await post(U.langAdd, {name, proficiency:v('ln-level')});
+  if (!d.ok) { err('ln-error', d.error||'Failed.'); return; }
+  document.getElementById('lang-empty')?.remove();
+  document.getElementById('lang-list').insertAdjacentHTML('beforeend',
+    `<div class="lang-row" id="lang-${d.id}">
+       <span class="lang-name">${d.name}</span>
+       <span class="lang-level">${d.proficiency_display}</span>
+       <button class="btn-danger-sm" onclick="delLang(${d.id})">✕</button>
+     </div>`
+  );
+  document.getElementById('ln-name').value='';
+  toast('Language added.');
+}
+async function delLang(pk) {
+  const d = await post(U.langDel(pk),{});
+  if (d.ok) { document.getElementById(`lang-${pk}`)?.remove(); toast('Removed.'); }
+  else toast('Failed.',false);
+}
+
+/* ══ References ══════════════════════════════════════════════════════════ */
+async function saveRef() {
+  const name = v('nr-name');
+  if (!name) { err('nr-error','Name required.'); return; }
+  err('nr-error','');
+  const payload = {name, company:v('nr-company'), position:v('nr-pos'), email:v('nr-email'), phone:v('nr-phone')};
+  const d = await post(U.refAdd, payload);
+  if (!d.ok) { err('nr-error', d.error||'Failed.'); return; }
+  document.getElementById('ref-empty')?.remove();
+  document.getElementById('ref-grid').insertAdjacentHTML('beforeend',
+    `<div class="ref-card" id="ref-${d.id}">
+       <div style="display:flex;justify-content:space-between;align-items:flex-start">
+         <div>
+           <div class="ref-name">${d.name}</div>
+           <div class="ref-pos">${d.position||''}${d.company?(d.position?' · ':'')+d.company:''}</div>
+           <div class="ref-contact">${d.email?d.email+'<br>':''}${d.phone||''}</div>
+         </div>
+         <button class="btn-danger-sm" onclick="delRef(${d.id})">✕</button>
+       </div>
+     </div>`
+  );
+  document.getElementById('new-ref').classList.remove('open');
+  clr('nr-name','nr-company','nr-pos','nr-email','nr-phone');
+  toast('Reference saved.');
+}
+async function delRef(pk) {
+  if (!confirm('Remove this reference?')) return;
+  const d = await post(U.refDel(pk),{});
+  if (d.ok) { document.getElementById(`ref-${pk}`)?.remove(); toast('Removed.'); }
+  else toast('Failed.',false);
+}
+
+/* ══ Social Links ════════════════════════════════════════════════════════ */
+
+/* Icon map (mirrors server-side PLATFORM_ICONS) */
+const ICONS = {
+  linkedin:'🔗', github:'🐙', twitter:'🐦', instagram:'📷',
+  facebook:'📘', youtube:'▶️', tiktok:'🎵', behance:'🎨',
+  dribbble:'🏀', stackoverflow:'📚', kaggle:'📊',
+  medium:'✍️', substack:'📬', portfolio:'🌐',
+};
+function guessIcon(platform) {
+  if (!platform) return '🔗';
+  const k = platform.toLowerCase().split('/')[0].trim();
+  for (const [key, ico] of Object.entries(ICONS)) { if (k.includes(key)) return ico; }
+  return '🔗';
+}
+function previewIcon() {
+  const p = document.getElementById('nl-platform')?.value||'';
+  const el = document.getElementById('nl-icon-preview');
+  if (el) el.textContent = guessIcon(p);
+}
+function previewEditIcon(pk) {
+  const p = document.getElementById(`le-platform-${pk}`)?.value||'';
+  const el = document.getElementById(`le-icon-${pk}`);
+  if (el) el.textContent = guessIcon(p);
+}
+function pickPlatform(name) {
+  document.getElementById('nl-platform').value = name;
+  previewIcon();
+  document.getElementById('nl-url').focus();
+}
+function openLinkEdit(pk) {
+  document.getElementById(`link-edit-${pk}`).classList.toggle('open');
+  document.getElementById(`link-${pk}`).classList.toggle('editing');
+}
+
+async function saveLink(pk) {
+  const p  = pk ? `le` : `nl`;
+  const s  = pk ? `-${pk}` : '';
+  const platform = v(`${p}-platform${s}`);
+  const url      = v(`${p}-url${s}`);
+  if (!platform || !url) {
+    err(pk?`le-error-${pk}`:'nl-error', 'Platform and URL are required.');
+    return;
+  }
+  err(pk?`le-error-${pk}`:'nl-error','');
+
+  const d = await post(pk ? U.linkEdit(pk) : U.linkAdd, {platform, url});
+  if (!d.ok) { err(pk?`le-error-${pk}`:'nl-error', d.error||'Failed.'); return; }
+
+  if (pk) {
+    const row = document.getElementById(`link-${pk}`);
+    row.querySelector('.link-icon').textContent = d.icon;
+    row.querySelector('.link-platform').textContent = d.platform;
+    const urlEl = row.querySelector('.link-url');
+    urlEl.innerHTML = `<a href="${d.url}" target="_blank" rel="noopener">${d.url}</a>`;
+    document.getElementById(`le-icon-${pk}`).textContent = d.icon;
+    openLinkEdit(pk);  // close
+  } else {
+    document.getElementById('links-empty')?.remove();
+    document.getElementById('links-list').insertAdjacentHTML('beforeend', linkRow(d));
+    document.getElementById('new-link').classList.remove('open');
+    clr('nl-platform','nl-url');
+    document.getElementById('nl-icon-preview').textContent = '🔗';
+  }
+  toast('Link saved.');
+}
+
+async function delLink(pk) {
+  if (!confirm('Remove this link?')) return;
+  const d = await post(U.linkDel(pk),{});
+  if (d.ok) { document.getElementById(`link-${pk}`)?.remove(); toast('Removed.'); }
+  else toast('Failed.',false);
+}
+
+function linkRow(d) {
+  return `<div class="link-row" id="link-${d.id}">
+    <div class="link-icon">${d.icon}</div>
+    <div class="link-info">
+      <div class="link-platform">${d.platform}</div>
+      <div class="link-url"><a href="${d.url}" target="_blank" rel="noopener">${d.url}</a></div>
+    </div>
+    <button class="btn-outline-sm" onclick="openLinkEdit(${d.id})">Edit</button>
+    <button class="btn-danger-sm"  onclick="delLink(${d.id})">✕</button>
+  </div>
+  <div class="link-edit-area" id="link-edit-${d.id}">
+    <div class="form-grid" style="grid-template-columns:1fr 2fr 2.5rem;align-items:end;gap:.65rem">
+      <div class="form-group">
+        <label class="form-label">Platform</label>
+        <input class="form-input" id="le-platform-${d.id}" value="${d.platform}" oninput="previewEditIcon(${d.id})"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">URL</label>
+        <input class="form-input" id="le-url-${d.id}" type="url" value="${d.url}" oninput="previewEditIcon(${d.id})"/>
+      </div>
+      <div class="icon-preview" id="le-icon-${d.id}">${d.icon}</div>
+    </div>
+    <div class="form-row-actions">
+      <button class="btn-primary"   onclick="saveLink(${d.id})">Save</button>
+      <button class="btn-outline-sm" onclick="openLinkEdit(${d.id})">Cancel</button>
+    </div>
+    <div id="le-error-${d.id}" class="err-msg"></div>
+  </div>`;
+}
+</script>
+</body>
 </html>
