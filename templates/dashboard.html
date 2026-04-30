@@ -8,6 +8,41 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/drawer.css' %}">
+{# Borrow jobs filter styles for the filter bar #}
+<style>
+  /* ── filter bar (shared with jobs.css but scoped here) ── */
+  .filter-bar { border-bottom: 1px solid var(--border); background: var(--card); }
+  .filter-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; padding: 0.55rem 1.5rem; border-bottom: 1px solid var(--border); }
+  .filter-row:last-child { border-bottom: none; }
+  .filter-label { font-family: 'Space Mono', monospace; font-size: 0.57rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; flex-shrink: 0; }
+  .ftab { font-family: 'Space Mono', monospace; font-size: 0.6rem; font-weight: 700; padding: 0.3rem 0.7rem; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-block; transition: all 0.15s; }
+  .ftab:hover { border-color: var(--accent); color: var(--accent); }
+  .ftab.act-green  { background: var(--accent);  color: #000; border-color: var(--accent); }
+  .ftab.act-purple { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+  .ftab.act-orange { background: var(--warn);    color: #000; border-color: var(--warn); }
+  .ftab.act-gov    { background: rgba(255,159,67,0.15); color: var(--warn); border-color: rgba(255,159,67,0.5); }
+  .filter-count { font-size: 0.52rem; opacity: 0.7; }
+  .pchip { font-family: 'Space Mono', monospace; font-size: 0.57rem; font-weight: 700; padding: 0.2rem 0.5rem; border: 1px solid var(--border); color: var(--muted); background: transparent; cursor: pointer; white-space: nowrap; user-select: none; text-decoration: none; display: inline-block; transition: all 0.15s; }
+  .pchip:hover { border-color: var(--accent2); color: var(--accent2); }
+  .pchip.on     { border-color: var(--accent2); color: var(--accent2); background: rgba(124,106,255,0.12); }
+  .pchip.on-all { border-color: var(--accent);  color: var(--accent);  background: rgba(0,255,136,0.08); }
+  .pchip.gov    { border-color: rgba(255,159,67,0.3); color: rgba(255,159,67,0.65); }
+  .pchip.gov.on { border-color: var(--warn); color: var(--warn); background: rgba(255,159,67,0.1); }
+  .type-wrap { position: relative; display: inline-flex; align-items: center; }
+  .type-sel { font-family: 'Space Mono', monospace; font-size: 0.6rem; font-weight: 700; padding: 0.3rem 1.6rem 0.3rem 0.6rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; transition: border-color 0.15s; min-width: 150px; }
+  .type-sel:focus { border-color: var(--accent2); }
+  .type-arr { position: absolute; right: 0.5rem; pointer-events: none; font-size: 0.5rem; color: var(--muted); }
+  .search-inp { font-family: 'Space Mono', monospace; font-size: 0.63rem; padding: 0.35rem 0.65rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); outline: none; width: 180px; }
+  .search-inp:focus { border-color: var(--accent2); }
+  .pill { font-family: 'Space Mono', monospace; font-size: 0.55rem; font-weight: 700; padding: 0.15rem 0.45rem; border: 1px solid rgba(124,106,255,0.4); color: var(--accent2); background: rgba(124,106,255,0.08); display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; text-decoration: none; }
+  .pill:hover { background: rgba(124,106,255,0.18); }
+  .clear-btn { font-family: 'Space Mono', monospace; font-size: 0.55rem; color: var(--danger); border: 1px solid rgba(255,68,102,0.3); background: transparent; padding: 0.18rem 0.5rem; cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-block; transition: background 0.15s; }
+  .clear-btn:hover { background: rgba(255,68,102,0.08); }
+  .spacer { flex: 1; min-width: 0; }
+  .results-bar { padding: 0.4rem 1.5rem; font-family: 'Space Mono', monospace; font-size: 0.57rem; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--surface); }
+  .results-bar span { color: var(--accent); }
+</style>
 </head>
 <body>
 
@@ -30,6 +65,7 @@
 </div>
 {% endif %}
 
+{# ── Pipeline action bar ────────────────────────────────────────────────── #}
 <form method="POST" action="/trigger/" id="pipeline-form">
   {% csrf_token %}
   <input type="hidden" name="action"  id="action-input"  value="all">
@@ -51,7 +87,7 @@
     </div>
 
     <div class="type-filter-strip">
-      <span class="type-filter-label">Types:</span>
+      <span class="type-filter-label">Scrape types:</span>
       <span class="type-chip active-all" data-type="all"      onclick="toggleChip(this)">✅ All</span>
       <span class="type-chip" data-type="internship"          onclick="toggleChip(this)">🎓 Internship</span>
       <span class="type-chip" data-type="learnership"         onclick="toggleChip(this)">📋 Learnership</span>
@@ -64,6 +100,7 @@
   </div>
 </form>
 
+{# ── Stats row ──────────────────────────────────────────────────────────── #}
 <div class="stats-row">
   <div class="stat">
     <div class="stat-val">{{ total_jobs }}</div>
@@ -78,11 +115,120 @@
     <div class="stat-label">Applied</div>
   </div>
   <div class="stat">
-    <div class="stat-val red">{{ total_jobs|add:"-"|add:applied_count }}</div>
+    <div class="stat-val red">{{ total_jobs|add:0|add:applied_count }}</div>
     <div class="stat-label">Pending</div>
   </div>
 </div>
 
+{# ── Filter bar (for the jobs panel) ────────────────────────────────────── #}
+<div class="filter-bar">
+
+  {# Row 1: status tabs + search #}
+  <div class="filter-row">
+    {% for slug, label, count in tab_defs %}
+    <a class="ftab
+      {% if active_tab == slug %}
+        {% if slug == 'email' %}act-green
+        {% elif slug == 'matched' %}act-purple
+        {% elif slug == 'applied' %}act-orange
+        {% elif slug == 'gov' %}act-gov
+        {% else %}act-green{% endif %}
+      {% endif %}"
+       href="?tab={{ slug }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
+      {{ label }} <span class="filter-count">({{ count }})</span>
+    </a>
+    {% endfor %}
+
+    <div class="spacer"></div>
+
+    <form method="get" action="{{ request.path }}" style="display:contents">
+      <input type="hidden" name="tab" value="{{ active_tab }}" />
+      {% for p in active_platforms %}<input type="hidden" name="platform" value="{{ p }}" />{% endfor %}
+      {% if active_job_type %}<input type="hidden" name="job_type" value="{{ active_job_type }}" />{% endif %}
+      <input class="search-inp" type="text" name="q" value="{{ active_search }}" placeholder="Search jobs..." />
+    </form>
+  </div>
+
+  {# Row 2: platform chips #}
+  <div class="filter-row">
+    <span class="filter-label">Platform:</span>
+    <a class="pchip {% if not active_platforms %}on-all{% endif %}"
+       href="?tab={{ active_tab }}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">All</a>
+    {% for plat, label, is_gov in platform_defs %}
+      {% if plat in active_platforms %}
+      <a class="pchip {% if is_gov %}gov {% endif %}on"
+         href="?tab={{ active_tab }}{% for p in active_platforms %}{% if p != plat %}&platform={{ p }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
+        {% if is_gov %}🏛 {% endif %}{{ label }}</a>
+      {% else %}
+      <a class="pchip {% if is_gov %}gov{% endif %}"
+         href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}&platform={{ plat }}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
+        {% if is_gov %}🏛 {% endif %}{{ label }}</a>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {# Row 3: job type + active pills + clear #}
+  <div class="filter-row">
+    <span class="filter-label">Type:</span>
+    <form method="get" action="{{ request.path }}" style="display:contents">
+      <input type="hidden" name="tab" value="{{ active_tab }}" />
+      {% for p in active_platforms %}<input type="hidden" name="platform" value="{{ p }}" />{% endfor %}
+      {% if active_search %}<input type="hidden" name="q" value="{{ active_search }}" />{% endif %}
+      <div class="type-wrap">
+        <select class="type-sel" name="job_type" onchange="this.form.submit()">
+          <option value="">All Job Types</option>
+          <optgroup label="Opportunities">
+            <option value="internship"  {% if active_job_type == "internship"  %}selected{% endif %}>🎓 Internship</option>
+            <option value="learnership" {% if active_job_type == "learnership" %}selected{% endif %}>📋 Learnership</option>
+            <option value="bursary"     {% if active_job_type == "bursary"     %}selected{% endif %}>🏆 Bursary / Scholarship</option>
+            <option value="graduate"    {% if active_job_type == "graduate"    %}selected{% endif %}>🎯 Graduate Programme</option>
+          </optgroup>
+          <optgroup label="Employment">
+            <option value="entry level" {% if active_job_type == "entry level" %}selected{% endif %}>📌 Entry Level</option>
+            <option value="permanent"   {% if active_job_type == "permanent"   %}selected{% endif %}>🏛 Permanent</option>
+            <option value="contract"    {% if active_job_type == "contract"    %}selected{% endif %}>📝 Contract</option>
+            <option value="temporary"   {% if active_job_type == "temporary"   %}selected{% endif %}>⏱ Temporary</option>
+            <option value="part-time"   {% if active_job_type == "part-time"   %}selected{% endif %}>🕐 Part-time</option>
+            <option value="full-time"   {% if active_job_type == "full-time"   %}selected{% endif %}>⚡ Full-time</option>
+          </optgroup>
+          <optgroup label="Government">
+            <option value="government"             {% if active_job_type == "government"             %}selected{% endif %}>🏛 Government</option>
+            <option value="government / permanent" {% if active_job_type == "government / permanent" %}selected{% endif %}>🏛 Gov Permanent</option>
+          </optgroup>
+        </select>
+        <span class="type-arr">▾</span>
+      </div>
+    </form>
+
+    {% for p in active_platforms %}
+    <a class="pill"
+       href="?tab={{ active_tab }}{% for op in active_platforms %}{% if op != p %}&platform={{ op }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}">
+      {{ p }} <span class="x">✕</span>
+    </a>
+    {% endfor %}
+
+    {% if active_job_type %}
+    <a class="pill"
+       href="?tab={{ active_tab }}{% for p in active_platforms %}&platform={{ p }}{% endfor %}{% if active_search %}&q={{ active_search }}{% endif %}">
+      {{ active_job_type }} <span class="x">✕</span>
+    </a>
+    {% endif %}
+
+    {% if active_platforms or active_job_type or active_search %}
+    <a class="clear-btn" href="/">✕ Clear filters</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="results-bar">
+  Showing <span>{{ filter_count }}</span> of {{ total_jobs }} jobs
+  {% if active_platforms %} · Platform: {% for p in active_platforms %}<strong>{{ p }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
+  {% if active_job_type %} · Type: <strong>{{ active_job_type }}</strong>{% endif %}
+  {% if active_search %} · Search: <strong>"{{ active_search }}"</strong>{% endif %}
+  &nbsp;·&nbsp;<a href="/jobs/" style="color:var(--accent2);font-size:0.57rem">View all →</a>
+</div>
+
+{# ── Main layout ────────────────────────────────────────────────────────── #}
 <div class="main">
   <div class="jobs-panel">
     <div class="panel-header">
@@ -101,7 +247,7 @@
             <div class="job-title">{{ job.title }}</div>
             <div class="job-meta">
               {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
-              <span class="platform {% if job.platform in 'dpsa sayouth essa govza' %}gov{% endif %}">
+              <span class="platform {% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov{% endif %}">
                 {{ job.platform }}
               </span>
               {% if job.job_type %}
@@ -124,7 +270,7 @@
             {% else %}
               <div class="no-email-dot" title="No email"></div>
             {% endif %}
-            {% if job.application %}<span class="applied-tag">✓ sent</span>{% endif %}
+            {% if job.pk in applied_ids %}<span class="applied-tag">✓ sent</span>{% endif %}
             {% if job.url %}
               <a href="{{ job.url }}" target="_blank" style="color:var(--muted);font-size:0.7rem;text-decoration:none;" onclick="event.stopPropagation()">↗</a>
             {% endif %}
@@ -133,10 +279,11 @@
         {% endwith %}
       {% endfor %}
     {% else %}
-      <div class="empty">No jobs yet. Hit <strong>⚡ Run All</strong> to start.</div>
+      <div class="empty">No jobs match your filters. <a href="/" style="color:var(--accent)">Clear filters</a> or <strong>⚡ Run All</strong> to scrape new jobs.</div>
     {% endif %}
   </div>
 
+  {# ── Side panel ────────────────────────────────────────────────────── #}
   <div class="side-panel">
     <div class="cv-card">
       <h3>Active CV</h3>
@@ -170,6 +317,7 @@
   </div>
 </div>
 
+{# ── Drawer + Toast ──────────────────────────────────────────────────────── #}
 <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div id="drawer-inner"></div>
@@ -179,5 +327,6 @@
 <script>const CSRF = '{{ csrf_token }}';</script>
 <script src="{% static 'js/drawer.js' %}"></script>
 <script src="{% static 'js/dashboard.js' %}"></script>
+
 </body>
 </html>

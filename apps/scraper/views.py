@@ -57,31 +57,133 @@ def _parse_job_types(post_data):
     return " ".join(valid)
 
 
+# Replace the dashboard() function in apps/scraper/views.py with this version.
+# It adds platform/job_type/q filter params so the dashboard job list
+# can be filtered the same way the jobs page is.
+
+from django.db.models import Q
+
+GOV_PLATFORMS = {"dpsa", "sayouth", "essa", "govza"}
+
+JOB_TYPE_MAP = {
+    "internship":   ["internship"],
+    "learnership":  ["learnership"],
+    "bursary":      ["bursary", "scholarship"],
+    "graduate":     ["graduate"],
+    "entry level":  ["entry level", "entry-level"],
+    "permanent":    ["permanent"],
+    "contract":     ["contract"],
+    "temporary":    ["temporary"],
+    "part-time":    ["part-time", "part time"],
+    "full-time":    ["full-time", "full time"],
+    "government":   ["government"],
+}
+
+PLATFORM_DEFS = [
+    ("linkedin",          "LinkedIn",          False),
+    ("indeed",            "Indeed",            False),
+    ("pnet",              "PNet",              False),
+    ("careerjunction",    "CareerJunction",    False),
+    ("careerjunction_it", "CareerJunction IT", False),
+    ("careers24",         "Careers24",         False),
+    ("jobmail",           "JobMail",           False),
+    ("gumtree",           "Gumtree",           False),
+    ("dpsa",              "DPSA",              True),
+    ("sayouth",           "SAYouth",           True),
+    ("essa",              "ESSA",              True),
+    ("govza",             "Gov.za",            True),
+]
+
+
 def dashboard(request):
+    from apps.cv.models import CV
+    from apps.mailer.models import Application
+
     cv = CV.objects.filter(active=True).last()
-
-    jobs = Job.objects.only(
-        "id", "title", "company", "match_score", "apply_email", "scraped_at", "platform"
-    ).order_by("-match_score", "-scraped_at")
-
     applications = Application.objects.select_related("job").only(
         "id", "job__id", "job__title", "job__company", "sent_at", "status"
     ).order_by("-sent_at")
+
+    # ── Filters ──────────────────────────────────────────────────────────────
+    active_platforms = request.GET.getlist("platform")
+    active_platforms = [p for p in active_platforms if p]
+    active_job_type  = request.GET.get("job_type", "").strip().lower()
+    active_search    = request.GET.get("q", "").strip()
+    active_tab       = request.GET.get("tab", "all")   # all | email | matched | gov
+
+    qs = Job.objects.only(
+        "id", "title", "company", "match_score", "apply_email",
+        "scraped_at", "platform", "job_type", "location",
+    ).order_by("-match_score", "-scraped_at")
+
+    # Tab filter
+    applied_ids = set(Application.objects.values_list("job_id", flat=True))
+    if active_tab == "email":
+        qs = qs.filter(~Q(apply_email=""))
+    elif active_tab == "matched":
+        qs = qs.filter(match_score__gte=60)
+    elif active_tab == "applied":
+        qs = qs.filter(pk__in=applied_ids)
+    elif active_tab == "gov":
+        qs = qs.filter(platform__in=GOV_PLATFORMS)
+
+    # Platform filter
+    if active_platforms:
+        qs = qs.filter(platform__in=active_platforms)
+
+    # Job type filter
+    if active_job_type and active_job_type in JOB_TYPE_MAP:
+        patterns = JOB_TYPE_MAP[active_job_type]
+        q_obj = Q()
+        for p in patterns:
+            q_obj |= Q(job_type__icontains=p)
+        qs = qs.filter(q_obj)
+
+    # Search filter
+    if active_search:
+        qs = qs.filter(
+            Q(title__icontains=active_search) |
+            Q(company__icontains=active_search)
+        )
+
+    jobs = qs[:20]
 
     top_jobs = Job.objects.filter(match_score__gte=60).exclude(apply_email="").only(
         "id", "title", "company", "match_score", "apply_email"
     )[:5]
 
-    return render(request, "dashboard.html", {
-        "cv":            cv,
-        "jobs":          jobs[:20],
-        "applications":  applications[:20],
-        "total_jobs":    Job.objects.count(),
-        "applied_count": applications.count(),
-        "matched_count": Job.objects.filter(match_score__gte=60).count(),
-        "top_jobs":      top_jobs,
-    })
+    total_qs = Job.objects
+    email_count   = total_qs.exclude(apply_email="").count()
+    matched_count = total_qs.filter(match_score__gte=60).count()
+    applied_count = applications.count()
+    gov_count     = total_qs.filter(platform__in=GOV_PLATFORMS).count()
 
+    tab_defs = [
+        ("all",     "All",         total_qs.count()),
+        ("email",   "✉ Has Email", email_count),
+        ("matched", "★ Matched",   matched_count),
+        ("applied", "✓ Applied",   applied_count),
+        ("gov",     "🏛 Gov",       gov_count),
+    ]
+
+    return render(request, "dashboard.html", {
+        "cv":                cv,
+        "jobs":              jobs,
+        "applications":      applications[:10],
+        "total_jobs":        total_qs.count(),
+        "applied_count":     applied_count,
+        "matched_count":     matched_count,
+        "top_jobs":          top_jobs,
+        "applied_ids":       applied_ids,
+        # filter context
+        "active_tab":        active_tab,
+        "active_platforms":  active_platforms,
+        "active_job_type":   active_job_type,
+        "active_search":     active_search,
+        "tab_defs":          tab_defs,
+        "platform_defs":     PLATFORM_DEFS,
+        "filter_count":      qs.count(),
+    })
 
 def job_detail(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
