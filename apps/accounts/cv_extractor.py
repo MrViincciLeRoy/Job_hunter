@@ -18,56 +18,474 @@ def _extract_blocks(page) -> list[dict]:
     return blocks
 
 
+def _blocks_in_band(blocks: list[dict], x_left: float, x_right: float) -> list[dict]:
+    return [b for b in blocks if x_left <= b["x0"] < x_right]
+
+
+def _column_text(blocks: list[dict]) -> str:
+    sorted_blocks = sorted(blocks, key=lambda b: (round(b["y0"] / 4) * 4, b["x0"]))
+    return "\n".join(b["text"] for b in sorted_blocks)
+
+
 def _detect_columns(blocks: list[dict], page_width: float) -> list[float]:
-    """
-    Returns sorted x-boundaries that divide the page into columns.
-    Strategy: find large horizontal gaps between block clusters.
-    """
     if not blocks:
         return [0, page_width]
-
-    # Collect all x0 values, bucket them into 5px slots
     x_starts = sorted({round(b["x0"] / 5) * 5 for b in blocks})
-
-    # Find gaps > 30px between consecutive x-start clusters
     gaps = []
     for i in range(1, len(x_starts)):
         gap = x_starts[i] - x_starts[i - 1]
         if gap > 30:
             gaps.append((gap, (x_starts[i - 1] + x_starts[i]) / 2))
-
     if not gaps:
         return [0, page_width]
-
-    # Sort gaps by size desc, take up to 2 largest (3 columns max)
     gaps.sort(reverse=True)
     splits = sorted(mid for _, mid in gaps[:2])
     return [0] + splits + [page_width]
 
 
-def _blocks_in_band(blocks: list[dict], x_left: float, x_right: float) -> list[dict]:
-    """Return blocks whose x0 falls within [x_left, x_right)."""
-    return [b for b in blocks if x_left <= b["x0"] < x_right]
+def _strip_icon_prefix(text: str) -> str:
+    """Strip leading non-ASCII icon/symbol characters (common in icon-font PDF bullets)."""
+    return re.sub(r'^[\x80-\xff\u0080-\uffff]+', '', text).strip()
 
 
-def _column_text(blocks: list[dict]) -> str:
-    """Sort blocks top-to-bottom and join their text."""
-    sorted_blocks = sorted(blocks, key=lambda b: (round(b["y0"] / 4) * 4, b["x0"]))
+_SECTION_LABEL_RE = re.compile(
+    r'^(OBJECTIVE|EXPERIENCE|EDUCATION|SKILLS|REFERENCE|REFERENCES|CONTACT|'
+    r'SUMMARY|PROFILE|ABOUT|WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|'
+    r'EMPLOYMENT|QUALIFICATIONS|CERTIFICATIONS|LANGUAGES|ACHIEVEMENTS|'
+    r'Objective|Experience|Education|Skills|Reference|References|Contact|'
+    r'Summary|Profile|About)$'
+)
+
+
+def _is_section_label(text: str) -> bool:
+    """Match section label after stripping leading icon-font characters."""
+    clean = _strip_icon_prefix(text.strip().split('\n')[0].strip())
+    return bool(_SECTION_LABEL_RE.match(clean))
+
+
+def _section_label_text(text: str) -> str:
+    """Return the clean section label string (uppercase), or empty string."""
+    clean = _strip_icon_prefix(text.strip().split('\n')[0].strip())
+    m = _SECTION_LABEL_RE.match(clean)
+    return m.group(1).upper() if m else ""
+
+
+def _classify_layout(blocks: list[dict], page_width: float) -> str:
+    """
+    Classify the PDF page layout into one of:
+      'dates_right'     — dates float to far-right (x > 60% page), content left
+      'dates_left'      — dates in narrow left col, content in right col (name far right)
+      'dates_sidebar'   — sidebar col (x<100) has section labels + dates; content at x>150
+      'three_column'    — 3 distinct x-columns (left sidebar, mid-dates, right content)
+      'standard'        — normal; handle with default column detection
+
+    FIX LOG:
+      - Strip icon-prefix chars before section label matching (fixes CV with icon bullets)
+      - dates_sidebar requires meaningful right-col content (fixes single-col false trigger)
+      - three_column detection moved before dates_right to catch icon-label CVs
+    """
+    date_re = re.compile(
+        r'\b(?:\d{1,2}[-/]\d{4})\b'
+        r'|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}\b'
+        r'|\b\d{4}\s*[-–]\s*(?:\d{4}|present|current)\b', re.I
+    )
+
+    date_blocks  = [b for b in blocks if date_re.search(b["text"]) and len(b["text"]) < 90]
+    section_blocks = [b for b in blocks if _is_section_label(b["text"])]
+
+    if not date_blocks:
+        return 'standard'
+
+    date_xs = [b["x0"] for b in date_blocks]
+    avg_date_x = sum(date_xs) / len(date_xs)
+
+    section_xs = [b["x0"] for b in section_blocks]
+    avg_section_x = sum(section_xs) / len(section_xs) if section_xs else page_width / 2
+
+    # --- THREE_COLUMN: check early so icon-label CVs don't fall through to dates_right ---
+    # Typical: left (x<~150) = sidebar labels/contact, mid (x=~200-450) = dates+content,
+    # right (x>~450) = date fragments OR additional content
+    # FIX: When >3 column boundaries exist, try all consecutive pairs as the left/right split
+    # to handle cases where PDF renders with 4 distinct x-clusters (e.g. icon-font sidebar CVs).
+    distinct_xs = sorted(set(round(b["x0"] / 15) * 15 for b in blocks))
+    col_boundaries = [0]
+    for i in range(1, len(distinct_xs)):
+        if distinct_xs[i] - distinct_xs[i-1] > 80:
+            col_boundaries.append((distinct_xs[i-1] + distinct_xs[i]) / 2)
+
+    # Try all possible (left_split, right_split) pairs from col_boundaries
+    found_three_col = False
+    if len(col_boundaries) >= 3:
+        for li in range(1, len(col_boundaries)):
+            for ri in range(li + 1, len(col_boundaries) + 1):
+                left_x = col_boundaries[li - 1] if li > 0 else 0
+                mid_x_min = col_boundaries[li]
+                mid_x_max = col_boundaries[ri] if ri < len(col_boundaries) else page_width
+
+                mid_date_blocks = [b for b in date_blocks if mid_x_min <= b["x0"] < mid_x_max]
+                right_content_blocks = [b for b in blocks if b["x0"] >= mid_x_max and len(b["text"]) > 20]
+                right_date_blocks = [b for b in date_blocks if b["x0"] >= mid_x_max]
+                mid_content_blocks = [b for b in blocks if mid_x_min <= b["x0"] < mid_x_max and len(b["text"]) > 20]
+                left_blocks_check = [b for b in blocks if b["x0"] < mid_x_min]
+
+                if (len(mid_date_blocks) >= 1 and len(right_content_blocks) >= 3) or \
+                   (len(right_date_blocks) >= 1 and len(mid_content_blocks) >= 3 and
+                    len(left_blocks_check) >= 3):
+                    found_three_col = True
+                    break
+            if found_three_col:
+                break
+    if found_three_col:
+        return 'three_column'
+
+    # --- DATES_RIGHT: all date blocks are in the far right zone (> 55% of page width)
+    if avg_date_x > page_width * 0.55 and avg_section_x < page_width * 0.55:
+        return 'dates_right'
+
+    # --- DATES_LEFT: dates in narrow left column, name far right ---
+    left_dates = [b for b in date_blocks if b["x0"] < 80]
+    right_content = [b for b in blocks if b["x0"] > 140 and len(b["text"]) > 20]
+    name_far_right = any(b["x0"] > page_width * 0.60 for b in blocks
+                         if not _is_section_label(b["text"])
+                         and len(b["text"]) < 60 and b["y0"] < 100)
+    if len(left_dates) >= 2 and len(right_content) >= 4 and name_far_right:
+        return 'dates_left'
+
+    # --- DATES_SIDEBAR: section headers at x<80 AND dates at x<80, content at x>100
+    # FIX: Require meaningful content in right column (prevents false trigger on single-col PDFs)
+    sidebar_section = [b for b in section_blocks if b["x0"] < 80]
+    sidebar_dates = [b for b in date_blocks if b["x0"] < 80]
+    right_col_content = [b for b in blocks if b["x0"] >= 100]
+    if len(sidebar_section) >= 3 and len(sidebar_dates) >= 1 and len(right_col_content) >= 4:
+        return 'dates_sidebar'
+
+    return 'standard'
+
+
+def _merge_adjacent_date_blocks(blocks: list[dict]) -> list[dict]:
+    """
+    Merge date/range fragments that were split into separate blocks
+    (e.g., "01-2024 -" on one block and "Dec 2024" on the next).
+    """
+    date_frag_re = re.compile(
+        r'^(?:\d{1,2}[-/]\d{4}|\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*'
+        r'|\d+(?:st|nd|rd|th)?\s*(?:of)?|[-–]\s*\d|\d+|Present|Current|of)[\s\-]*$', re.I
+    )
+    result = []
+    used = set()
+    sorted_b = sorted(blocks, key=lambda b: (round(b["y0"] / 3) * 3, b["x0"]))
+
+    for i, b in enumerate(sorted_b):
+        if i in used:
+            continue
+        text = b["text"].strip()
+        if not date_frag_re.match(text):
+            result.append(b)
+            continue
+        merged_text = text
+        merged_y1 = b["y1"]
+        used.add(i)
+        for j in range(i + 1, min(i + 6, len(sorted_b))):
+            if j in used:
+                continue
+            nb = sorted_b[j]
+            if abs(nb["x0"] - b["x0"]) > 30:
+                continue
+            if nb["y0"] > merged_y1 + 30:
+                break
+            nt = nb["text"].strip()
+            merged_text = (merged_text + " " + nt).strip()
+            merged_y1 = nb["y1"]
+            used.add(j)
+        result.append({**b, "text": merged_text, "y1": merged_y1})
+
+    return result
+
+
+def _reconstruct_dates_left(blocks: list[dict]) -> str:
+    """
+    Layout: narrow left column has dates (x<80), wide right column has
+    section headers + content (x>140).
+    """
+    left_blocks = sorted([b for b in blocks if b["x0"] < 100], key=lambda b: b["y0"])
+    right_blocks = sorted([b for b in blocks if b["x0"] >= 100], key=lambda b: b["y0"])
+
+    left_blocks = _merge_adjacent_date_blocks(left_blocks)
+
+    date_annotations: dict[int, str] = {}
+    for lb in left_blocks:
+        best_rb, best_dy = None, float('inf')
+        for rb in right_blocks:
+            dy = abs(rb["y0"] - lb["y0"])
+            if dy < best_dy:
+                best_dy, best_rb = dy, rb
+        if best_rb is not None and best_dy < 80:
+            existing = date_annotations.get(id(best_rb), "")
+            lt = lb["text"].strip()
+            date_annotations[id(best_rb)] = (existing + " " + lt).strip() if existing else lt
+
     lines = []
-    for b in sorted_blocks:
-        lines.append(b["text"])
+    for rb in right_blocks:
+        text = rb["text"].strip()
+        date = date_annotations.get(id(rb), "")
+        lines.append(f"{text}  {date}" if date else text)
     return "\n".join(lines)
 
 
-def extract_text_layout_aware(file_bytes: bytes) -> str:
+def _reconstruct_dates_sidebar(blocks: list[dict]) -> str:
     """
-    Extract text from a PDF preserving multi-column reading order.
-    Uses PyMuPDF block coordinates to detect columns and reconstruct order.
-    Falls back to pdfplumber then pypdf.
+    Layout: left sidebar (x<80) has BOTH section labels AND dates.
+    Right column (x>150) has all content without section boundaries.
     """
-    try:
-        import fitz  # PyMuPDF
+    sidebar = sorted([b for b in blocks if b["x0"] < 100], key=lambda b: b["y0"])
+    content = sorted([b for b in blocks if b["x0"] >= 100], key=lambda b: b["y0"])
 
+    content = _merge_adjacent_date_blocks(content)
+
+    sections_y: list[tuple[str, float]] = []
+    for b in sidebar:
+        label = _section_label_text(b["text"])
+        if label:
+            sections_y.append((label, b["y0"]))
+
+    date_re = re.compile(r'\b(?:\d{1,2}[-/]\d{4}|\d{4})\b', re.I)
+    sidebar_dates = [b for b in sidebar if date_re.search(b["text"]) and
+                     not _is_section_label(b["text"])]
+    sidebar_dates = _merge_adjacent_date_blocks(sidebar_dates)
+
+    date_annotations: dict[int, str] = {}
+    for db in sidebar_dates:
+        best_cb, best_dy = None, float('inf')
+        for cb in content:
+            dy = abs(cb["y0"] - db["y0"])
+            if dy < best_dy:
+                best_dy, best_cb = dy, cb
+        if best_cb is not None and best_dy < 60:
+            existing = date_annotations.get(id(best_cb), "")
+            dt = db["text"].strip()
+            date_annotations[id(best_cb)] = (existing + " " + dt).strip() if existing else dt
+
+    if not sections_y:
+        lines = []
+        for cb in content:
+            text = cb["text"].strip()
+            date = date_annotations.get(id(cb), "")
+            lines.append(f"{text}  {date}" if date else text)
+        return "\n".join(lines)
+
+    result_parts = []
+    first_y = sections_y[0][1]
+    header_blocks = [b for b in content if b["y0"] < first_y - 10]
+    if header_blocks:
+        hlines = []
+        for b in header_blocks:
+            text = b["text"].strip()
+            date = date_annotations.get(id(b), "")
+            hlines.append(f"{text}  {date}" if date else text)
+        result_parts.append("\n".join(hlines))
+
+    for i, (label, y_start) in enumerate(sections_y):
+        y_end = sections_y[i + 1][1] if i + 1 < len(sections_y) else float('inf')
+        section_blocks = [b for b in content if y_start - 25 <= b["y0"] < y_end]
+        lines = []
+        for b in section_blocks:
+            text = b["text"].strip()
+            date = date_annotations.get(id(b), "")
+            lines.append(f"{text}  {date}" if date else text)
+        result_parts.append(f"{label}\n" + "\n".join(lines))
+
+    return "\n\n".join(result_parts)
+
+
+def _reconstruct_dates_right(blocks: list[dict], page_width: float) -> str:
+    """
+    Layout: content in left column, dates floated to far right.
+
+    FIX: Only annotate right-side blocks that actually contain date strings.
+    Previously ALL right-side blocks (including name/contact) were used as
+    date annotations, causing garbled output like "Objective  Ronda Chauke 11th St".
+    Also tightened y-proximity threshold from 100px to 60px.
+    """
+    all_x0s = sorted(set(round(b["x0"] / 5) * 5 for b in blocks))
+    split_x = page_width * 0.55
+    for i in range(1, len(all_x0s)):
+        if all_x0s[i] - all_x0s[i-1] > 50:
+            split_x = (all_x0s[i-1] + all_x0s[i]) / 2
+            break
+
+    left_blocks = sorted([b for b in blocks if b["x0"] <= split_x], key=lambda b: b["y0"])
+    right_blocks = sorted([b for b in blocks if b["x0"] > split_x], key=lambda b: b["y0"])
+
+    right_blocks = _merge_adjacent_date_blocks(right_blocks)
+
+    # FIX: Only use right-side blocks that actually contain a date pattern
+    date_re = re.compile(
+        r'\b(?:\d{1,2}[-/]\d{4}|\d{4}[-–]\d{4}|\d{4})\b'
+        r'|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}\b',
+        re.I
+    )
+    right_date_blocks = [b for b in right_blocks if date_re.search(b["text"])]
+
+    date_annotations: dict[int, str] = {}
+    for rb in right_date_blocks:
+        best_lb, best_dy = None, float('inf')
+        for lb in left_blocks:
+            dy = abs(lb["y0"] - rb["y0"])
+            if dy < best_dy:
+                best_dy, best_lb = dy, lb
+        # FIX: tightened from 100px to 60px
+        if best_lb is not None and best_dy < 60:
+            existing = date_annotations.get(id(best_lb), "")
+            rt = rb["text"].strip()
+            date_annotations[id(best_lb)] = (existing + " " + rt).strip() if existing else rt
+
+    lines = []
+    for lb in left_blocks:
+        text = lb["text"].strip()
+        date = date_annotations.get(id(lb), "")
+        lines.append(f"{text}  {date}" if date else text)
+    return "\n".join(lines)
+
+
+def _reconstruct_two_col_sidebar(blocks: list[dict]) -> str:
+    """
+    Layout: narrow left sidebar has section headers, right column has
+    all content + dates.
+    """
+    sidebar_x_thresh = 100
+    sidebar = sorted([b for b in blocks if b["x0"] < sidebar_x_thresh], key=lambda b: b["y0"])
+    content = sorted([b for b in blocks if b["x0"] >= sidebar_x_thresh], key=lambda b: b["y0"])
+
+    sections_y: list[tuple[str, float]] = []
+    for b in sidebar:
+        label = _section_label_text(b["text"])
+        if label:
+            sections_y.append((label, b["y0"]))
+
+    if not sections_y:
+        return _column_text(blocks)
+
+    result_parts = []
+    first_y = sections_y[0][1]
+    header_blocks = [b for b in content if b["y0"] < first_y - 10]
+    if header_blocks:
+        result_parts.append(_column_text(header_blocks))
+
+    for i, (label, y_start) in enumerate(sections_y):
+        y_end = sections_y[i + 1][1] if i + 1 < len(sections_y) else float('inf')
+        section_blocks = [b for b in content if y_start - 25 <= b["y0"] < y_end]
+        section_text = _column_text(section_blocks)
+        result_parts.append(f"{label}\n{section_text}")
+
+    return "\n\n".join(result_parts)
+
+
+def _reconstruct_three_column(blocks: list[dict], page_width: float) -> str:
+    """
+    Layout: left sidebar (contact/skills/refs), mid column (content + possibly dates),
+    right column (date fragments OR section headers + content).
+
+    FIX: Handles two sub-cases:
+      A) Mid col has dates, right col has section+content (original behavior)
+      B) Right col has date fragments, mid col has section+content, left=sidebar
+         (new case for icon-label CVs like CV_101755)
+    """
+    all_x0s = sorted(b["x0"] for b in blocks)
+    gaps = []
+    prev = all_x0s[0]
+    for x in all_x0s[1:]:
+        if x - prev > 40:
+            gaps.append(((prev + x) / 2, x - prev))
+        prev = x
+    gaps.sort(key=lambda g: g[1], reverse=True)
+    split_xs = sorted(g[0] for g in gaps[:2]) if len(gaps) >= 2 else [page_width * 0.35, page_width * 0.65]
+
+    left_col = sorted([b for b in blocks if b["x0"] < split_xs[0]], key=lambda b: b["y0"])
+    mid_col = sorted([b for b in blocks if split_xs[0] <= b["x0"] < split_xs[1]], key=lambda b: b["y0"])
+    right_col = sorted([b for b in blocks if b["x0"] >= split_xs[1]], key=lambda b: b["y0"])
+
+    date_re = re.compile(
+        r'\b(?:\d{1,2}[-/]\d{4}|\d{4}[-–]\d{4})\b'
+        r'|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}\b', re.I
+    )
+
+    mid_has_dates = any(date_re.search(b["text"]) for b in mid_col)
+    right_has_dates = any(date_re.search(b["text"]) for b in right_col)
+    right_has_content = any(len(b["text"]) > 20 for b in right_col)
+
+    if right_has_dates and not right_has_content:
+        # Case B: dates are right-col fragments, content is mid-col
+        mid_col = _merge_adjacent_date_blocks(mid_col)
+        right_col_merged = _merge_adjacent_date_blocks(right_col)
+
+        date_annotations: dict[int, str] = {}
+        for rb in right_col_merged:
+            if not date_re.search(rb["text"]):
+                continue
+            best_mb, best_dy = None, float('inf')
+            for mb in mid_col:
+                dy = abs(mb["y0"] - rb["y0"])
+                if dy < best_dy:
+                    best_dy, best_mb = dy, mb
+            if best_mb is not None and best_dy < 80:
+                existing = date_annotations.get(id(best_mb), "")
+                rt = rb["text"].strip()
+                date_annotations[id(best_mb)] = (existing + " " + rt).strip() if existing else rt
+
+        # Build mid-col section-aware output
+        sections_y: list[tuple[str, float]] = []
+        for b in mid_col:
+            label = _section_label_text(b["text"])
+            if label:
+                sections_y.append((label, b["y0"]))
+
+        mid_lines = []
+        for mb in mid_col:
+            text = _strip_icon_prefix(mb["text"].strip())
+            date = date_annotations.get(id(mb), "")
+            mid_lines.append(f"{text}  {date}" if date else text)
+
+        left_lines = []
+        for lb in left_col:
+            text = _strip_icon_prefix(lb["text"].strip())
+            left_lines.append(text)
+
+        return "\n".join(mid_lines) + "\n\n" + "\n".join(left_lines)
+
+    else:
+        # Case A: original behavior — mid col has dates, right col has content
+        mid_col = _merge_adjacent_date_blocks(mid_col)
+
+        date_annotations: dict[int, str] = {}
+        for mb in mid_col:
+            best_rb, best_dy = None, float('inf')
+            for rb in right_col:
+                dy = abs(rb["y0"] - mb["y0"])
+                if dy < best_dy:
+                    best_dy, best_rb = dy, rb
+            if best_rb is not None and best_dy < 80:
+                existing = date_annotations.get(id(best_rb), "")
+                mt = mb["text"].strip()
+                date_annotations[id(best_rb)] = (existing + " " + mt).strip() if existing else mt
+
+        right_lines = []
+        for rb in right_col:
+            text = rb["text"].strip()
+            date = date_annotations.get(id(rb), "")
+            right_lines.append(f"{text}  {date}" if date else text)
+
+        left_text = _column_text(left_col)
+        right_text = "\n".join(right_lines)
+        return right_text + "\n\n" + left_text
+
+
+def _col_char_count(blocks: list[dict]) -> int:
+    return sum(len(b["text"]) for b in blocks)
+
+
+def extract_text_layout_aware(file_bytes: bytes) -> str:
+    try:
+        import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         all_pages: list[str] = []
 
@@ -75,42 +493,54 @@ def extract_text_layout_aware(file_bytes: bytes) -> str:
             blocks = _extract_blocks(page)
             if not blocks:
                 continue
-
             page_width = page.rect.width
-            col_bounds = _detect_columns(blocks, page_width)
 
-            # Check if genuinely multi-column: do columns have meaningful content?
-            if len(col_bounds) > 2:
-                col_texts = []
-                for i in range(len(col_bounds) - 1):
-                    band = _blocks_in_band(blocks, col_bounds[i], col_bounds[i + 1])
-                    col_text = _column_text(band).strip()
-                    if col_text:
-                        col_texts.append(col_text)
-                # Only use multi-column if each column has real content
-                if all(len(t) > 20 for t in col_texts):
-                    all_pages.append("\n\n".join(col_texts))
-                    continue
+            layout = _classify_layout(blocks, page_width)
 
-            # Single column or columns didn't work — sort everything by y then x
-            all_pages.append(_column_text(blocks))
+            if layout == 'dates_right':
+                all_pages.append(_reconstruct_dates_right(blocks, page_width))
+            elif layout == 'dates_left':
+                all_pages.append(_reconstruct_dates_left(blocks))
+            elif layout == 'dates_sidebar':
+                all_pages.append(_reconstruct_dates_sidebar(blocks))
+            elif layout == 'three_column':
+                all_pages.append(_reconstruct_three_column(blocks, page_width))
+            else:
+                # Standard: try column detection
+                col_bounds = _detect_columns(blocks, page_width)
+                if len(col_bounds) > 2:
+                    col_bands = []
+                    for i in range(len(col_bounds) - 1):
+                        band = _blocks_in_band(blocks, col_bounds[i], col_bounds[i + 1])
+                        ct = _column_text(band).strip()
+                        if ct:
+                            col_bands.append((band, ct))
+
+                    # FIX: Reject false multi-column splits where one col has <10% of chars.
+                    # This handles centered/single-column CVs that get split by narrow x-gaps
+                    # from text wrapping (e.g. CV_135540 "Results-driven..." wraps to x0=31).
+                    if col_bands:
+                        total_chars = sum(_col_char_count(b) for b, _ in col_bands)
+                        valid_bands = [(b, t) for b, t in col_bands
+                                       if total_chars == 0 or _col_char_count(b) / total_chars > 0.10]
+                        if len(valid_bands) >= 2 and all(len(t) > 20 for _, t in valid_bands):
+                            all_pages.append("\n\n".join(t for _, t in valid_bands))
+                            continue
+
+                all_pages.append(_column_text(blocks))
 
         return "\n\n--- PAGE BREAK ---\n\n".join(all_pages)
 
     except ImportError:
         pass
 
-    # Fallback 1: pdfplumber
     try:
         import pdfplumber
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            return "\n".join(
-                p.extract_text(x_tolerance=2, y_tolerance=3) or "" for p in pdf.pages
-            )
+            return "\n".join(p.extract_text(x_tolerance=2, y_tolerance=3) or "" for p in pdf.pages)
     except Exception:
         pass
 
-    # Fallback 2: pypdf
     try:
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(file_bytes))
@@ -122,11 +552,6 @@ def extract_text_layout_aware(file_bytes: bytes) -> str:
 
 
 def extract_header_area(file_bytes: bytes) -> str:
-    """
-    Extract text only from the top 30% of the first page.
-    Much more reliable for name + contact info since it avoids
-    sidebar skills/reference sections that sit at the same y-level.
-    """
     try:
         import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -175,35 +600,13 @@ _ALL_HEADERS = [
     "PROFESSIONAL SUMMARY", "EXECUTIVE SUMMARY", "CAREER OBJECTIVE",
     "CAREER SUMMARY", "PROFILE SUMMARY", "PERSONAL PROFILE", "OBJECTIVE",
     "SUMMARY", "PROFILE", "ABOUT ME", "ABOUT", "CERTIFICATIONS",
-    "CERTIFICATES", "ACHIEVEMENTS", "AWARDS", "PROJECTS", "PERSONAL PROJECTS",
+    "CERTIFICATES", "ACHIEVEMENTS", "AWARDS", "PROJECTS",
     "VOLUNTEER", "INTERESTS", "HOBBIES", "PERSONAL DETAILS",
     "PERSONAL INFORMATION", "CONTACT DETAILS", "CONTACT", "PERSONAL SKILLS",
     "REFERENCE",
 ]
 
-_HEADER_PAT = re.compile(
-    r"(?:^|\n)\s*(?:" + "|".join(re.escape(h) for h in _ALL_HEADERS) + r")\s*[:\-]?\s*(?=\n)",
-    re.I,
-)
-
-
-def _get_section(text: str, *names: str) -> str:
-    pat = re.compile(
-        r"(?:^|\n)\s*(?:" + "|".join(re.escape(n) for n in names) + r")\s*[:\-]?\s*\n"
-        r"([\s\S]*?)"
-        r"(?=\n\s*(?:" + "|".join(re.escape(h) for h in _ALL_HEADERS) + r")\s*[:\-]?\s*\n|\n---\n|$)",
-        re.I,
-    )
-    m = pat.search(text)
-    return m.group(1).strip() if m else ""
-
-
 def _find_sections(text: str) -> dict[str, str]:
-    """
-    Split text into named sections. Works even when section headers
-    appear anywhere in the text (common in multi-column CVs where the
-    extractor may place section titles mid-stream).
-    """
     sections: dict[str, str] = {}
     lines = text.splitlines()
     header_re = re.compile(
@@ -226,6 +629,17 @@ def _find_sections(text: str) -> dict[str, str]:
     return sections
 
 
+def _get_section(text: str, *names: str) -> str:
+    pat = re.compile(
+        r"(?:^|\n)\s*(?:" + "|".join(re.escape(n) for n in names) + r")\s*[:\-]?\s*\n"
+        r"([\s\S]*?)"
+        r"(?=\n\s*(?:" + "|".join(re.escape(h) for h in _ALL_HEADERS) + r")\s*[:\-]?\s*\n|\n---\n|$)",
+        re.I,
+    )
+    m = pat.search(text)
+    return m.group(1).strip() if m else ""
+
+
 # ── Contact Info ───────────────────────────────────────────────────────────────
 
 _EMAIL_RE = re.compile(r"[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}")
@@ -240,7 +654,6 @@ _URL_RE = re.compile(r"https?://[\w./\-?=&%+#@:]+")
 
 
 def _extract_email(text: str, header: str = "") -> str:
-    # Header area is most reliable (avoids ref emails appearing before candidate's)
     if header:
         m = _EMAIL_RE.search(header)
         if m:
@@ -250,8 +663,8 @@ def _extract_email(text: str, header: str = "") -> str:
     m = _EMAIL_RE.search(search_text)
     return m.group() if m else (_EMAIL_RE.search(text).group() if _EMAIL_RE.search(text) else "")
 
+
 def _extract_phone(text: str, header: str = "") -> str:
-    # Header area is most reliable — candidate phone is always in the header
     if header:
         m = _PHONE_RE.search(header)
         if m:
@@ -264,13 +677,16 @@ def _extract_phone(text: str, header: str = "") -> str:
     m = _PHONE_RE.search(text)
     return re.sub(r"[\s.\-]", " ", m.group()).strip() if m else ""
 
+
 def _extract_linkedin(text: str) -> str:
     m = _LINKEDIN_RE.search(text)
     return f"https://linkedin.com/in/{m.group(1)}" if m else ""
 
+
 def _extract_github(text: str) -> str:
     m = _GITHUB_RE.search(text)
     return f"https://github.com/{m.group(1)}" if m else ""
+
 
 def _extract_portfolio(text: str) -> str:
     for u in _URL_RE.findall(text):
@@ -283,7 +699,7 @@ def _extract_portfolio(text: str) -> str:
 
 _NAME_RE = re.compile(r"^[A-Z][a-zA-Z'\-]{1,30}(?:\s+[A-Z][a-zA-Z'\-]{1,30}){1,4}$")
 _NAME_CAPS_RE = re.compile(r"^[A-Z]{2,20}(?:\s+[A-Z]{2,20}){1,3}$")
-_NAME_PART_RE = re.compile(r"^[A-Z]{2,20}$")  # single ALL-CAPS word like "RONDA"
+_NAME_PART_RE = re.compile(r"^[A-Z]{2,20}$")
 
 _SKIP_HEADER = re.compile(
     r"\b(objective|experience|education|skills|reference|contact|"
@@ -293,10 +709,10 @@ _SKIP_HEADER = re.compile(
     r"lecturer|researcher|supervisor)\b", re.I
 )
 
+
 def _extract_name(lines: list[str]) -> tuple[str, str]:
-    # First pass: look for full name on one line
     for line in lines[:35]:
-        line = _clean(line)
+        line = _clean(_strip_icon_prefix(line))
         if not line or "@" in line or len(line) > 65:
             continue
         if re.search(r"\d", line) or _SKIP_HEADER.search(line):
@@ -306,9 +722,8 @@ def _extract_name(lines: list[str]) -> tuple[str, str]:
             if len(parts) >= 2:
                 return parts[0], " ".join(parts[1:])
 
-    # Second pass: look for two consecutive ALL-CAPS single words (split name)
     for i in range(min(35, len(lines) - 1)):
-        a, b = _clean(lines[i]), _clean(lines[i + 1])
+        a, b = _clean(_strip_icon_prefix(lines[i])), _clean(_strip_icon_prefix(lines[i + 1]))
         if _NAME_PART_RE.match(a) and _NAME_PART_RE.match(b):
             return a.title(), b.title()
 
@@ -326,6 +741,7 @@ _SA_PLACES = re.compile(
     r"north west|northern cape|free state|eastern cape)\b",
     re.I,
 )
+
 
 def _extract_location(lines: list[str], text: str) -> str:
     for line in lines[:30]:
@@ -347,7 +763,6 @@ def _extract_bio(sections: dict[str, str], text: str) -> str:
         if content:
             lines = [l for l in content.splitlines() if l.strip() and len(l.strip()) > 15]
             return _clean(" ".join(lines))[:600]
-    # Fallback: look in full text
     return _get_section(text, "OBJECTIVE", "SUMMARY", "PROFILE", "ABOUT")[:600]
 
 
@@ -364,12 +779,12 @@ _TITLE_WORDS = re.compile(
     re.I,
 )
 
+
 def _extract_occupation(lines: list[str], name: str) -> str:
     name_words = {w.lower() for w in name.split()}
     for line in lines[:25]:
         lc = line.lower()
         if _TITLE_WORDS.search(lc) and not (name_words & set(lc.split())) and len(line) < 80:
-            # Skip if it looks like a section header
             if not re.match(r"^(EXPERIENCE|EDUCATION|SKILLS|REFERENCE)", line, re.I):
                 return _clean(line)
     return ""
@@ -395,6 +810,7 @@ _DATE_RANGE_RE = re.compile(
     re.I,
 )
 
+
 def _parse_date(s: str) -> str:
     s = s.strip()
     if re.match(r"^\d{4}$", s):
@@ -408,6 +824,7 @@ def _parse_date(s: str) -> str:
         return f"{m.group(2)}-{int(m.group(1)):02d}-01"
     return ""
 
+
 def _is_present(s: str) -> bool:
     return bool(re.match(r"present|current|now|till\s*date|to\s*date|date", s.strip(), re.I))
 
@@ -420,29 +837,35 @@ _EMP_TYPES = re.compile(
     re.I,
 )
 
+_EDU_LINE_RE = re.compile(
+    r"\b(bachelor|honours|master|phd|diploma|degree|certificate|matric|"
+    r"grade\s*12|bsc|b\.sc|msc|m\.sc|bcom|b\.com|university|college|institute|"
+    r"faculty|distinctions?)\b",
+    re.I,
+)
+
+
+def _is_likely_bullet(text: str) -> bool:
+    if len(text) > 80:
+        return True
+    if re.match(r"^[-–*•]", text):
+        return True
+    if re.match(r"^(Performed|Conducted|Assisted|Maintained|Collaborated|Developed|"
+                r"Managed|Implemented|Designed|Created|Led|Supported|Ensured)\b", text, re.I):
+        return True
+    return False
+
 
 def _join_split_dates(text: str) -> str:
-    """
-    Join date ranges that have been split across lines by multi-column extraction.
-    e.g. "01-2024 -\nDec 2024" -> "01-2024 - Dec 2024"
-         "02/01/2023\n- 1st of\nDecember\n2023" -> "02/01/2023 - 1st of December 2023"
-    """
-    # Join a trailing dash/dash+newline with the next line
     text = re.sub(r"(\d{4})\s*[-–]\s*\n\s*([A-Za-z])", r"\1 - \2", text)
     text = re.sub(r"(\d{1,2}/\d{4})\s*\n\s*[-–]\s*", r"\1 - ", text)
-    # Collapse "Month\nYear" continuations (e.g., "December\n2023")
     text = re.sub(r"(January|February|March|April|May|June|July|August|"
                   r"September|October|November|December)\s*\n\s*(\d{4})", r"\1 \2", text)
-    # "1st of\nDecember" -> "1st of December"
     text = re.sub(r"(\d+(?:st|nd|rd|th)?\s+of)\s*\n\s*", r"\1 ", text)
     return text
 
 
 def _extract_work_experiences(sections: dict, text: str) -> list[dict]:
-    """
-    Extract work experience entries. Uses the EXPERIENCE section text first,
-    then falls back to scanning the full text for date ranges.
-    """
     section_text = ""
     for key in ("WORK EXPERIENCE", "PROFESSIONAL EXPERIENCE", "EMPLOYMENT HISTORY",
                 "CAREER HISTORY", "EXPERIENCE"):
@@ -450,17 +873,10 @@ def _extract_work_experiences(sections: dict, text: str) -> list[dict]:
             section_text = sections[key]
             break
 
-    # Pre-process: join split date ranges produced by column extraction
     search_text = _join_split_dates(section_text or text)
     entries: list[dict] = []
     seen_ranges: set[tuple] = set()
-
-    # Collect all date ranges in the section text
     all_date_matches = list(_DATE_RANGE_RE.finditer(search_text))
-
-    # Also find job entries WITHOUT dates (for orphaned-date pairing)
-    # These appear as company/title lines NOT adjacent to a date range
-    date_positions = {dm.start() for dm in all_date_matches}
 
     for dm in all_date_matches:
         start_raw, end_raw = dm.group(1), dm.group(2)
@@ -473,65 +889,76 @@ def _extract_work_experiences(sections: dict, text: str) -> list[dict]:
             continue
         seen_ranges.add(key)
 
-        # Context before and after the date range
         pre_lines = [l.strip() for l in search_text[:dm.start()].splitlines() if l.strip()][-8:]
         post_lines = [l.strip() for l in search_text[dm.end():].splitlines() if l.strip()][:12]
 
         job_title = company = location = emp_type = ""
         desc_lines: list[str] = []
 
-        # Try to find job title and company from lines near the date
+        candidate_lines = []
         for line in reversed(pre_lines):
             lc = _clean(line)
-            if not lc or _DATE_RANGE_RE.search(lc):
+            if not lc or _DATE_RANGE_RE.search(lc) or _EDU_LINE_RE.search(lc):
                 continue
-            # Split "Title at Company" or "Title, Company"
-            sep = re.split(r"\s+(?:at|@|–|-)\s+|\s*,\s*(?=[A-Z])", lc, maxsplit=1)
-            if len(sep) == 2 and 3 < len(sep[0]) < 80 and 3 < len(sep[1]) < 100:
-                job_title, company = _clean(sep[0]), _clean(sep[1])
-            else:
+            if _is_likely_bullet(lc):
+                continue
+            candidate_lines.append(lc)
+            if len(candidate_lines) >= 2:
+                break
+
+        if candidate_lines:
+            job_title = candidate_lines[0]
+            if len(candidate_lines) > 1:
+                company = candidate_lines[1]
+
+        if not job_title or not company:
+            for line in post_lines[:4]:
+                lc = _clean(line)
+                if not lc or _DATE_RANGE_RE.search(lc) or _EDU_LINE_RE.search(lc):
+                    continue
+                if _is_likely_bullet(lc):
+                    break
                 if not job_title:
                     job_title = lc
                 elif not company:
                     company = lc
-            if job_title and company:
-                break
+                    break
 
-        # If still missing, scan post lines for company-like content
-        if not company and post_lines:
-            for line in post_lines[:3]:
-                lc = _clean(line)
-                if lc and not _DATE_RANGE_RE.search(lc) and lc != job_title:
-                    if re.search(r"\b(university|college|pty|ltd|inc|pharmacare|department)\b", lc, re.I):
-                        company = lc
-                        break
+        if job_title and not company:
+            sep = re.split(r"\s*,\s*(?=[A-Z])|\s+(?:at|@)\s+", job_title, maxsplit=1)
+            if len(sep) == 2 and 3 < len(sep[0]) < 80 and 3 < len(sep[1]) < 100:
+                job_title, company = _clean(sep[0]), _clean(sep[1])
 
-        # Employment type
-        ctx = " ".join(pre_lines + post_lines[:5])
+        ctx = " ".join(pre_lines[-3:] + post_lines[:5])
         em = _EMP_TYPES.search(ctx)
         if em:
             emp_type = em.group(1).title()
 
-        # Location
-        for l in (pre_lines + post_lines)[:6]:
+        for l in (pre_lines[-4:] + post_lines[:4]):
             if _SA_PLACES.search(l) and l != job_title and l != company:
                 location = _clean(l)
                 break
 
-        # Description bullets
+        in_desc = bool(company or job_title)
+        skip_re = re.compile(
+            r"^(EDUCATION|SKILLS|REFERENCE|OBJECTIVE|SUMMARY|PROFILE|CONTACT)", re.I
+        )
         for l in post_lines:
             stripped = l.lstrip("*•-–>◦▪▸ ")
+            if skip_re.match(stripped):
+                break
+            if _EDU_LINE_RE.search(stripped) and len(stripped) > 30:
+                break
             if stripped and len(stripped) > 10 and not _DATE_RANGE_RE.search(l):
-                # Stop if we hit a new section header
-                if re.match(r"^(EDUCATION|SKILLS|REFERENCE|OBJECTIVE|SUMMARY)", stripped, re.I):
-                    break
-                desc_lines.append(stripped)
+                if stripped != job_title and stripped != company:
+                    desc_lines.append(stripped)
             if len(desc_lines) >= 6:
                 break
 
-        if not job_title and not company:
+        if _EDU_LINE_RE.search(job_title or ""):
             continue
-        if re.search(r"\b(university|college|diploma|degree|certificate|school)\b", job_title, re.I):
+
+        if not job_title and not company:
             continue
 
         entries.append({
@@ -545,21 +972,16 @@ def _extract_work_experiences(sections: dict, text: str) -> list[dict]:
             "description": _clean(" ".join(desc_lines))[:500],
         })
 
-    # ── Orphaned-date recovery ─────────────────────────────────────────────────
-    # Some layouts put ALL dates in a separate column; they end up clustered at
-    # the bottom of the section after normal extraction. Match them to entries
-    # by order if we found no dates near the job titles.
     if not entries and section_text:
         orphan_dates = list(_DATE_RANGE_RE.finditer(_join_split_dates(text)))
-        # Find job/company lines by looking for lines that aren't dates/bullets
         job_lines = []
         for line in _lines(section_text):
             if (not _DATE_RANGE_RE.search(line)
                     and not line.startswith(("-", "•", "*"))
+                    and not _EDU_LINE_RE.search(line)
                     and len(line) > 5 and len(line) < 100):
                 job_lines.append(line)
 
-        # Pair dates with job lines by order
         for i, dm in enumerate(orphan_dates[:6]):
             start_raw, end_raw = dm.group(1), dm.group(2)
             start_str = _parse_date(start_raw)
@@ -567,10 +989,11 @@ def _extract_work_experiences(sections: dict, text: str) -> list[dict]:
             end_str = None if is_cur else _parse_date(end_raw)
             if not start_str:
                 continue
-            # Try to guess job_title / company from job_lines
-            base = i * 3  # crude: assume ~3 lines per entry
+            base = i * 3
             job_title = job_lines[base] if base < len(job_lines) else ""
             company = job_lines[base + 1] if base + 1 < len(job_lines) else ""
+            if _EDU_LINE_RE.search(job_title):
+                continue
             entries.append({
                 "job_title": job_title[:150],
                 "company": company[:150],
@@ -582,7 +1005,6 @@ def _extract_work_experiences(sections: dict, text: str) -> list[dict]:
                 "description": "",
             })
 
-    # Deduplicate
     seen: dict[tuple, dict] = {}
     for e in entries:
         k = (e["job_title"].lower()[:30], e["company"].lower()[:30])
@@ -609,12 +1031,18 @@ _INST_RE = re.compile(
     re.I,
 )
 
+_TABLE_HEADER_RE = re.compile(
+    r"^(course|degree|school|university|grade|score|year)\b", re.I
+)
+
+
 def _infer_nqf(qual: str) -> str:
     lc = qual.lower()
     for level, kws in _NQF_MAP.items():
         if any(kw in lc for kw in kws):
             return level
     return ""
+
 
 def _extract_educations(sections: dict, text: str) -> list[dict]:
     section = ""
@@ -628,7 +1056,6 @@ def _extract_educations(sections: dict, text: str) -> list[dict]:
     if not section:
         return []
 
-    _TABLE_HEADER = re.compile(r"^(course|degree|school|university|grade|score|year)\b", re.I)
     year_re = re.compile(r"\b((?:19|20)\d{2})\b")
     entries: list[dict] = []
     blocks = re.split(r"\n{2,}|\n(?=\s*(?:19|20)\d{2})", section.strip())
@@ -638,9 +1065,12 @@ def _extract_educations(sections: dict, text: str) -> list[dict]:
         if not block or len(block) < 8:
             continue
         raw_lines = [l.strip() for l in block.splitlines() if l.strip()]
-        # Skip table header rows
-        if raw_lines and _TABLE_HEADER.match(raw_lines[0]):
-            continue
+
+        if raw_lines and _TABLE_HEADER_RE.match(raw_lines[0]):
+            if len(raw_lines) < 2:
+                continue
+            raw_lines = raw_lines[1:]
+
         qual = institution = field = description = ""
         start_year = end_year = 0
         is_current = False
@@ -648,9 +1078,8 @@ def _extract_educations(sections: dict, text: str) -> list[dict]:
         years = year_re.findall(block)
 
         if len(raw_lines) >= 2:
-            # Check for table-style: "Qualification | Institution | Grade | Year"
             parts = [p.strip() for p in raw_lines[0].split("|")]
-            if len(parts) >= 2:
+            if len(parts) >= 2 and not _TABLE_HEADER_RE.match(parts[0]):
                 qual = _clean(parts[0])
                 institution = _clean(parts[1]) if len(parts) > 1 else ""
                 ym = year_re.search(parts[-1]) if parts else None
@@ -659,7 +1088,6 @@ def _extract_educations(sections: dict, text: str) -> list[dict]:
                     start_year = end_year - 1
             else:
                 qual = _clean(raw_lines[0])
-                # Second line: institution or year
                 if _INST_RE.search(raw_lines[1]) or not year_re.search(raw_lines[1]):
                     institution = _clean(raw_lines[1])
                 else:
@@ -679,10 +1107,18 @@ def _extract_educations(sections: dict, text: str) -> list[dict]:
         if _INST_RE.search(qual) and not _INST_RE.search(institution):
             qual, institution = institution, qual
 
+        if not qual or len(qual) < 4:
+            continue
+        if re.match(r"^[@,\s]+$", qual):
+            continue
+        if _NAME_CAPS_RE.match(qual) and not _EDU_LINE_RE.search(qual):
+            continue
+
         nqf = _infer_nqf(qual) or _infer_nqf(institution)
 
         if not qual and not institution:
             continue
+
         entries.append({
             "institution": institution[:200],
             "qualification": qual[:200],
@@ -742,7 +1178,6 @@ def _extract_skills(sections: dict, text: str) -> list[dict]:
     source = section or text
     found: dict[str, dict] = {}
 
-    # Tech skills from regex
     for m in _TECH_RE.finditer(source):
         name = _clean(m.group())
         ctx = source[max(0, m.start() - 40):m.end() + 40]
@@ -752,12 +1187,10 @@ def _extract_skills(sections: dict, text: str) -> list[dict]:
         if key not in found:
             found[key] = {"name": name.title(), "level": level, "category": "Technical"}
 
-    # Plain skill items from section
     if section:
         plain = _TECH_RE.sub("", section)
         for item in re.split(r"[,•|\n/;]+", plain):
             item = _clean(item.lstrip("*•-–> "))
-            # Skip percentage lines (skill bars), short noise, years
             if 2 < len(item) < 70 and not re.search(r"\d{2,}%|\d{4}", item):
                 lm = _LEVEL_RE.search(item)
                 level = _LEVEL_MAP.get((lm.group(1).lower() if lm else "").replace("-", " "), "intermediate")
@@ -791,10 +1224,12 @@ _LANG_RE = re.compile(
     re.I,
 )
 
+
 def _extract_languages(sections: dict, text: str) -> list[dict]:
     found: dict[str, dict] = {}
-
-    section = sections.get("LANGUAGE PROFICIENCY") or sections.get("LANGUAGES SPOKEN") or sections.get("LANGUAGES", "")
+    section = (sections.get("LANGUAGE PROFICIENCY") or
+               sections.get("LANGUAGES SPOKEN") or
+               sections.get("LANGUAGES", ""))
     if section and not re.search(r"(design|system|research|symbolic|writing)", section, re.I):
         for line in _lines(section):
             m = re.match(r"([A-Za-z]{3,})\s*[-:–(]+\s*([A-Za-z\s]+)", line)
@@ -826,7 +1261,6 @@ def _extract_references(sections: dict, text: str) -> list[dict]:
     if not section or re.search(r"available\s+(?:on|upon)\s+request", section, re.I):
         return []
 
-    # Split into ref blocks
     blocks = re.split(r"\n{2,}", section.strip())
     if len(blocks) <= 1:
         blocks = re.split(r"(?=\b(?:Mr|Mrs|Ms|Dr|Prof)\b)", section)
@@ -841,11 +1275,9 @@ def _extract_references(sections: dict, text: str) -> list[dict]:
 
         for line in raw_lines:
             if not name:
-                # First substantial line is the name
                 if re.match(r"\b(Mr|Mrs|Ms|Dr|Prof)\b", line) or (
                     _NAME_RE.match(line) and not _EMAIL_RE.search(line) and not _PHONE_RE.search(line)
                 ):
-                    # Strip "Name - Company" pattern
                     dash_split = re.split(r"\s*[-–]\s*", line, maxsplit=1)
                     name = _clean(dash_split[0])
                     if len(dash_split) > 1:
@@ -918,12 +1350,10 @@ def parse_cv(file_bytes: bytes, mime_type: str = "application/pdf") -> dict[str,
     lines = _lines(text)
     header_lines = _lines(header_text) if header_text else lines
 
-    # Build section map once — used by all extractors
     sections = _find_sections(text)
 
     email = _extract_email(text, header_text)
     phone = _extract_phone(text, header_text)
-    # Use header area for name (avoids picking up sidebar skill/job-title words)
     first, last = _extract_name(header_lines)
     if not first:
         first, last = _extract_name(lines)
