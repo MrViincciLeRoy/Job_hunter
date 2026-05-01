@@ -7,6 +7,7 @@ urlpatterns = [
     path("login/",                           views.login_view,           name="login"),
     path("logout/",                          views.logout_view,          name="logout"),
     path("onboarding/",                      views.onboarding_view,      name="onboarding"),
+    path("onboarding/extract-cv/",           views.extract_cv_view,      name="extract_cv"),
     path("profile/",                         views.profile_view,         name="profile"),
     path("documents/",                       views.documents_view,       name="documents"),
     path("documents/<int:doc_id>/download/", views.document_download,    name="doc_download"),
