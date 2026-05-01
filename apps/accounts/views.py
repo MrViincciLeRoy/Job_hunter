@@ -1,3 +1,5 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
@@ -28,6 +30,28 @@ def logout_view(request):
     logout(request)
     return redirect("accounts:login")
 
+
+# ── CV Extraction (local only) ────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def extract_cv_view(request):
+    f = request.FILES.get("file")
+    if not f:
+        return JsonResponse({"ok": False, "error": "No file provided."})
+
+    file_bytes = f.read()
+    mime_type  = f.content_type or "application/octet-stream"
+
+    try:
+        from .cv_extractor import parse_cv
+        data = parse_cv(file_bytes, mime_type)
+        return JsonResponse({"ok": True, "data": data})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)})
+
+
+# ── Onboarding ────────────────────────────────────────────────────────────────
 
 @login_required
 def onboarding_view(request):
@@ -90,6 +114,81 @@ def onboarding_view(request):
             )
             return JsonResponse({"ok": True})
 
+        elif step == "extracted_data":
+            try:
+                experiences = json.loads(request.POST.get("experiences", "[]"))
+                educations  = json.loads(request.POST.get("educations",  "[]"))
+                skills      = json.loads(request.POST.get("skills",      "[]"))
+                languages   = json.loads(request.POST.get("languages",   "[]"))
+            except json.JSONDecodeError as e:
+                return JsonResponse({"ok": False, "error": f"Bad JSON: {e}"})
+
+            # Clear existing extracted data to avoid duplication on re-run
+            WorkExperience.objects.filter(user=request.user).delete()
+            Education.objects.filter(user=request.user).delete()
+            Skill.objects.filter(user=request.user).delete()
+            Language.objects.filter(user=request.user).delete()
+
+            for e in experiences:
+                try:
+                    WorkExperience.objects.create(
+                        user        = request.user,
+                        job_title   = e.get("job_title", "")[:150],
+                        company     = e.get("company", "")[:150],
+                        location    = e.get("location", "")[:100],
+                        start_date  = e.get("start_date") or "2000-01-01",
+                        end_date    = e.get("end_date") or None,
+                        is_current  = bool(e.get("is_current", False)),
+                        description = e.get("description", ""),
+                    )
+                except Exception:
+                    pass
+
+            for e in educations:
+                try:
+                    Education.objects.create(
+                        user           = request.user,
+                        institution    = e.get("institution", "")[:200],
+                        qualification  = e.get("qualification", "")[:200],
+                        field_of_study = e.get("field_of_study", "")[:150],
+                        nqf_level      = e.get("nqf_level", ""),
+                        start_year     = int(e.get("start_year") or 0),
+                        end_year       = int(e["end_year"]) if e.get("end_year") else None,
+                        is_current     = bool(e.get("is_current", False)),
+                        description    = e.get("description", ""),
+                    )
+                except Exception:
+                    pass
+
+            for s in skills:
+                try:
+                    level = s.get("level", "intermediate")
+                    if level not in ("beginner", "intermediate", "advanced", "expert"):
+                        level = "intermediate"
+                    Skill.objects.create(
+                        user     = request.user,
+                        name     = s.get("name", "")[:100],
+                        level    = level,
+                        category = s.get("category", "")[:50],
+                    )
+                except Exception:
+                    pass
+
+            for l in languages:
+                try:
+                    prof = l.get("proficiency", "professional")
+                    if prof not in ("basic", "conversational", "professional", "native"):
+                        prof = "professional"
+                    Language.objects.create(
+                        user        = request.user,
+                        name        = l.get("name", "")[:80],
+                        proficiency = prof,
+                    )
+                except Exception:
+                    pass
+
+            return JsonResponse({"ok": True})
+
         elif step == "complete":
             profile.onboarding_done = True
             profile.save()
@@ -97,6 +196,8 @@ def onboarding_view(request):
 
     return render(request, "accounts/onboarding.html", {"profile": profile})
 
+
+# ── Profile ───────────────────────────────────────────────────────────────────
 
 @login_required
 def profile_view(request):
@@ -132,24 +233,24 @@ def profile_view(request):
     doc_counts = {dt: docs.filter(doc_type=dt).count() for dt, _ in DOC_TYPES}
 
     return render(request, "accounts/profile.html", {
-        "profile":            profile,
-        "doc_counts":         doc_counts,
-        "doc_types":          DOC_TYPES,
-        "docs":               docs,
-        "work_experiences":   WorkExperience.objects.filter(user=request.user),
-        "educations":         Education.objects.filter(user=request.user),
-        "skills":             Skill.objects.filter(user=request.user),
-        "languages":          Language.objects.filter(user=request.user),
-        "references":         Reference.objects.filter(user=request.user),
-        "social_links":       SocialLink.objects.filter(user=request.user),
+        "profile":              profile,
+        "doc_counts":           doc_counts,
+        "doc_types":            DOC_TYPES,
+        "docs":                 docs,
+        "work_experiences":     WorkExperience.objects.filter(user=request.user),
+        "educations":           Education.objects.filter(user=request.user),
+        "skills":               Skill.objects.filter(user=request.user),
+        "languages":            Language.objects.filter(user=request.user),
+        "references":           Reference.objects.filter(user=request.user),
+        "social_links":         SocialLink.objects.filter(user=request.user),
         "platform_suggestions": PLATFORM_SUGGESTIONS,
-        "nqf_levels":         NQF_LEVELS,
-        "skill_levels":       SKILL_LEVELS,
-        "proficiency_levels": PROFICIENCY_LEVELS,
+        "nqf_levels":           NQF_LEVELS,
+        "skill_levels":         SKILL_LEVELS,
+        "proficiency_levels":   PROFICIENCY_LEVELS,
     })
 
 
-# ?? Work Experience ????????????????????????????????????????????????????????????
+# ── Work Experience ───────────────────────────────────────────────────────────
 
 @login_required
 @require_POST
@@ -175,7 +276,7 @@ def experience_save(request, pk=None):
         exp = WorkExperience.objects.create(user=request.user, **data)
 
     return JsonResponse({
-        "ok": True,
+        "ok":          True,
         "id":          exp.pk,
         "job_title":   exp.job_title,
         "company":     exp.company,
@@ -195,7 +296,7 @@ def experience_delete(request, pk):
     return JsonResponse({"ok": True})
 
 
-# ?? Education ??????????????????????????????????????????????????????????????????
+# ── Education ─────────────────────────────────────────────────────────────────
 
 @login_required
 @require_POST
@@ -222,16 +323,16 @@ def education_save(request, pk=None):
         edu = Education.objects.create(user=request.user, **data)
 
     return JsonResponse({
-        "ok": True,
-        "id":            edu.pk,
-        "institution":   edu.institution,
-        "qualification": edu.qualification,
-        "field_of_study":edu.field_of_study,
-        "nqf_level":     edu.get_nqf_level_display(),
-        "start_year":    edu.start_year,
-        "end_year":      edu.end_year or "",
-        "is_current":    edu.is_current,
-        "description":   edu.description,
+        "ok":             True,
+        "id":             edu.pk,
+        "institution":    edu.institution,
+        "qualification":  edu.qualification,
+        "field_of_study": edu.field_of_study,
+        "nqf_level":      edu.get_nqf_level_display(),
+        "start_year":     edu.start_year,
+        "end_year":       edu.end_year or "",
+        "is_current":     edu.is_current,
+        "description":    edu.description,
     })
 
 
@@ -242,7 +343,7 @@ def education_delete(request, pk):
     return JsonResponse({"ok": True})
 
 
-# ?? Skills ?????????????????????????????????????????????????????????????????????
+# ── Skills ────────────────────────────────────────────────────────────────────
 
 @login_required
 @require_POST
@@ -262,10 +363,12 @@ def skill_save(request, pk=None):
         skill = Skill.objects.create(user=request.user, name=name, level=level, category=category)
 
     return JsonResponse({
-        "ok": True, "id": skill.pk,
-        "name": skill.name, "level": skill.level,
+        "ok":            True,
+        "id":            skill.pk,
+        "name":          skill.name,
+        "level":         skill.level,
         "level_display": skill.get_level_display(),
-        "category": skill.category,
+        "category":      skill.category,
     })
 
 
@@ -276,7 +379,7 @@ def skill_delete(request, pk):
     return JsonResponse({"ok": True})
 
 
-# ?? Languages ??????????????????????????????????????????????????????????????????
+# ── Languages ─────────────────────────────────────────────────────────────────
 
 @login_required
 @require_POST
@@ -295,8 +398,10 @@ def language_save(request, pk=None):
         lang = Language.objects.create(user=request.user, name=name, proficiency=proficiency)
 
     return JsonResponse({
-        "ok": True, "id": lang.pk,
-        "name": lang.name, "proficiency": lang.proficiency,
+        "ok":                  True,
+        "id":                  lang.pk,
+        "name":                lang.name,
+        "proficiency":         lang.proficiency,
         "proficiency_display": lang.get_proficiency_display(),
     })
 
@@ -308,7 +413,7 @@ def language_delete(request, pk):
     return JsonResponse({"ok": True})
 
 
-# ?? References ?????????????????????????????????????????????????????????????????
+# ── References ────────────────────────────────────────────────────────────────
 
 @login_required
 @require_POST
@@ -341,7 +446,7 @@ def reference_delete(request, pk):
     return JsonResponse({"ok": True})
 
 
-# ?? Documents ??????????????????????????????????????????????????????????????????
+# ── Documents ─────────────────────────────────────────────────────────────────
 
 @login_required
 def documents_view(request):
@@ -416,7 +521,7 @@ def photo_view(request):
     return HttpResponse(bytes(profile.photo), content_type=profile.photo_mime or "image/jpeg")
 
 
-# ?? Social Links ???????????????????????????????????????????????????????????????
+# ── Social Links ──────────────────────────────────────────────────────────────
 
 @login_required
 @require_POST
@@ -434,17 +539,18 @@ def social_link_save(request, pk=None):
     if pk:
         link = get_object_or_404(SocialLink, pk=pk, user=request.user)
         link.platform = platform
-        link.url = url
-        link.icon = icon
+        link.url      = url
+        link.icon     = icon
         link.save()
     else:
         link = SocialLink.objects.create(user=request.user, platform=platform, url=url, icon=icon)
 
     return JsonResponse({
-        "ok": True, "id": link.pk,
+        "ok":       True,
+        "id":       link.pk,
         "platform": link.platform,
-        "url": link.url,
-        "icon": link.get_icon(),
+        "url":      link.url,
+        "icon":     link.get_icon(),
     })
 
 
@@ -455,7 +561,7 @@ def social_link_delete(request, pk):
     return JsonResponse({"ok": True})
 
 
-# ?? Internal helpers ???????????????????????????????????????????????????????????
+# ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _sync_cv_to_pipeline(user, pdf_bytes, filename):
     try:
