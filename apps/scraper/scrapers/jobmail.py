@@ -1,5 +1,3 @@
-# apps/scraper/scrapers/jobmail.py
-
 import re
 import time
 import random
@@ -16,11 +14,19 @@ START_URL = 'https://www.jobmail.co.za/jobs/it-computer?sort=latest'
 
 PHONE_RE = re.compile(r'(\+27|0)[0-9()\s-]{8,14}')
 
-# Emails that belong to the platform itself, not the employer
 _PLATFORM_EMAIL_DOMAINS = {
     'jobmail.co.za', 'gumtree.co.za', 'careers24.com',
     'pnet.co.za', 'careerjunction.co.za', 'communicate.co.za',
 }
+
+# Salary: word boundary before R, SA format R156 000,00 or R156,000 or R156000
+_SALARY_RE = re.compile(
+    r'(?<![A-Za-z])'                             # not preceded by a letter
+    r'R\s*\d[\d\s]*(?:[.,]\d{2})?'              # R + number (e.g. R156 000,00)
+    r'(?:\s*[-–]\s*R\s*\d[\d\s]*(?:[.,]\d{2})?)?' # optional range
+    r'(?:\s*\([^)]{1,30}\))?',                   # optional "(PER YEAR)"
+    re.IGNORECASE,
+)
 
 
 def _clean(t):
@@ -33,27 +39,22 @@ def _extract_id(url):
 
 
 def _is_platform_email(email: str) -> bool:
-    """Return True if email belongs to a job board or recruiter platform, not a real employer."""
     domain = email.lower().split('@')[-1] if '@' in email else ''
     return domain in _PLATFORM_EMAIL_DOMAINS
 
 
 def _extract_contact_email(raw_text: str) -> str:
-    """Extract email from Contact [Name] on [email] pattern."""
     m = re.search(
         r'Contact\s+\w[\w\s]+\s+on\s+([\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})',
         raw_text, re.IGNORECASE
     )
     if m:
         return m.group(1)
-    # Also catch "email: addr" or "e-mail: addr"
     m = re.search(
         r'e-?mail[:\s]+([^\s,<>]+@[^\s,<>]+\.[a-zA-Z]{2,})',
         raw_text, re.IGNORECASE
     )
-    if m:
-        return m.group(1)
-    return ''
+    return m.group(1) if m else ''
 
 
 def _parse_listing_page(html, keywords=None):
@@ -67,17 +68,13 @@ def _parse_listing_page(html, keywords=None):
         if not job_id or job_id in seen_ids:
             continue
 
-        # Skip pagination/nav links — they wrap large blocks of text
-        # Real job title links are short and don't contain newlines
         raw_text = a.get_text(separator=' ')
         title = _clean(raw_text)
 
-        # Filter out search-result page links (e.g. "5 Architect jobs in Gauteng on Job Mail")
         if re.search(r'\d+\s+\w+\s+jobs?\s+in\b', title, re.IGNORECASE):
             continue
         if not title or len(title) < 3 or len(title) > 120:
             continue
-        # Skip if it reads like a sentence (pagination text tends to be long)
         if title.count(' ') > 10:
             continue
 
@@ -104,98 +101,128 @@ def _scrape_detail(url):
     soup = BeautifulSoup(r.text, 'html.parser')
     raw_text = soup.get_text(separator='\n', strip=True)
 
-    title_el = soup.select_one('h1')
-    title = _clean(title_el.get_text()) if title_el else ''
+    # ── Title ────────────────────────────────────────────────────────────────
+    title = ''
+    for sel in ['h1.text-primary', 'h1.h3', '.company-details h1', 'h1']:
+        el = soup.select_one(sel)
+        if el:
+            title = _clean(el.get_text())
+            break
     if not title:
         return None
-
-    # Skip search-results pages that slipped through
     if re.search(r'\d+\s+\w+\s+jobs?\s+in\b', title, re.IGNORECASE):
         return None
 
-    comp_m = re.search(r'(?:Recruiter|Company|Employer|Posted\s+by)[:\s]+([^\n]+)', raw_text, re.I)
-    company = _clean(comp_m.group(1)) if comp_m else ''
-
-    loc_el = soup.select_one('[class*="location"], [data-qa*="location"], [itemprop="addressLocality"]')
-    location = _clean(loc_el.get_text()) if loc_el else ''
-    if not location:
-        loc_m = re.search(r'(?:Location|City|Area|Province)[:\s]+([^\n]+)', raw_text, re.I)
-        location = _clean(loc_m.group(1)) if loc_m else 'South Africa'
-
-    salary_m = re.search(r'(R[\d ,]+(?:\s*[-–]\s*R[\d ,]+)?|Market\s+Related|Negotiable|CTC)', raw_text, re.I)
-    salary = _clean(salary_m.group(0)) if salary_m else ''
-
-    job_type_m = re.search(
-        r'\b(permanent|contract|temporary|internship|learnership|part[- ]time|full[- ]time)\b',
-        raw_text, re.I
-    )
-    job_type = job_type_m.group(0).title() if job_type_m else ''
-
-    # Extract description — use semantic selectors first, fall back to text between markers
-    description = ''
-    for sel in ['.job-description', '.description', '[class*="job-detail"]', 'article', '.content', 'main']:
+    # ── Company ──────────────────────────────────────────────────────────────
+    company = ''
+    for sel in ['a.details-company', '.details-company', 'span.recruiter']:
         el = soup.select_one(sel)
         if el:
-            description = _clean(el.get_text('\n'))
+            company = _clean(el.get_text())
             break
+    if not company:
+        m = re.search(r'(?:Recruiter|Company|Employer|Posted\s+by)[:\s]+([^\n]+)', raw_text, re.I)
+        company = _clean(m.group(1)) if m else ''
 
-    if not description:
-        desc_m = re.search(
-            r'Apply Now\s*(.+?)(?:Apply Now|Create your FREE|Get notified|Sign in)',
-            raw_text, re.DOTALL | re.IGNORECASE
+    # ── Location ─────────────────────────────────────────────────────────────
+    location = ''
+    for sel in ['span.details-job-location', 'div.details-job-location', '[class*="job-location"]']:
+        el = soup.select_one(sel)
+        if el:
+            location = _clean(el.get_text())
+            break
+    if not location:
+        m = re.search(r'(?:Location|City|Area|Province)[:\s]+([^\n]+)', raw_text, re.I)
+        location = _clean(m.group(1)) if m else 'South Africa'
+
+    # ── Job Type — selector first, then regex with optional hyphen/space ─────
+    job_type = ''
+    for sel in ['span.details-job-type', '[class*="job-type"]']:
+        el = soup.select_one(sel)
+        if el:
+            job_type = _clean(el.get_text())
+            break
+    if not job_type:
+        m = re.search(
+            r'\b(permanent|contract|temporary|internship|learnership|'
+            r'part[- ]?time|full[- ]?time)\b',
+            raw_text, re.I
         )
-        if desc_m:
-            description = _clean(desc_m.group(1))
+        job_type = m.group(0).title() if m else ''
 
-    # Strip recruiter boilerplate from description
-    description = re.sub(
-        r'Connect\s+with\s+us\s+on\s+www\..+$', '', description, flags=re.DOTALL | re.IGNORECASE
-    ).strip()
-    description = re.sub(
-        r'Register\s+your\s+CV\s+to\s+create.+$', '', description, flags=re.DOTALL | re.IGNORECASE
-    ).strip()
+    # ── Salary — strict word-boundary pattern to avoid matching "r" in words ─
+    salary = ''
+    sal_m = _SALARY_RE.search(raw_text)
+    if sal_m:
+        salary = _clean(sal_m.group(0))
+    if not salary:
+        m2 = re.search(r'\b(Market\s+Related|Negotiable|CTC|TBC)\b', raw_text, re.I)
+        salary = _clean(m2.group(0)) if m2 else ''
 
-    how_to_apply_m = re.search(
+    # ── Description — target the active job-spec card body ───────────────────
+    description = ''
+    for sel in [
+        '#pills-job-spec-' + (_extract_id(url) or '0') + ' .card-body',
+        '.tab-pane.active .card-body',
+        '.tab-pane.show .card-body',
+        '.card-body',
+        'article',
+        'main',
+    ]:
+        el = soup.select_one(sel)
+        if el:
+            txt = _clean(el.get_text('\n'))
+            if len(txt) > 100:
+                description = txt
+                break
+
+    # Strip recruiter boilerplate
+    for pat in [
+        r'Connect\s+with\s+us\s+on\s+www\..+$',
+        r'Register\s+your\s+CV\s+to\s+create.+$',
+        r'One\s+of\s+the\s+best\s+Developer\s+Recruitment.+$',
+    ]:
+        description = re.sub(pat, '', description, flags=re.DOTALL | re.IGNORECASE).strip()
+
+    # ── How to apply ─────────────────────────────────────────────────────────
+    m = re.search(
         r'(?:How\s+to\s+Apply|To\s+Apply|Send.*?CV|Forward.*?CV|'
         r'Application\s+Process|Apply\s+(?:via|by|to))[:\s]*([^\n]{10,300})',
         raw_text, re.I
     )
-    how_to_apply = _clean(how_to_apply_m.group(1)) if how_to_apply_m else ''
+    how_to_apply = _clean(m.group(1)) if m else ''
 
-    # Email: try contact-name pattern first (common on JobMail)
+    # ── Email ─────────────────────────────────────────────────────────────────
     apply_email = _extract_contact_email(raw_text)
-
-    # Fall back to standard priority extraction, skipping platform-owned emails
     if not apply_email:
         apply_email = extract_email_priority(
             how_to_apply=how_to_apply,
             description=description,
             raw_text=raw_text,
         )
-
-    # Never store a platform/job-board email as the apply email
     if apply_email and _is_platform_email(apply_email):
         apply_email = ''
 
+    # ── Phone / closing date ──────────────────────────────────────────────────
+    phone_m = PHONE_RE.search(raw_text)
+    phone        = _clean(phone_m.group(0)) if phone_m else ''
     closing_date = extract_closing_date(raw_text)
 
-    phone_m = PHONE_RE.search(raw_text)
-    phone = _clean(phone_m.group(0)) if phone_m else ''
-
-    req_m = re.search(
-        r'(?:Requirements?|Minimum\s+Requirements?|Qualifications?)[:\s]*\n+(.*?)(?:\n{2,}|$)',
-        raw_text, re.DOTALL | re.I
-    )
-    requirements = _clean(req_m.group(1))[:500] if req_m else ''
-
-    duties_m = re.search(
-        r'(?:Duties|Responsibilities|Key\s+Responsibilities)[:\s]*\n+(.*?)(?:\n{2,}|$)',
-        raw_text, re.DOTALL | re.I
-    )
-    duties = _clean(duties_m.group(1))[:500] if duties_m else ''
-
+    # ── Pad short descriptions ────────────────────────────────────────────────
     if len(description) < 200:
-        description = ' | '.join(filter(None, [description, requirements, duties]))
+        req_m = re.search(
+            r'(?:Requirements?|Minimum\s+Requirements?)[:\s]*\n+(.*?)(?:\n{2,}|$)',
+            raw_text, re.DOTALL | re.I
+        )
+        duties_m = re.search(
+            r'(?:Duties|Responsibilities|Key\s+Responsibilities)[:\s]*\n+(.*?)(?:\n{2,}|$)',
+            raw_text, re.DOTALL | re.I
+        )
+        extras = [
+            _clean(req_m.group(1))[:500]    if req_m    else '',
+            _clean(duties_m.group(1))[:500] if duties_m else '',
+        ]
+        description = ' | '.join(filter(None, [description] + extras))
 
     return job_record({
         'title':        title,
