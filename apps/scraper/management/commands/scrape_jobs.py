@@ -1,22 +1,5 @@
-"""
-scrape_jobs — bulk scraper command, no artificial limits.
-
-Usage:
-  python manage.py scrape_jobs
-  python manage.py scrape_jobs --types internship learnership bursary
-  python manage.py scrape_jobs --types internship learnership bursary entry_level low_barrier
-  python manage.py scrape_jobs --keywords "IT admin"
-  python manage.py scrape_jobs --max-jobs 500
-  python manage.py scrape_jobs --gov-only
-  python manage.py scrape_jobs --workers 6
-  python manage.py scrape_jobs --scrapers pnet careerjunction
-
-Available --types values:
-  internship, learnership, bursary, scholarship, graduate,
-  entry_level, low_barrier, permanent, all (default)
-"""
-
 from django.core.management.base import BaseCommand
+from django.db import close_old_connections
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from apps.scraper.scrapers.pnet import scrape_pnet
 from apps.scraper.scrapers.careerjunction import scrape_careerjunction, scrape_careerjunction_it
@@ -27,8 +10,6 @@ from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_es
 from apps.scraper.models import Job
 from apps.cv.models import CV
 
-# ─── Job type filter map ──────────────────────────────────────────────────────
-# Maps CLI/form slug → job_type strings stored on job records
 JOB_TYPE_MAP = {
     'internship':  ['internship'],
     'learnership': ['learnership'],
@@ -36,9 +17,9 @@ JOB_TYPE_MAP = {
     'scholarship': ['scholarship', 'bursary'],
     'graduate':    ['graduate'],
     'entry_level': ['entry level'],
-    'low_barrier': ['entry level'],   # also uses _low_barrier flag
+    'low_barrier': ['entry level'],
     'permanent':   ['Government / Permanent', 'Permanent'],
-    'all':         [],                # empty = no filter
+    'all':         [],
 }
 
 FRIENDLY_NAMES = {
@@ -53,7 +34,6 @@ FRIENDLY_NAMES = {
     'all':         'All Job Types',
 }
 
-# ─── Scraper registry ─────────────────────────────────────────────────────────
 SCRAPERS_PRIMARY = [
     ("DPSA",              scrape_dpsa,              "gov",    "dpsa"),
     ("SAYouth",           scrape_sayouth,           "gov",    "sayouth"),
@@ -80,12 +60,6 @@ except ImportError:
 GOV_PLATFORMS   = {"dpsa", "sayouth", "essa", "govza"}
 IT_PLATFORMS    = {"pnet", "careerjunction", "careerjunction_it"}
 GOV_PRIORITY_KW = "internship learnership entry level graduate IT"
-
-# These scrapers parse full documents (PDFs/circulars) regardless of search terms.
-# Applying a type filter before DB write would silently drop valid opportunities
-# when the user triggers a type-specific scrape (e.g. "learnership" would drop
-# DPSA internships since they have job_type='internship').
-# The UI filter handles display-level filtering separately.
 GOV_PDF_SCRAPERS = {'dpsa'}
 
 SCRAPER_MAX_PAGES = {
@@ -109,40 +83,22 @@ def _t(value, max_len):
 
 
 def _job_passes_type_filter(job, allowed_job_types):
-    """
-    Return True if this job should be kept given the selected type filters.
-    allowed_job_types: set of job_type strings (empty = keep all).
-    """
     if not allowed_job_types:
         return True
-
     jt = (job.get('job_type') or '').lower().strip()
-
-    # Direct match
     if jt in allowed_job_types:
         return True
-
-    # Low-barrier flag from dpsa scraper
     if 'entry level' in allowed_job_types and job.get('_low_barrier'):
         return True
-
-    # Partial match for edge cases
     for allowed in allowed_job_types:
         if allowed in jt:
             return True
-
     return False
 
 
 def _resolve_type_filter(type_slugs):
-    """
-    Convert list of CLI slugs e.g. ['internship', 'bursary'] into
-    a set of job_type strings to match against.
-    Returns empty set if 'all' is present or list is empty.
-    """
     if not type_slugs or 'all' in type_slugs:
         return set()
-
     resolved = set()
     for slug in type_slugs:
         resolved.update(JOB_TYPE_MAP.get(slug, [slug]))
@@ -182,7 +138,6 @@ class Command(BaseCommand):
             self.stderr.write("No active CV. Upload one first via /upload-cv/")
             return
 
-        # ── Type filter ───────────────────────────────────────────────────────
         type_slugs  = options.get("types") or ["all"]
         type_filter = _resolve_type_filter(type_slugs)
 
@@ -192,14 +147,12 @@ class Command(BaseCommand):
         else:
             self.stdout.write("Type filter: ALL (no filter)\n")
 
-        # ── Keywords ──────────────────────────────────────────────────────────
         keywords = options.get("keywords")
         user_set_keywords = bool(keywords)
         if not keywords:
             skills = cv.parsed_data.get("skills", [])
             keywords = " ".join(skills[:4]) if skills else "developer"
 
-        # Inject internship/learnership terms into keyword search when filtered
         if type_filter and not user_set_keywords:
             extra_kw = []
             if 'internship' in type_filter:
@@ -215,7 +168,6 @@ class Command(BaseCommand):
         workers       = options["workers"]
         skip_existing = not options.get("no_skip", False)
 
-        # ── Build scraper list ────────────────────────────────────────────────
         scrapers = list(SCRAPERS_PRIMARY)
         if options["include_jobspy"] and SCRAPERS_JOBSPY:
             scrapers += SCRAPERS_JOBSPY
@@ -234,7 +186,6 @@ class Command(BaseCommand):
                 self.stderr.write(f"No matching scrapers: {options['scrapers']}")
                 return
 
-        # ── Existing URL cache ────────────────────────────────────────────────
         existing_urls = set()
         if skip_existing:
             existing_urls = set(Job.objects.exclude(url="").values_list("url", flat=True))
@@ -247,7 +198,6 @@ class Command(BaseCommand):
 
         all_jobs = []
 
-        # ── Run scrapers ──────────────────────────────────────────────────────
         def _run_scraper(name, fn, tier, slug):
             kw = None
             if slug in {"sayouth", "essa", "govza"} and not user_set_keywords:
@@ -258,12 +208,6 @@ class Command(BaseCommand):
             try:
                 results = fn(kw, limit=limit_arg)
 
-                # Apply job type filter — but NOT for gov PDF scrapers (e.g. dpsa).
-                # DPSA parses the full circular PDF regardless of search terms,
-                # so filtering before DB write would silently drop internships
-                # when the user triggered scrape with a different type selected
-                # (e.g. "learnership" would drop job_type='internship' DPSA posts).
-                # The UI handles display-level filtering separately.
                 if type_filter and slug not in GOV_PDF_SCRAPERS:
                     before = len(results)
                     results = [j for j in results if _job_passes_type_filter(j, type_filter)]
@@ -271,7 +215,6 @@ class Command(BaseCommand):
                 else:
                     filtered_out = 0
 
-                # Skip existing URLs
                 if skip_existing and existing_urls:
                     before = len(results)
                     results = [j for j in results if j.get("url") not in existing_urls]
@@ -307,7 +250,6 @@ class Command(BaseCommand):
                 except Exception:
                     pass
 
-        # ── Dedup across scrapers ─────────────────────────────────────────────
         seen_keys = set()
         deduped = []
         for j in all_jobs:
@@ -322,7 +264,6 @@ class Command(BaseCommand):
 
         self.stdout.write(f"\n{len(all_jobs)} total → {len(deduped)} after dedup\n")
 
-        # Type breakdown summary
         type_counts = {}
         for j in deduped:
             jt = j.get('job_type', 'unknown')
@@ -333,6 +274,11 @@ class Command(BaseCommand):
                 self.stdout.write(f"  {jt:<30} {count}\n")
 
         # ── Write to DB ───────────────────────────────────────────────────────
+        # Refresh DB connections — Neon closes idle connections after ~5 min.
+        # The thread pool keeps the process alive past that timeout, so we
+        # must discard stale connections before touching the DB again.
+        close_old_connections()
+
         created = updated = skipped = errors = 0
 
         for j in deduped:
@@ -382,6 +328,7 @@ class Command(BaseCommand):
                 else:
                     skipped += 1
 
+        close_old_connections()
         self.stdout.write(self.style.SUCCESS(
             f"\n{'─'*50}\n"
             f"  ✓ Created : {created}\n"
