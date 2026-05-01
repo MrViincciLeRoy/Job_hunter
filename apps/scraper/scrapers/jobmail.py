@@ -1,3 +1,5 @@
+# apps/scraper/scrapers/jobmail.py
+
 import re
 import time
 import random
@@ -14,6 +16,12 @@ START_URL = 'https://www.jobmail.co.za/jobs/it-computer?sort=latest'
 
 PHONE_RE = re.compile(r'(\+27|0)[0-9()\s-]{8,14}')
 
+# Emails that belong to the platform itself, not the employer
+_PLATFORM_EMAIL_DOMAINS = {
+    'jobmail.co.za', 'gumtree.co.za', 'careers24.com',
+    'pnet.co.za', 'careerjunction.co.za', 'communicate.co.za',
+}
+
 
 def _clean(t):
     return re.sub(r'\s+', ' ', t or '').strip()
@@ -22,6 +30,30 @@ def _clean(t):
 def _extract_id(url):
     m = re.search(r'-id-(\d+)', url)
     return m.group(1) if m else ''
+
+
+def _is_platform_email(email: str) -> bool:
+    """Return True if email belongs to a job board or recruiter platform, not a real employer."""
+    domain = email.lower().split('@')[-1] if '@' in email else ''
+    return domain in _PLATFORM_EMAIL_DOMAINS
+
+
+def _extract_contact_email(raw_text: str) -> str:
+    """Extract email from Contact [Name] on [email] pattern."""
+    m = re.search(
+        r'Contact\s+\w[\w\s]+\s+on\s+([\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})',
+        raw_text, re.IGNORECASE
+    )
+    if m:
+        return m.group(1)
+    # Also catch "email: addr" or "e-mail: addr"
+    m = re.search(
+        r'e-?mail[:\s]+([^\s,<>]+@[^\s,<>]+\.[a-zA-Z]{2,})',
+        raw_text, re.IGNORECASE
+    )
+    if m:
+        return m.group(1)
+    return ''
 
 
 def _parse_listing_page(html, keywords=None):
@@ -34,10 +66,22 @@ def _parse_listing_page(html, keywords=None):
         job_id = _extract_id(href)
         if not job_id or job_id in seen_ids:
             continue
-        seen_ids.add(job_id)
-        title = _clean(a.get_text())
-        if not title or len(title) < 3:
+
+        # Skip pagination/nav links — they wrap large blocks of text
+        # Real job title links are short and don't contain newlines
+        raw_text = a.get_text(separator=' ')
+        title = _clean(raw_text)
+
+        # Filter out search-result page links (e.g. "5 Architect jobs in Gauteng on Job Mail")
+        if re.search(r'\d+\s+\w+\s+jobs?\s+in\b', title, re.IGNORECASE):
             continue
+        if not title or len(title) < 3 or len(title) > 120:
+            continue
+        # Skip if it reads like a sentence (pagination text tends to be long)
+        if title.count(' ') > 10:
+            continue
+
+        seen_ids.add(job_id)
         parts = href.strip('/').split('/')
         location = parts[3].replace('-', ' ').title() if len(parts) > 3 else 'South Africa'
         full_url = href if href.startswith('http') else BASE_URL + href
@@ -65,6 +109,10 @@ def _scrape_detail(url):
     if not title:
         return None
 
+    # Skip search-results pages that slipped through
+    if re.search(r'\d+\s+\w+\s+jobs?\s+in\b', title, re.IGNORECASE):
+        return None
+
     comp_m = re.search(r'(?:Recruiter|Company|Employer|Posted\s+by)[:\s]+([^\n]+)', raw_text, re.I)
     company = _clean(comp_m.group(1)) if comp_m else ''
 
@@ -83,19 +131,29 @@ def _scrape_detail(url):
     )
     job_type = job_type_m.group(0).title() if job_type_m else ''
 
+    # Extract description — use semantic selectors first, fall back to text between markers
     description = ''
-    desc_m = re.search(
-        r'Apply Now\s*(.+?)(?:Apply Now|Create your FREE|Get notified|Sign in)',
-        raw_text, re.DOTALL | re.IGNORECASE
-    )
-    if desc_m:
-        description = _clean(desc_m.group(1))
+    for sel in ['.job-description', '.description', '[class*="job-detail"]', 'article', '.content', 'main']:
+        el = soup.select_one(sel)
+        if el:
+            description = _clean(el.get_text('\n'))
+            break
+
     if not description:
-        for sel in ['.job-description', '.description', 'article', '.content', 'main']:
-            el = soup.select_one(sel)
-            if el:
-                description = _clean(el.get_text('\n'))
-                break
+        desc_m = re.search(
+            r'Apply Now\s*(.+?)(?:Apply Now|Create your FREE|Get notified|Sign in)',
+            raw_text, re.DOTALL | re.IGNORECASE
+        )
+        if desc_m:
+            description = _clean(desc_m.group(1))
+
+    # Strip recruiter boilerplate from description
+    description = re.sub(
+        r'Connect\s+with\s+us\s+on\s+www\..+$', '', description, flags=re.DOTALL | re.IGNORECASE
+    ).strip()
+    description = re.sub(
+        r'Register\s+your\s+CV\s+to\s+create.+$', '', description, flags=re.DOTALL | re.IGNORECASE
+    ).strip()
 
     how_to_apply_m = re.search(
         r'(?:How\s+to\s+Apply|To\s+Apply|Send.*?CV|Forward.*?CV|'
@@ -104,11 +162,20 @@ def _scrape_detail(url):
     )
     how_to_apply = _clean(how_to_apply_m.group(1)) if how_to_apply_m else ''
 
-    apply_email = extract_email_priority(
-        how_to_apply=how_to_apply,
-        description=description,
-        raw_text=raw_text,
-    )
+    # Email: try contact-name pattern first (common on JobMail)
+    apply_email = _extract_contact_email(raw_text)
+
+    # Fall back to standard priority extraction, skipping platform-owned emails
+    if not apply_email:
+        apply_email = extract_email_priority(
+            how_to_apply=how_to_apply,
+            description=description,
+            raw_text=raw_text,
+        )
+
+    # Never store a platform/job-board email as the apply email
+    if apply_email and _is_platform_email(apply_email):
+        apply_email = ''
 
     closing_date = extract_closing_date(raw_text)
 
@@ -163,11 +230,7 @@ def _collect_links(keywords, max_pages=20):
 
     for start_url in urls_to_try:
         for pg in range(1, max_pages + 1):
-            if pg == 1:
-                url = start_url
-            else:
-                base_path = start_url.split('?')[0]
-                url = f'{base_path}/page{pg}?sort=latest'
+            url = start_url if pg == 1 else f'{start_url.split("?")[0]}/page{pg}?sort=latest'
 
             session.headers.update(random_headers())
             try:
