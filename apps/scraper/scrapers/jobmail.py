@@ -1,4 +1,5 @@
 import re
+import json
 import time
 import random
 import requests
@@ -19,14 +20,17 @@ _PLATFORM_EMAIL_DOMAINS = {
     'pnet.co.za', 'careerjunction.co.za', 'communicate.co.za',
 }
 
-# Salary: word boundary before R, SA format R156 000,00 or R156,000 or R156000
+# Tighter pattern: requires at least 4 digits (R1 000 minimum) to avoid R0/R2 garbage.
+# Handles: R50 000,00 | R50,000 | R50000 | R1 500 000 | ranges with –
 _SALARY_RE = re.compile(
-    r'(?<![A-Za-z])'                             # not preceded by a letter
-    r'R\s*\d[\d\s]*(?:[.,]\d{2})?'              # R + number (e.g. R156 000,00)
-    r'(?:\s*[-–]\s*R\s*\d[\d\s]*(?:[.,]\d{2})?)?' # optional range
-    r'(?:\s*\([^)]{1,30}\))?',                   # optional "(PER YEAR)"
+    r'(?<![A-Za-z@])'
+    r'R\s*\d{1,3}(?:[\s\u00a0]\d{3})*(?:[.,]\d{2})?'       # e.g. R50 000,00
+    r'(?:\s*[-–]\s*R\s*\d{1,3}(?:[\s\u00a0]\d{3})*(?:[.,]\d{2})?)?'  # optional – R60 000,00
+    r'(?:\s*\(PER\s+(?:MONTH|YEAR|ANNUM)\))?',
     re.IGNORECASE,
 )
+
+_MIN_SALARY_DIGITS = 4   # must have at least 4 consecutive digits to be a real salary
 
 
 def _clean(t):
@@ -55,6 +59,69 @@ def _extract_contact_email(raw_text: str) -> str:
         raw_text, re.IGNORECASE
     )
     return m.group(1) if m else ''
+
+
+def _extract_salary_jsonld(soup) -> str:
+    """Pull salary from the JobPosting JSON-LD block — always accurate when present."""
+    tag = soup.find('script', type='application/ld+json', id='JobPosting')
+    if not tag:
+        tag = soup.find('script', type='application/ld+json')
+    if not tag:
+        return ''
+    try:
+        data = json.loads(tag.string or '')
+        if data.get('@type') != 'JobPosting':
+            return ''
+        bs = data.get('baseSalary', {})
+        val = bs.get('value', {})
+        mn  = val.get('minValue')
+        mx  = val.get('maxValue')
+        unit = val.get('unitText', '')
+        currency = bs.get('currency', 'ZAR')
+        if mn and mx and mn != mx:
+            return f'R{int(mn):,} – R{int(mx):,} ({unit})'
+        elif mn:
+            return f'R{int(mn):,} ({unit})'
+    except Exception:
+        pass
+    return ''
+
+
+def _extract_salary_html(soup) -> str:
+    """Pull from the structured salary element on the detail page."""
+    for sel in [
+        'a.details-salary-range b',
+        '.details-salary-range b',
+        '[class*="salary"] b',
+        '[class*="salary-range"] b',
+    ]:
+        el = soup.select_one(sel)
+        if el:
+            txt = _clean(el.get_text())
+            # Confirm it looks like a real ZAR amount (has digits)
+            if re.search(r'\d{3}', txt):
+                return txt
+    # Fallback: full salary container text
+    for sel in ['a.details-salary-range', '.details-salary-range']:
+        el = soup.select_one(sel)
+        if el:
+            txt = _clean(el.get_text())
+            if re.search(r'R\s*\d{3}', txt):
+                return txt
+    return ''
+
+
+def _extract_salary_text(raw_text: str) -> str:
+    """Regex extraction from raw text — last resort, filtered to avoid garbage."""
+    for m in _SALARY_RE.finditer(raw_text):
+        candidate = _clean(m.group(0))
+        # Must contain at least _MIN_SALARY_DIGITS consecutive digits
+        digits = re.sub(r'[^\d]', '', candidate)
+        if len(digits) >= _MIN_SALARY_DIGITS:
+            return candidate
+    # Soft fallbacks
+    soft = re.search(r'\b(Market\s+Related|Negotiable|CTC|TBC)\b', raw_text, re.I)
+    return _clean(soft.group(0)) if soft else ''
 
 
 def _parse_listing_page(html, keywords=None):
@@ -135,7 +202,7 @@ def _scrape_detail(url):
         m = re.search(r'(?:Location|City|Area|Province)[:\s]+([^\n]+)', raw_text, re.I)
         location = _clean(m.group(1)) if m else 'South Africa'
 
-    # ── Job Type — selector first, then regex with optional hyphen/space ─────
+    # ── Job Type ─────────────────────────────────────────────────────────────
     job_type = ''
     for sel in ['span.details-job-type', '[class*="job-type"]']:
         el = soup.select_one(sel)
@@ -150,19 +217,21 @@ def _scrape_detail(url):
         )
         job_type = m.group(0).title() if m else ''
 
-    # ── Salary — strict word-boundary pattern to avoid matching "r" in words ─
-    salary = ''
-    sal_m = _SALARY_RE.search(raw_text)
-    if sal_m:
-        salary = _clean(sal_m.group(0))
+    # ── Salary — 3-tier priority ──────────────────────────────────────────────
+    # 1. JSON-LD (most reliable — set by the site)
+    salary = _extract_salary_jsonld(soup)
+    # 2. Structured HTML element
     if not salary:
-        m2 = re.search(r'\b(Market\s+Related|Negotiable|CTC|TBC)\b', raw_text, re.I)
-        salary = _clean(m2.group(0)) if m2 else ''
+        salary = _extract_salary_html(soup)
+    # 3. Regex over raw text (catches salary buried in job summary)
+    if not salary:
+        salary = _extract_salary_text(raw_text)
 
-    # ── Description — target the active job-spec card body ───────────────────
+    # ── Description ──────────────────────────────────────────────────────────
     description = ''
+    job_id = _extract_id(url) or '0'
     for sel in [
-        '#pills-job-spec-' + (_extract_id(url) or '0') + ' .card-body',
+        f'#pills-job-spec-{job_id} .card-body',
         '.tab-pane.active .card-body',
         '.tab-pane.show .card-body',
         '.card-body',
@@ -176,7 +245,6 @@ def _scrape_detail(url):
                 description = txt
                 break
 
-    # Strip recruiter boilerplate
     for pat in [
         r'Connect\s+with\s+us\s+on\s+www\..+$',
         r'Register\s+your\s+CV\s+to\s+create.+$',
