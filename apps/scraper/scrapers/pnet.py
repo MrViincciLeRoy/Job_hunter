@@ -4,19 +4,12 @@ import re
 import json
 import time
 import random
-from utils.scraper_utils import random_headers, polite_delay, page_delay, job_record
+from utils.scraper_utils import (
+    random_headers, polite_delay, page_delay, job_record,
+    extract_email_priority, extract_closing_date,
+)
 
 BASE = "https://www.pnet.co.za"
-EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}")
-SKIP_EMAILS = {"noreply", "no-reply", "donotreply", "support@pnet", "info@pnet", "privacy", "legal"}
-
-
-def _find_email(text):
-    for m in EMAIL_RE.finditer(text):
-        e = m.group(0).lower()
-        if not any(s in e for s in SKIP_EMAILS):
-            return m.group(0)
-    return ""
 
 
 def _try_json_ld(soup):
@@ -36,7 +29,11 @@ def _try_json_ld(soup):
                     loc = item.get("jobLocation", {})
                     if isinstance(loc, dict):
                         addr = loc.get("address", {})
-                        location = addr.get("addressLocality", "") or addr.get("addressRegion", "") or "South Africa"
+                        location = (
+                            addr.get("addressLocality", "")
+                            or addr.get("addressRegion", "")
+                            or "South Africa"
+                        )
                     url = item.get("url", "") or item.get("identifier", "")
                     desc = item.get("description", "")
                     salary_raw = ""
@@ -47,17 +44,24 @@ def _try_json_ld(soup):
                             mn = val.get("minValue", "")
                             mx = val.get("maxValue", "")
                             salary_raw = f"R{mn} - R{mx}" if mn and mx else str(mn or mx)
+
+                    closing_date = extract_closing_date(
+                        item.get("validThrough", "") + " " + desc
+                    )
+                    apply_email = extract_email_priority(description=desc)
+
                     if title:
                         jobs.append(job_record({
-                            "title": title,
-                            "company": company,
-                            "location": location or "South Africa",
-                            "description": desc[:2000],
-                            "url": url,
-                            "apply_email": _find_email(desc),
-                            "platform": "pnet",
-                            "salary": salary_raw,
-                            "job_type": item.get("employmentType", ""),
+                            "title":        title,
+                            "company":      company,
+                            "location":     location or "South Africa",
+                            "description":  desc[:2000],
+                            "url":          url,
+                            "apply_email":  apply_email,
+                            "platform":     "pnet",
+                            "salary":       salary_raw,
+                            "job_type":     item.get("employmentType", ""),
+                            "closing_date": closing_date,
                         }))
         except Exception:
             pass
@@ -79,12 +83,18 @@ def _collect_listing_links(keywords, max_pages=50):
     for base_url in url_patterns:
         for pg in range(1, max_pages + 1):
             session.headers.update(random_headers())
-            url = base_url if pg == 1 else f"{base_url}?page={pg}" if "?" not in base_url else f"{base_url}&page={pg}"
+            url = (
+                base_url
+                if pg == 1
+                else (
+                    f"{base_url}?page={pg}"
+                    if "?" not in base_url
+                    else f"{base_url}&page={pg}"
+                )
+            )
             try:
                 r = session.get(url, timeout=20)
                 soup = BeautifulSoup(r.text, "html.parser")
-
-                # collect detail page links
                 found = []
                 for a in soup.find_all("a", href=re.compile(r"/jobs/[^/]+-\d+/?$")):
                     href = a["href"]
@@ -93,7 +103,6 @@ def _collect_listing_links(keywords, max_pages=50):
                     if key not in seen and key != f"{BASE}/jobs/":
                         seen.add(key)
                         found.append(key)
-
                 if not found:
                     break
                 links.extend(found)
@@ -102,7 +111,6 @@ def _collect_listing_links(keywords, max_pages=50):
             except Exception as e:
                 print(f"[PNet] Page {pg} error: {e}")
                 break
-
         if links:
             break
 
@@ -119,11 +127,14 @@ def _scrape_detail(url):
     soup = BeautifulSoup(r.text, "html.parser")
     raw_text = soup.get_text(separator="\n", strip=True)
 
-    # try JSON-LD first
     ld_jobs = _try_json_ld(soup)
     if ld_jobs:
         j = ld_jobs[0]
         j["url"] = url
+        if not j.get("apply_email"):
+            j["apply_email"] = extract_email_priority(raw_text=raw_text)
+        if not j.get("closing_date"):
+            j["closing_date"] = extract_closing_date(raw_text)
         return j
 
     selector_sets = [
@@ -152,38 +163,69 @@ def _scrape_detail(url):
     if not title:
         return None
 
-    salary_m = re.search(r'(R\s?[\d ,]+(?:\s*[-–]\s*R\s?[\d ,]+)?|Market Related|Negotiable)', raw_text, re.I)
+    salary_m = re.search(
+        r'(R\s?[\d ,]+(?:\s*[-–]\s*R\s?[\d ,]+)?|Market\s+Related|Negotiable)',
+        raw_text, re.I
+    )
     salary = salary_m.group(0).strip() if salary_m else ""
 
-    job_type_m = re.search(r'(Permanent|Contract|Temporary|Internship|Learnership|Part.time|Full.time)', raw_text, re.I)
+    job_type_m = re.search(
+        r'\b(Permanent|Contract|Temporary|Internship|Learnership|Part[- ]time|Full[- ]time)\b',
+        raw_text, re.I
+    )
     job_type = job_type_m.group(0).strip() if job_type_m else ""
 
-    location_m = re.search(r'(?:Location|City)[:\s]+([^\n]+)', raw_text, re.I)
+    location_m = re.search(r"(?:Location|City)[:\s]+([^\n]+)", raw_text, re.I)
     location = location_m.group(1).strip() if location_m else "South Africa"
+
+    req_m = re.search(
+        r"(?:Minimum\s+Requirements?|Requirements?|Qualifications?)[:\s]*\n+(.*?)(?:\n{2,}|Duties|Skills|$)",
+        raw_text, re.DOTALL | re.I
+    )
+    requirements = req_m.group(1).strip()[:600] if req_m else ""
+
+    duties_m = re.search(
+        r"(?:Duties\s+(?:and\s+)?Responsibilities|Responsibilities|Key\s+Duties)[:\s]*\n+(.*?)(?:\n{2,}|Requirements?|Skills|$)",
+        raw_text, re.DOTALL | re.I
+    )
+    duties = duties_m.group(1).strip()[:600] if duties_m else ""
 
     desc_el = soup.select_one("[class*='description'], article, main, [class*='job-detail']")
     description = desc_el.get_text(separator="\n", strip=True)[:2000] if desc_el else ""
+    if len(description) < 300 and (requirements or duties):
+        description = " | ".join(filter(None, [description, requirements, duties]))
 
-    how_to_apply_m = re.search(r'(?:How to Apply|To Apply|Application Process)[:\s]*([^\n]{10,300})', raw_text, re.I)
+    how_to_apply_m = re.search(
+        r"(?:How\s+to\s+Apply|To\s+Apply|Application\s+Process)[:\s]*([^\n]{10,300})",
+        raw_text, re.I
+    )
     how_to_apply = how_to_apply_m.group(1).strip() if how_to_apply_m else ""
 
+    apply_email = extract_email_priority(
+        how_to_apply=how_to_apply,
+        description=description,
+        raw_text=raw_text,
+    )
+
+    closing_date = extract_closing_date(raw_text)
+
     return job_record({
-        "title": title,
-        "company": company,
-        "location": location,
-        "description": description,
-        "url": url,
-        "apply_email": _find_email(description) or _find_email(raw_text),
-        "platform": "pnet",
-        "salary": salary,
-        "job_type": job_type,
+        "title":        title,
+        "company":      company,
+        "location":     location,
+        "description":  description,
+        "url":          url,
+        "apply_email":  apply_email,
+        "platform":     "pnet",
+        "salary":       salary,
+        "job_type":     job_type,
         "how_to_apply": how_to_apply,
-        "raw_text": raw_text[:3000],
+        "closing_date": closing_date,
+        "raw_text":     raw_text[:3000],
     })
 
 
 def scrape_pnet(keywords="developer", limit=500):
-    # First try JSON-LD from listing pages (fast bulk path)
     query = keywords.strip().replace(" ", "-").lower()
     bulk_jobs = []
     seen_titles = set()
@@ -197,7 +239,15 @@ def scrape_pnet(keywords="developer", limit=500):
     for base_url in listing_urls:
         for pg in range(1, 51):
             session.headers.update(random_headers())
-            url = base_url if pg == 1 else (f"{base_url}?page={pg}" if "?" not in base_url else f"{base_url}&page={pg}")
+            url = (
+                base_url
+                if pg == 1
+                else (
+                    f"{base_url}?page={pg}"
+                    if "?" not in base_url
+                    else f"{base_url}&page={pg}"
+                )
+            )
             try:
                 r = session.get(url, timeout=20)
                 soup = BeautifulSoup(r.text, "html.parser")
@@ -222,7 +272,6 @@ def scrape_pnet(keywords="developer", limit=500):
         print(f"[PNet] Fast path: {len(bulk_jobs)} jobs via JSON-LD")
         return bulk_jobs[:limit]
 
-    # Fallback: scrape detail pages individually
     print("[PNet] JSON-LD empty, falling back to detail scraping...")
     links = _collect_listing_links(keywords, max_pages=50)
     if not links:

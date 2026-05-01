@@ -2,21 +2,15 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from .async_http import parallel_fetch
-from utils.scraper_utils import random_headers, polite_delay, page_delay, job_record
+from utils.scraper_utils import (
+    random_headers, polite_delay, page_delay, job_record,
+    extract_email_priority, extract_closing_date,
+)
 
-BASE_URL = 'https://www.careerjunction.co.za'
-IT_SEARCH_URL = f'{BASE_URL}/jobs/results?Location=1&SortBy=Relevance&rbcat=16&lr=0'
+BASE_URL          = 'https://www.careerjunction.co.za'
+IT_SEARCH_URL      = f'{BASE_URL}/jobs/results?Location=1&SortBy=Relevance&rbcat=16&lr=0'
 GENERAL_SEARCH_URL = f'{BASE_URL}/jobs/results?Location=1&SortBy=Relevance&lr=0'
-EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
-SKIP_EMAILS = {'noreply', 'no-reply', 'donotreply', 'info@careerjunction', 'support@careerjunction', 'privacy', 'legal'}
-
-
-def _find_email(text):
-    for m in EMAIL_RE.finditer(text):
-        e = m.group(0).lower()
-        if not any(s in e for s in SKIP_EMAILS):
-            return m.group(0)
-    return ''
+PHONE_RE = re.compile(r'(\+27|0)[0-9()\s-]{8,14}')
 
 
 def _get_listing_links(search_url, per_page=100, max_pages=20):
@@ -73,17 +67,20 @@ def _scrape_job(url):
         return None
 
     company = text('h2 a') or text('h2')
-    meta_items = [el.get_text(strip=True) for el in soup.select('ul.job-summary li, .job-details li, section ul li')]
 
-    salary = job_type = location = closing_date = ''
+    meta_items = [
+        el.get_text(strip=True)
+        for el in soup.select('ul.job-summary li, .job-details li, section ul li')
+    ]
+
+    salary = job_type = location = ''
     for item in meta_items:
         item_l = item.lower()
-        if 'undisclosed' in item_l or item.startswith('R ') or 'market related' in item_l or re.match(r'R\s*[\d,]+', item):
+        if any(x in item_l for x in ['undisclosed', 'market related']) or re.match(r'R\s?[\d,]+', item):
             salary = item
-        elif any(t in item_l for t in ['permanent', 'contract', 'temporary', 'internship', 'learnership', 'part-time', 'full-time']):
+        elif any(t in item_l for t in ['permanent', 'contract', 'temporary', 'internship',
+                                        'learnership', 'part-time', 'full-time']):
             job_type = item
-        elif re.search(r'\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)', item_l):
-            closing_date = item
         elif not location and len(item) < 60 and re.match(r'^[A-Z][a-z]', item):
             location = item
 
@@ -91,32 +88,62 @@ def _scrape_job(url):
         loc_m = re.search(r'(?:Location|City)[:\s]+([^\n]+)', raw_text, re.I)
         location = loc_m.group(1).strip() if loc_m else 'South Africa'
 
-    desc_el = soup.select_one('.job-description, article, .about-position, section.description, [class*="description"]')
+    desc_el = soup.select_one(
+        '.job-description, article, .about-position, section.description, '
+        '[class*="description"], [class*="Description"]'
+    )
     description = desc_el.get_text(separator='\n', strip=True) if desc_el else ''
     if not description:
-        m = re.search(r'About the position(.+?)(?:Apply Now|Desired Skills|$)', raw_text, re.DOTALL | re.IGNORECASE)
+        m = re.search(r'About the position(.+?)(?:Apply Now|Desired Skills|$)', raw_text, re.DOTALL | re.I)
         description = m.group(1).strip() if m else ''
 
-    how_to_apply_m = re.search(r'(?:How to Apply|To Apply|Application Process)[:\s]*([^\n]{10,300})', raw_text, re.I)
+    req_m = re.search(
+        r'(?:Minimum\s+Requirements?|Requirements?|Qualifications?)[:\s]*\n+(.*?)(?:\n{2,}|Duties|Skills|$)',
+        raw_text, re.DOTALL | re.I
+    )
+    requirements = req_m.group(1).strip()[:600] if req_m else ''
+
+    duties_m = re.search(
+        r'(?:Duties\s+(?:and\s+)?Responsibilities|Responsibilities|Key\s+Duties)[:\s]*\n+(.*?)(?:\n{2,}|Requirements?|Skills|$)',
+        raw_text, re.DOTALL | re.I
+    )
+    duties = duties_m.group(1).strip()[:600] if duties_m else ''
+
+    if len(description) < 300 and (requirements or duties):
+        description = ' | '.join(filter(None, [description, requirements, duties]))
+
+    how_to_apply_m = re.search(
+        r'(?:How\s+to\s+Apply|To\s+Apply|Application\s+Process|'
+        r'Forward.*?CV|Send.*?CV|email.*?CV)[:\s]*([^\n]{10,300})',
+        raw_text, re.I
+    )
     how_to_apply = how_to_apply_m.group(1).strip() if how_to_apply_m else ''
 
-    phone_m = re.search(r'(\+27|0)[0-9()\s-]{8,14}', raw_text)
+    apply_email = extract_email_priority(
+        how_to_apply=how_to_apply,
+        description=description,
+        raw_text=raw_text,
+    )
+
+    closing_date = extract_closing_date(raw_text)
+
+    phone_m = PHONE_RE.search(raw_text)
     phone = phone_m.group(0).strip() if phone_m else ''
 
     return job_record({
-        'title': title,
-        'company': company,
-        'location': location,
-        'salary': salary,
-        'job_type': job_type,
+        'title':        title,
+        'company':      company,
+        'location':     location,
+        'salary':       salary,
+        'job_type':     job_type,
         'closing_date': closing_date,
-        'apply_email': _find_email(description) or _find_email(raw_text),
-        'phone': phone,
+        'apply_email':  apply_email,
+        'phone':        phone,
         'how_to_apply': how_to_apply,
-        'url': url,
-        'platform': 'careerjunction',
-        'description': description[:2000],
-        'raw_text': raw_text[:3000],
+        'url':          url,
+        'platform':     'careerjunction',
+        'description':  description[:2000],
+        'raw_text':     raw_text[:3000],
     })
 
 

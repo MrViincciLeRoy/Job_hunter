@@ -4,26 +4,15 @@ import random
 import requests
 from bs4 import BeautifulSoup
 from .async_http import parallel_fetch
-from utils.scraper_utils import random_headers, job_record
+from utils.scraper_utils import (
+    random_headers, job_record,
+    extract_email_priority, extract_closing_date,
+)
 
 BASE_URL  = 'https://www.jobmail.co.za'
 START_URL = 'https://www.jobmail.co.za/jobs/it-computer?sort=latest'
 
-EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
-SKIP_EMAILS = {
-    'noreply', 'no-reply', 'donotreply',
-    'support@jobmail', 'info@jobmail', 'privacy@jobmail',
-    'help@jobmail', 'legal@jobmail',
-}
 PHONE_RE = re.compile(r'(\+27|0)[0-9()\s-]{8,14}')
-
-
-def _find_email(text):
-    for m in EMAIL_RE.finditer(text):
-        e = m.group(0).lower()
-        if not any(s in e for s in SKIP_EMAILS):
-            return m.group(0)
-    return ''
 
 
 def _clean(t):
@@ -40,7 +29,6 @@ def _parse_listing_page(html, keywords=None):
     cards = []
     seen_ids = set()
 
-    # Primary pattern: /jobs/{cat}/{location}/{slug}-id-{id}
     for a in soup.find_all('a', href=re.compile(r'/jobs/.+-id-\d+')):
         href = a.get('href', '')
         job_id = _extract_id(href)
@@ -77,24 +65,31 @@ def _scrape_detail(url):
     if not title:
         return None
 
-    comp_m = re.search(r'(?:Recruiter|Company|Employer)[:\s]+([^\n]+)', raw_text, re.I)
+    comp_m = re.search(r'(?:Recruiter|Company|Employer|Posted\s+by)[:\s]+([^\n]+)', raw_text, re.I)
     company = _clean(comp_m.group(1)) if comp_m else ''
 
-    loc_m = re.search(r'(?:Location|City|Area)[:\s]+([^\n]+)', raw_text, re.I)
-    location = _clean(loc_m.group(1)) if loc_m else 'South Africa'
+    loc_el = soup.select_one('[class*="location"], [data-qa*="location"], [itemprop="addressLocality"]')
+    location = _clean(loc_el.get_text()) if loc_el else ''
+    if not location:
+        loc_m = re.search(r'(?:Location|City|Area|Province)[:\s]+([^\n]+)', raw_text, re.I)
+        location = _clean(loc_m.group(1)) if loc_m else 'South Africa'
 
-    salary_m = re.search(r'(R[\d ,]+(?:\s*[-–]\s*R[\d ,]+)?|Market Related|Negotiable|CTC)', raw_text, re.I)
+    salary_m = re.search(r'(R[\d ,]+(?:\s*[-–]\s*R[\d ,]+)?|Market\s+Related|Negotiable|CTC)', raw_text, re.I)
     salary = _clean(salary_m.group(0)) if salary_m else ''
 
-    job_type_m = re.search(r'(permanent|contract|temporary|internship|learnership|part.time|full.time)', raw_text, re.I)
+    job_type_m = re.search(
+        r'\b(permanent|contract|temporary|internship|learnership|part[- ]time|full[- ]time)\b',
+        raw_text, re.I
+    )
     job_type = job_type_m.group(0).title() if job_type_m else ''
 
-    # Description: grab the main body block
+    description = ''
     desc_m = re.search(
         r'Apply Now\s*(.+?)(?:Apply Now|Create your FREE|Get notified|Sign in)',
         raw_text, re.DOTALL | re.IGNORECASE
     )
-    description = _clean(desc_m.group(1)) if desc_m else ''
+    if desc_m:
+        description = _clean(desc_m.group(1))
     if not description:
         for sel in ['.job-description', '.description', 'article', '.content', 'main']:
             el = soup.select_one(sel)
@@ -103,39 +98,56 @@ def _scrape_detail(url):
                 break
 
     how_to_apply_m = re.search(
-        r'(?:How to Apply|To Apply|Send.*?CV|Application Process)[:\s]*([^\n]{10,300})',
+        r'(?:How\s+to\s+Apply|To\s+Apply|Send.*?CV|Forward.*?CV|'
+        r'Application\s+Process|Apply\s+(?:via|by|to))[:\s]*([^\n]{10,300})',
         raw_text, re.I
     )
     how_to_apply = _clean(how_to_apply_m.group(1)) if how_to_apply_m else ''
 
+    apply_email = extract_email_priority(
+        how_to_apply=how_to_apply,
+        description=description,
+        raw_text=raw_text,
+    )
+
+    closing_date = extract_closing_date(raw_text)
+
     phone_m = PHONE_RE.search(raw_text)
     phone = _clean(phone_m.group(0)) if phone_m else ''
 
-    closing_m = re.search(r'(?:Closing Date|Deadline)[:\s]*([^\n]{5,40})', raw_text, re.I)
-    closing_date = _clean(closing_m.group(1)) if closing_m else ''
+    req_m = re.search(
+        r'(?:Requirements?|Minimum\s+Requirements?|Qualifications?)[:\s]*\n+(.*?)(?:\n{2,}|$)',
+        raw_text, re.DOTALL | re.I
+    )
+    requirements = _clean(req_m.group(1))[:500] if req_m else ''
+
+    duties_m = re.search(
+        r'(?:Duties|Responsibilities|Key\s+Responsibilities)[:\s]*\n+(.*?)(?:\n{2,}|$)',
+        raw_text, re.DOTALL | re.I
+    )
+    duties = _clean(duties_m.group(1))[:500] if duties_m else ''
+
+    if len(description) < 200:
+        description = ' | '.join(filter(None, [description, requirements, duties]))
 
     return job_record({
-        'title': title,
-        'company': company,
-        'location': location,
-        'salary': salary,
-        'job_type': job_type,
+        'title':        title,
+        'company':      company,
+        'location':     location,
+        'salary':       salary,
+        'job_type':     job_type,
         'closing_date': closing_date,
-        'apply_email': _find_email(description) or _find_email(raw_text),
-        'phone': phone,
+        'apply_email':  apply_email,
+        'phone':        phone,
         'how_to_apply': how_to_apply,
-        'url': url,
-        'platform': 'jobmail',
-        'description': description[:2000],
-        'raw_text': raw_text[:3000],
+        'url':          url,
+        'platform':     'jobmail',
+        'description':  description[:2000],
+        'raw_text':     raw_text[:3000],
     })
 
 
 def _collect_links(keywords, max_pages=20):
-    """
-    Walk JobMail paginator — up to max_pages (default 20, ~600 listings).
-    Tries keyword-specific URL first, falls back to IT category.
-    """
     session = requests.Session()
     session.headers.update(random_headers())
     all_cards = []
@@ -154,7 +166,6 @@ def _collect_links(keywords, max_pages=20):
             if pg == 1:
                 url = start_url
             else:
-                # JobMail pagination: /jobs/{cat}/page{N}?sort=latest
                 base_path = start_url.split('?')[0]
                 url = f'{base_path}/page{pg}?sort=latest'
 
@@ -177,7 +188,6 @@ def _collect_links(keywords, max_pages=20):
                     seen_ids.add(c['job_id'])
                 all_cards.extend(new_cards)
                 print(f'[JobMail] Page {pg}: {len(new_cards)} new cards (total: {len(all_cards)})')
-
                 time.sleep(random.uniform(0.8, 2.0))
 
             except Exception as e:
@@ -192,10 +202,6 @@ def _collect_links(keywords, max_pages=20):
 
 
 def scrape_jobmail(keywords=None, limit=500):
-    """
-    Scrape up to `limit` JobMail listings across up to 20 pages.
-    Default limit=500 is effectively uncapped for normal usage.
-    """
     cards = _collect_links(keywords, max_pages=20)
     if not cards:
         print('[JobMail] No jobs found')

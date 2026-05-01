@@ -2,26 +2,13 @@ import re
 import time
 import requests
 from bs4 import BeautifulSoup
-from utils.scraper_utils import random_headers, polite_delay, page_delay, job_record
+from utils.scraper_utils import (
+    random_headers, polite_delay, page_delay, job_record,
+    extract_email_priority, extract_closing_date,
+)
 from apps.scraper.scrapers.async_http import parallel_fetch
 
 BASE_URL = "https://www.careers24.com"
-EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}")
-SKIP_DOMAINS = {
-    "careers24.com", "pnet.co.za", "careerjunction.co.za", "jobmail.co.za",
-    "gumtree.co.za", "linkedin.com", "indeed.com", "glassdoor.com",
-}
-SKIP_PREFIXES = {"noreply", "no-reply", "donotreply", "privacy", "legal", "support", "info", "admin", "webmaster"}
-
-
-def _find_email(text):
-    for m in EMAIL_RE.finditer(text):
-        e = m.group(0).lower()
-        local, domain = e.split("@", 1)
-        if domain in SKIP_DOMAINS or local in SKIP_PREFIXES:
-            continue
-        return m.group(0)
-    return ""
 
 
 def _clean(t):
@@ -101,20 +88,23 @@ def _scrape_detail(url):
     salary_m = re.search(r"(?:Salary|Remuneration|Package)[:\s]*([^\n]{3,80})", text, re.I)
     salary = _clean(salary_m.group(1)) if salary_m else ""
 
-    job_type_m = re.search(r"(?:Job Type|Contract Type|Employment Type)[:\s]*([^\n]{3,50})", text, re.I)
+    job_type_m = re.search(
+        r"(?:Job Type|Contract Type|Employment Type)[:\s]*([^\n]{3,50})", text, re.I
+    )
     job_type = _clean(job_type_m.group(1)) if job_type_m else ""
 
-    closing_m = re.search(r"(?:Closing Date|Deadline)[:\s]*([^\n]{3,50})", text, re.I)
-    closing_date = _clean(closing_m.group(1)) if closing_m else ""
+    req_m = re.search(
+        r"(?:Minimum\s+Requirements?|Requirements?|Qualifications?)[:\s]*\n+(.*?)(?:\n{2,}|Knowledge|Skills|Salary|$)",
+        text, re.DOTALL | re.I
+    )
+    requirements = _clean(req_m.group(1))[:600] if req_m else ""
 
     duties_m = re.search(
-        r"(?:Duties\s+and\s+Responsibilities|Duties|Responsibilities)[:\s]*\n+(.+?)(?:\n{2,}|Minimum\s+Requirements|Requirements|Skills|Salary|$)",
+        r"(?:Duties\s+(?:and\s+)?Responsibilities|Responsibilities|Key\s+Duties)[:\s]*\n+(.*?)(?:\n{2,}|Minimum\s+Requirements?|Requirements?|Skills|Salary|$)",
         text, re.DOTALL | re.I
     )
-    req_m = re.search(
-        r"(?:Minimum\s+Requirements|Requirements|Qualifications)[:\s]*\n+(.+?)(?:\n{2,}|Knowledge|Skills|Salary|$)",
-        text, re.DOTALL | re.I
-    )
+    duties = _clean(duties_m.group(1))[:600] if duties_m else ""
+
     description = " ".join(filter(None, [
         _clean(duties_m.group(1)) if duties_m else "",
         _clean(req_m.group(1)) if req_m else "",
@@ -123,22 +113,34 @@ def _scrape_detail(url):
         desc_el = soup.select_one("[class*='description'], article, main")
         description = _clean(desc_el.get_text("\n")) if desc_el else ""
 
-    apply_m = re.search(r"(?:How to Apply|To Apply|Application Process|Send.*?CV|Apply.*?via)[:\s]*([^\n]{10,200})", text, re.I)
+    apply_m = re.search(
+        r"(?:How\s+to\s+Apply|To\s+Apply|Application\s+Process|"
+        r"Send.*?CV|Apply.*?via)[:\s]*([^\n]{10,200})",
+        text, re.I
+    )
     how_to_apply = _clean(apply_m.group(1)) if apply_m else ""
 
+    apply_email = extract_email_priority(
+        how_to_apply=how_to_apply,
+        description=description,
+        raw_text=text,
+    )
+
+    closing_date = extract_closing_date(text)
+
     return job_record({
-        "title": title,
-        "company": company,
-        "location": location,
-        "description": description[:2000],
-        "url": url,
-        "apply_email": _find_email(text),
-        "platform": "careers24",
-        "salary": salary,
-        "job_type": job_type,
+        "title":        title,
+        "company":      company,
+        "location":     location,
+        "description":  description[:2000],
+        "url":          url,
+        "apply_email":  apply_email,
+        "platform":     "careers24",
+        "salary":       salary,
+        "job_type":     job_type,
         "closing_date": closing_date,
         "how_to_apply": how_to_apply,
-        "raw_text": text[:3000],
+        "raw_text":     text[:3000],
     })
 
 
