@@ -1,11 +1,8 @@
 """
 apps/accounts/cv_extractor.py
 
-Local CV extraction — no external API.
-Uses pdfplumber for text, then a layered regex/heuristic algo.
-
-Returned dict shape matches the Anthropic-extraction schema exactly,
-so the onboarding front-end works without changes.
+Pure local CV extraction — no external API.
+Uses pdfplumber / pypdf for text then layered regex + heuristics.
 """
 
 from __future__ import annotations
@@ -15,13 +12,17 @@ import re
 from datetime import datetime
 from typing import Any
 
-# ── PDF text extraction ────────────────────────────────────────────────────────
+
+# ── Text extraction ────────────────────────────────────────────────────────────
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     try:
         import pdfplumber
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            pages = [p.extract_text() or "" for p in pdf.pages]
+            pages = []
+            for p in pdf.pages:
+                text = p.extract_text(x_tolerance=2, y_tolerance=3) or ""
+                pages.append(text)
         return "\n".join(pages)
     except Exception:
         pass
@@ -36,154 +37,193 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
     try:
-        import docx2txt, io as _io
-        return docx2txt.process(_io.BytesIO(file_bytes))
+        import docx2txt
+        return docx2txt.process(io.BytesIO(file_bytes))
     except Exception:
-        return file_bytes.decode("utf-8", errors="ignore")
+        pass
+    return file_bytes.decode("utf-8", errors="ignore")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _clean(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip()
+    return re.sub(r"\s+", " ", s or "").strip()
 
 def _lines(text: str) -> list[str]:
     return [l.strip() for l in text.splitlines() if l.strip()]
 
-def _section_text(text: str, *headers: str, stop_headers: list[str] | None = None) -> str:
-    """
-    Extract text between a section header and the next known section header.
-    Case-insensitive. Returns empty string if not found.
-    """
-    stop = stop_headers or SECTION_HEADERS
-    pattern = r"(?i)(?:^|\n)(?:" + "|".join(re.escape(h) for h in headers) + r")\s*[:\-]?\s*\n([\s\S]*?)(?=\n(?:" + "|".join(re.escape(s) for s in stop) + r")\s*[:\-]?\s*\n|$)"
-    m = re.search(pattern, text)
+def _norm(text: str) -> str:
+    """Normalise unicode dashes/bullets to ASCII."""
+    return (text
+        .replace("\u2013", "-").replace("\u2014", "-")
+        .replace("\u2022", "*").replace("\u2019", "'")
+        .replace("\u00a0", " ").replace("\uf0b7", "*")
+    )
+
+
+# ── Section splitter ───────────────────────────────────────────────────────────
+
+# All known section headers (order matters for greedy matching)
+_ALL_HEADERS = [
+    "WORK EXPERIENCE", "PROFESSIONAL EXPERIENCE", "EMPLOYMENT HISTORY",
+    "CAREER HISTORY", "EXPERIENCE",
+    "EDUCATION AND TRAINING", "EDUCATION & TRAINING", "ACADEMIC BACKGROUND",
+    "ACADEMIC QUALIFICATIONS", "QUALIFICATIONS", "EDUCATION",
+    "TECHNICAL SKILLS", "CORE COMPETENCIES", "KEY COMPETENCIES",
+    "COMPUTER SKILLS", "IT SKILLS", "COMPETENCIES", "SKILLS",
+    "LANGUAGE PROFICIENCY", "LANGUAGES SPOKEN", "LANGUAGES",
+    "PROFESSIONAL REFERENCES", "CHARACTER REFERENCES", "REFERENCES",
+    "PROFESSIONAL SUMMARY", "EXECUTIVE SUMMARY", "CAREER OBJECTIVE",
+    "CAREER SUMMARY", "PROFILE SUMMARY", "PERSONAL PROFILE",
+    "OBJECTIVE", "SUMMARY", "PROFILE", "ABOUT ME", "ABOUT",
+    "CERTIFICATIONS", "CERTIFICATES", "ACHIEVEMENTS", "AWARDS",
+    "PROJECTS", "VOLUNTEER", "INTERESTS", "HOBBIES",
+    "PERSONAL DETAILS", "PERSONAL INFORMATION", "CONTACT DETAILS", "CONTACT",
+]
+
+_HEADER_PAT = re.compile(
+    r"(?:^|\n)\s*(" + "|".join(re.escape(h) for h in _ALL_HEADERS) + r")\s*[:\-]?\s*\n",
+    re.I | re.M,
+)
+
+
+def _get_section(text: str, *names: str) -> str:
+    """Return text between the first matching header and the next known header."""
+    text = _norm(text)
+    pat = re.compile(
+        r"(?:^|\n)\s*(?:" + "|".join(re.escape(n) for n in names) + r")\s*[:\-]?\s*\n([\s\S]*?)(?=\n\s*(?:" +
+        "|".join(re.escape(h) for h in _ALL_HEADERS) + r")\s*[:\-]?\s*\n|$)",
+        re.I | re.M,
+    )
+    m = pat.search(text)
     return m.group(1).strip() if m else ""
 
 
-SECTION_HEADERS = [
-    "EXPERIENCE", "WORK EXPERIENCE", "EMPLOYMENT", "EMPLOYMENT HISTORY",
-    "PROFESSIONAL EXPERIENCE", "CAREER HISTORY",
-    "EDUCATION", "QUALIFICATIONS", "ACADEMIC",
-    "SKILLS", "TECHNICAL SKILLS", "CORE COMPETENCIES", "COMPETENCIES",
-    "LANGUAGES", "LANGUAGE PROFICIENCY",
-    "REFERENCES", "REFEREES",
-    "SUMMARY", "PROFILE", "OBJECTIVE", "ABOUT",
-    "CERTIFICATIONS", "CERTIFICATES", "ACHIEVEMENTS",
-    "PROJECTS", "INTERESTS", "HOBBIES",
-    "CONTACT", "PERSONAL DETAILS", "PERSONAL INFORMATION",
-]
+# ── Contact info ───────────────────────────────────────────────────────────────
 
-
-# ── Contact / Personal ─────────────────────────────────────────────────────────
-
-EMAIL_RE    = re.compile(r"[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}")
-PHONE_RE    = re.compile(r"(?:\+?27|0)[\s\-]?[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}|\+?\d[\d\s\-().]{8,15}")
-LINKEDIN_RE = re.compile(r"(?:linkedin\.com/in/)([\w\-]+)", re.I)
-GITHUB_RE   = re.compile(r"(?:github\.com/)([\w\-]+)", re.I)
-URL_RE      = re.compile(r"https?://[\w./\-?=&%+#]+")
+_EMAIL_RE    = re.compile(r"[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}")
+_PHONE_RE    = re.compile(
+    r"(?:\+?27|0)[\s.\-]?(?:(?:6[0-9]|7[0-9]|8[0-9])[\s.\-]?\d{3}[\s.\-]?\d{4}"
+    r"|(?:1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])[\s.\-]?\d{3}[\s.\-]?\d{4})"
+    r"|\+\d{1,3}[\s.\-]?\(?\d{1,4}\)?[\s.\-]?\d{3}[\s.\-]?\d{3,4}"
+)
+_LINKEDIN_RE = re.compile(r"linkedin\.com/in/([\w\-]+)", re.I)
+_GITHUB_RE   = re.compile(r"github\.com/([\w\-]+)", re.I)
+_URL_RE      = re.compile(r"https?://[\w./\-?=&%+#@:]+")
 
 
 def _extract_email(text: str) -> str:
-    m = EMAIL_RE.search(text)
+    m = _EMAIL_RE.search(text)
     return m.group() if m else ""
 
 
 def _extract_phone(text: str) -> str:
-    m = PHONE_RE.search(text)
-    return _clean(m.group()) if m else ""
+    m = _PHONE_RE.search(text)
+    return re.sub(r"[\s.\-]", " ", m.group()).strip() if m else ""
 
 
 def _extract_linkedin(text: str) -> str:
-    m = LINKEDIN_RE.search(text)
+    m = _LINKEDIN_RE.search(text)
     return f"https://linkedin.com/in/{m.group(1)}" if m else ""
 
 
 def _extract_github(text: str) -> str:
-    m = GITHUB_RE.search(text)
+    m = _GITHUB_RE.search(text)
     return f"https://github.com/{m.group(1)}" if m else ""
 
 
 def _extract_portfolio(text: str) -> str:
-    # Return first URL that's not linkedin / github / email
-    for u in URL_RE.findall(text):
-        if not any(x in u.lower() for x in ("linkedin", "github", "mailto")):
+    for u in _URL_RE.findall(text):
+        if not any(x in u.lower() for x in ("linkedin", "github", "mailto", "facebook", "twitter", "instagram")):
             return u
     return ""
 
 
-def _extract_name(lines: list[str], email: str) -> tuple[str, str]:
-    """
-    Heuristic: the name is usually in the first 1-3 non-empty lines,
-    is NOT an email/phone/URL, and looks like 2-4 title-case words.
-    """
-    NAME_RE = re.compile(r"^[A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){1,3}$")
-    for line in lines[:8]:
+# ── Name ──────────────────────────────────────────────────────────────────────
+
+_NAME_RE = re.compile(r"^[A-Z][a-zA-Z'\-]{1,30}(?:\s+[A-Z][a-zA-Z'\-]{1,30}){1,4}$")
+
+
+def _extract_name(lines: list[str]) -> tuple[str, str]:
+    for line in lines[:10]:
         line = _clean(line)
-        if not line or "@" in line or re.search(r"\d{4}", line):
+        if not line or "@" in line or re.search(r"\d", line) or len(line) > 60:
             continue
-        if NAME_RE.match(line):
+        if _NAME_RE.match(line):
             parts = line.split()
             return parts[0], " ".join(parts[1:])
     return "", ""
 
 
-def _extract_location(text: str) -> str:
-    # Look for "City, Province" or "City, Country" patterns
-    LOC_RE = re.compile(
-        r"\b([A-Z][a-zA-Z\s]+),\s*([A-Z]{2}|[A-Z][a-zA-Z\s]+)\b"
-    )
-    # Prioritise lines with common SA cities / provinces
-    SA = re.compile(
-        r"\b(johannesburg|cape town|durban|pretoria|port elizabeth|gqeberha|bloemfontein|nelspruit|polokwane|east london|kimberley|rustenburg|soweto|tshwane|sandton|randburg|gauteng|western cape|kwazulu|limpopo|mpumalanga|north west|northern cape|free state|eastern cape)\b",
-        re.I,
-    )
-    for line in _lines(text)[:30]:
-        if SA.search(line):
-            return _clean(line)
-    m = LOC_RE.search(text[:500])
+# ── Location ──────────────────────────────────────────────────────────────────
+
+_SA_PLACES = re.compile(
+    r"\b(johannesburg|cape town|durban|pretoria|port elizabeth|gqeberha|"
+    r"bloemfontein|nelspruit|mbombela|polokwane|east london|kimberley|"
+    r"rustenburg|soweto|tshwane|sandton|randburg|centurion|midrand|"
+    r"roodepoort|benoni|boksburg|germiston|witbank|emalahleni|"
+    r"gauteng|western cape|kwazulu.natal|limpopo|mpumalanga|"
+    r"north west|northern cape|free state|eastern cape)\b",
+    re.I,
+)
+
+
+def _extract_location(lines: list[str], text: str) -> str:
+    # Prefer lines near the top that contain SA place names
+    for line in lines[:25]:
+        if _SA_PLACES.search(line):
+            cleaned = re.sub(r"[\|•:]+", ",", line)
+            # Strip contact noise
+            if "@" not in cleaned and not _PHONE_RE.search(cleaned):
+                return _clean(cleaned)
+    # Fallback: "City, Province" or "City, Country"
+    m = re.search(r"\b([A-Z][a-zA-Z\s]{2,20}),\s*([A-Z]{2}|[A-Z][a-zA-Z\s]{3,20})\b", text[:800])
     return _clean(m.group()) if m else ""
 
 
-# ── Summary / Bio ──────────────────────────────────────────────────────────────
+# ── Bio / Summary ──────────────────────────────────────────────────────────────
 
 def _extract_bio(text: str) -> str:
-    block = _section_text(text, "SUMMARY", "PROFILE", "OBJECTIVE", "ABOUT", "PROFESSIONAL SUMMARY")
-    if block:
-        # Cap at ~500 chars
-        return _clean(block[:500])
+    section = _get_section(
+        text,
+        "PROFESSIONAL SUMMARY", "EXECUTIVE SUMMARY", "CAREER SUMMARY",
+        "PERSONAL PROFILE", "PROFILE SUMMARY", "SUMMARY", "PROFILE",
+        "OBJECTIVE", "CAREER OBJECTIVE", "ABOUT ME", "ABOUT",
+    )
+    if section:
+        # Remove stray header lines, cap at 600 chars
+        lines = [l for l in section.splitlines() if l.strip() and len(l.strip()) > 15]
+        return _clean(" ".join(lines))[:600]
     return ""
 
 
 # ── Occupation ─────────────────────────────────────────────────────────────────
 
-TITLES = [
-    "developer", "engineer", "designer", "manager", "analyst", "consultant",
-    "architect", "specialist", "officer", "director", "lead", "head",
-    "accountant", "administrator", "coordinator", "technician", "programmer",
-    "scientist", "researcher", "teacher", "lecturer", "nurse", "doctor",
-    "sales", "marketing", "recruiter", "hr", "finance", "legal",
-]
+_TITLE_WORDS = re.compile(
+    r"\b(developer|engineer|designer|manager|analyst|consultant|architect|"
+    r"specialist|officer|director|lead|head|accountant|administrator|"
+    r"coordinator|technician|programmer|scientist|researcher|teacher|"
+    r"lecturer|nurse|doctor|pharmacist|attorney|lawyer|sales|marketing|"
+    r"recruiter|hr|human resources|finance|legal|buyer|planner|"
+    r"supervisor|foreman|driver|mechanic|electrician|plumber|welder|"
+    r"receptionist|clerk|assistant|intern|graduate|trainee)\b",
+    re.I,
+)
 
 
 def _extract_occupation(lines: list[str], name: str) -> str:
-    name_words = set(name.lower().split())
-    for line in lines[:15]:
+    name_words = {w.lower() for w in name.split()}
+    for line in lines[:20]:
         lc = line.lower()
-        if any(t in lc for t in TITLES) and not (name_words & set(lc.split())):
+        if _TITLE_WORDS.search(lc) and not (name_words & set(lc.split())) and len(line) < 80:
             return _clean(line)
     return ""
 
 
-# ── Years of experience ────────────────────────────────────────────────────────
-
-YR_MAP = [
-    (re.compile(r"\b(\d+)\+?\s*years?\s+(?:of\s+)?experience", re.I), None),
-]
+# ── Years experience ───────────────────────────────────────────────────────────
 
 def _infer_years_experience(text: str, work_experiences: list[dict]) -> str:
-    # Try explicit statement first
-    m = re.search(r"\b(\d+)\+?\s*years?\s+(?:of\s+)?experience", text, re.I)
+    m = re.search(r"\b(\d+)\+?\s*years?\s+(?:of\s+)?(?:work\s+)?experience", text, re.I)
     if m:
         n = int(m.group(1))
         if n < 1:   return "0-1"
@@ -191,13 +231,11 @@ def _infer_years_experience(text: str, work_experiences: list[dict]) -> str:
         if n <= 5:  return "3-5"
         if n <= 10: return "5-10"
         return "10+"
-    # Fall back: calculate from earliest work start
-    years: list[int] = []
+    years = []
     for we in work_experiences:
         sd = we.get("start_date", "")
         try:
-            y = int(sd[:4])
-            years.append(y)
+            years.append(int(sd[:4]))
         except Exception:
             pass
     if years:
@@ -210,181 +248,235 @@ def _infer_years_experience(text: str, work_experiences: list[dict]) -> str:
     return ""
 
 
-# ── Work Experience ────────────────────────────────────────────────────────────
+# ── Date parsing ───────────────────────────────────────────────────────────────
 
-DATE_RE = re.compile(
-    r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}"
-    r"|\d{4})\s*[-–—to]+\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}"
-    r"|\d{4}|Present|Current|Now|Date)",
+_MONTHS = {
+    "jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
+    "jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12,
+    "january":1,"february":2,"march":3,"april":4,"june":6,
+    "july":7,"august":8,"september":9,"october":10,"november":11,"december":12,
+}
+
+_DATE_TOKEN = (
+    r"(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}"  # Month YYYY
+    r"|\d{1,2}[/\-\.]\d{4}"                                                       # MM/YYYY
+    r"|\d{4})"                                                                     # YYYY
+)
+_DATE_RANGE_RE = re.compile(
+    rf"({_DATE_TOKEN})\s*[-–—to/]+\s*({_DATE_TOKEN}|Present|Current|Now|Till\s*Date|To\s*Date|Date)",
     re.I,
 )
 
-MONTH_MAP = {
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
-}
 
-
-def _parse_date_str(s: str) -> str:
-    """Convert month-year or year string to YYYY-MM-DD."""
+def _parse_date(s: str) -> str:
     s = s.strip()
     if re.match(r"^\d{4}$", s):
         return f"{s}-01-01"
     m = re.match(r"([A-Za-z]+)[\s.]+(\d{4})", s)
     if m:
-        month_str = m.group(1)[:3].lower()
-        month = MONTH_MAP.get(month_str, 1)
+        month = _MONTHS.get(m.group(1)[:3].lower(), 1)
         return f"{m.group(2)}-{month:02d}-01"
+    m = re.match(r"(\d{1,2})[/\-.](\d{4})", s)
+    if m:
+        return f"{m.group(2)}-{int(m.group(1)):02d}-01"
     return ""
 
 
+def _is_present(s: str) -> bool:
+    return bool(re.match(r"present|current|now|till\s*date|to\s*date|date", s.strip(), re.I))
+
+
+# ── Work Experience ────────────────────────────────────────────────────────────
+
+_EXP_SECTION_NAMES = (
+    "WORK EXPERIENCE", "PROFESSIONAL EXPERIENCE", "EMPLOYMENT HISTORY",
+    "CAREER HISTORY", "EXPERIENCE",
+)
+
+_EMP_TYPES = re.compile(
+    r"\b(full[- ]time|part[- ]time|contract|freelance|temporary|temp|"
+    r"fixed[- ]term|internship|intern|learnership|graduate|volunteer)\b",
+    re.I,
+)
+
+
 def _extract_work_experiences(text: str) -> list[dict]:
-    section = _section_text(
-        text,
-        "EXPERIENCE", "WORK EXPERIENCE", "EMPLOYMENT",
-        "EMPLOYMENT HISTORY", "PROFESSIONAL EXPERIENCE", "CAREER HISTORY",
-    )
-    if not section:
-        section = text  # search whole doc if no clear section
+    text = _norm(text)
+    section = _get_section(text, *_EXP_SECTION_NAMES) or text
 
+    # Split into blocks — each starts when we find a date range or a clear title line
+    # Strategy: find all date-range positions, then carve out blocks around them
     entries: list[dict] = []
-    # Split on date-range anchors
-    chunks = re.split(
-        r"(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\b\d{4}\s*[-–—])",
-        section,
-        flags=re.I,
-    )
+    seen_ranges: set[tuple] = set()
 
-    for chunk in chunks:
-        chunk = chunk.strip()
-        if not chunk or len(chunk) < 20:
-            continue
-        dm = DATE_RE.search(chunk)
-        if not dm:
-            continue
-
-        start_str = _parse_date_str(dm.group(1))
+    for dm in _DATE_RANGE_RE.finditer(section):
+        start_raw = dm.group(1)
         end_raw   = dm.group(2)
-        is_current = bool(re.match(r"present|current|now|date", end_raw, re.I))
-        end_str    = None if is_current else _parse_date_str(end_raw)
+        start_str = _parse_date(start_raw)
+        is_cur    = _is_present(end_raw)
+        end_str   = None if is_cur else _parse_date(end_raw)
 
-        # Remove date from chunk, try to find title + company
-        remainder = chunk[:dm.start()] + chunk[dm.end():]
-        rem_lines  = [l.strip() for l in remainder.splitlines() if l.strip()]
+        key = (start_str, end_str)
+        if key in seen_ranges:
+            continue
+        seen_ranges.add(key)
 
-        job_title = ""
-        company   = ""
-        location  = ""
+        # Grab context: ~8 lines before the date range
+        pre_text  = section[:dm.start()]
+        pre_lines = [l.strip() for l in pre_text.splitlines() if l.strip()][-8:]
+        post_text = section[dm.end():]
+        post_lines= [l.strip() for l in post_text.splitlines() if l.strip()][:10]
+
+        job_title, company, location, emp_type = "", "", "", ""
         desc_lines: list[str] = []
 
-        if rem_lines:
-            # First non-empty line = job title or "Title @ Company" or "Title, Company"
-            first = rem_lines[0]
-            sep = re.split(r"\s+(?:at|@|,)\s+", first, maxsplit=1, flags=re.I)
-            if len(sep) == 2:
-                job_title, company = _clean(sep[0]), _clean(sep[1])
+        # Job title is usually the last non-empty pre-line before the date
+        # Company is the line before that, or same line split by " at "/" @ "
+        if pre_lines:
+            top = pre_lines[-1]
+            # "Job Title at Company" / "Job Title @ Company" / "Job Title, Company"
+            sep = re.split(r"\s+(?:at|@|–)\s+|\s*,\s*(?=[A-Z])", top, maxsplit=1)
+            if len(sep) == 2 and len(sep[1]) < 80:
+                job_title = _clean(sep[0])
+                company   = _clean(sep[1])
             else:
-                job_title = _clean(first)
-                if len(rem_lines) > 1:
-                    company = _clean(rem_lines[1])
-                    desc_lines = rem_lines[2:]
-                else:
-                    desc_lines = []
-        else:
-            desc_lines = rem_lines
+                job_title = _clean(top)
+                if len(pre_lines) >= 2:
+                    company = _clean(pre_lines[-2])
 
-        # Location: look for "City, XX" in the first 3 lines
-        for l in rem_lines[:3]:
-            if re.search(r"[A-Z][a-z]+,\s*[A-Z]{2,}", l):
-                location = _clean(l)
+        # Employment type from post context
+        full_context = " ".join(pre_lines + post_lines)
+        em = _EMP_TYPES.search(full_context)
+        if em:
+            emp_type = em.group(1).title()
+
+        # Location: look for "City, Province" in surrounding lines
+        for l in (pre_lines + post_lines)[:5]:
+            if _SA_PLACES.search(l) or re.search(r"[A-Z][a-z]+,\s*[A-Z]{2,}", l):
+                if l != job_title and l != company:
+                    location = _clean(l)
+                    break
+
+        # Description: bullet lines after the date
+        for l in post_lines:
+            stripped = l.lstrip("*•-–>◦▪▸ ")
+            if stripped and len(stripped) > 10 and not _DATE_RANGE_RE.search(l):
+                desc_lines.append(stripped)
+            if len(desc_lines) >= 5:
                 break
 
-        description = " ".join(desc_lines[:6]).strip()
-
+        # Skip if we couldn't find a job title
         if not job_title and not company:
+            continue
+        # Skip obvious false positives (education dates etc.)
+        if re.search(r"\b(university|college|diploma|degree|certificate|school)\b", job_title, re.I):
             continue
 
         entries.append({
-            "job_title":   job_title,
-            "company":     company,
-            "location":    location,
-            "start_date":  start_str,
-            "end_date":    end_str,
-            "is_current":  is_current,
-            "description": _clean(description[:400]),
+            "job_title":       job_title[:150],
+            "company":         company[:150],
+            "location":        location[:100],
+            "employment_type": emp_type,
+            "start_date":      start_str,
+            "end_date":        end_str,
+            "is_current":      is_cur,
+            "description":     _clean(" ".join(desc_lines))[:500],
         })
 
-    return entries[:10]  # cap
+    # Deduplicate by (title, company) keeping longest description
+    seen: dict[tuple, dict] = {}
+    for e in entries:
+        k = (e["job_title"].lower(), e["company"].lower())
+        if k not in seen or len(e["description"]) > len(seen[k]["description"]):
+            seen[k] = e
+
+    return sorted(seen.values(), key=lambda x: x["start_date"] or "", reverse=True)[:12]
 
 
 # ── Education ──────────────────────────────────────────────────────────────────
 
-NQF_KEYWORDS = {
-    "10": ["phd", "doctoral", "doctorate", "d.phil"],
-    "9":  ["masters", "master of", "m.sc", "mba", "m.com", "m.eng", "m.tech"],
-    "8":  ["honours", "hons", "postgraduate diploma", "pgdip"],
-    "7":  ["bachelor", "b.sc", "b.com", "b.tech", "b.eng", "b.a ", "degree"],
-    "6":  ["diploma", "national diploma", "nd "],
-    "5":  ["higher certificate", "higher cert"],
-    "4":  ["matric", "grade 12", "national senior certificate", "nsc"],
+_NQF_MAP = {
+    "10": ["phd","doctoral","doctorate","d.phil","dphil"],
+    "9":  ["masters","master of","m.sc","msc","mba","m.com","mcom","m.eng","meng","m.tech","mtech","llm"],
+    "8":  ["honours","hons","postgraduate diploma","pgdip","postgrad dip"],
+    "7":  ["bachelor","b.sc","bsc","b.com","bcom","b.tech","btech","b.eng","beng","b.a","ba ","llb","degree"],
+    "6":  ["national diploma","nd ","diploma"],
+    "5":  ["higher certificate","higher cert"],
+    "4":  ["matric","grade 12","national senior certificate","nsc","senior certificate"],
 }
+
+_INST_RE = re.compile(
+    r"\b(university|universiteit|college|institute|school|academy|"
+    r"polytechnic|tvet|varsity|faculty|campus|seta)\b", re.I,
+)
 
 
 def _infer_nqf(qual: str) -> str:
     lc = qual.lower()
-    for level, kws in NQF_KEYWORDS.items():
+    for level, kws in _NQF_MAP.items():
         if any(kw in lc for kw in kws):
             return level
     return ""
 
 
 def _extract_educations(text: str) -> list[dict]:
-    section = _section_text(
+    text = _norm(text)
+    section = _get_section(
         text,
-        "EDUCATION", "QUALIFICATIONS", "ACADEMIC", "ACADEMIC BACKGROUND",
-        "EDUCATION AND TRAINING",
+        "EDUCATION AND TRAINING", "EDUCATION & TRAINING",
+        "ACADEMIC BACKGROUND", "ACADEMIC QUALIFICATIONS",
+        "QUALIFICATIONS", "EDUCATION",
     )
     if not section:
         return []
 
+    year_re  = re.compile(r"\b((?:19|20)\d{2})\b")
     entries: list[dict] = []
-    year_re = re.compile(r"\b((?:19|20)\d{2})\b")
 
-    # Each entry is separated by a blank line or a year anchor
-    blocks = re.split(r"\n{2,}|\n(?=(?:19|20)\d{2})", section)
+    # Split on blank lines or year anchors
+    blocks = re.split(r"\n{2,}|\n(?=\s*(?:19|20)\d{2})", section)
 
     for block in blocks:
         block = block.strip()
-        if not block or len(block) < 8:
+        if not block or len(block) < 10:
             continue
-        lines = [l.strip() for l in block.splitlines() if l.strip()]
-        years = year_re.findall(block)
+
+        lines  = [l.strip() for l in block.splitlines() if l.strip()]
+        years  = year_re.findall(block)
         start_year = int(years[0]) if years else 0
-        end_year   = int(years[1]) if len(years) > 1 else None
-        is_current = bool(re.search(r"present|current|ongoing", block, re.I))
+        end_year   = int(years[-1]) if len(years) > 1 else None
+        is_current = bool(re.search(r"present|current|ongoing|in progress", block, re.I))
         if is_current:
             end_year = None
 
         qual = _clean(lines[0]) if lines else ""
         inst = _clean(lines[1]) if len(lines) > 1 else ""
-        desc = " ".join(lines[2:]).strip()
+        desc_lines = lines[2:]
 
-        # Swap if institution looks more like an institution name
-        INST_WORDS = re.compile(r"\b(university|college|institute|school|academy|polytechnic|tvet)\b", re.I)
-        if inst and INST_WORDS.search(qual) and not INST_WORDS.search(inst):
+        # Swap if institution keyword found in qual
+        if _INST_RE.search(qual) and not _INST_RE.search(inst):
             qual, inst = inst, qual
-        if not INST_WORDS.search(inst) and INST_WORDS.search(qual):
-            qual, inst = inst, qual
+
+        # Extract field of study from "BSc in Computer Science" pattern
+        field = ""
+        fom = re.search(r"\bin\s+([A-Z][a-zA-Z\s&]+)", qual)
+        if fom:
+            field = _clean(fom.group(1))
+
+        nqf = _infer_nqf(qual) or _infer_nqf(inst)
+
+        if not qual and not inst:
+            continue
 
         entries.append({
-            "institution":   inst,
-            "qualification": qual,
-            "field_of_study":"",
-            "nqf_level":     _infer_nqf(qual),
-            "start_year":    start_year,
-            "end_year":      end_year,
-            "is_current":    is_current,
-            "description":   _clean(desc[:300]),
+            "institution":    inst[:200],
+            "qualification":  qual[:200],
+            "field_of_study": field[:150],
+            "nqf_level":      nqf,
+            "start_year":     start_year,
+            "end_year":       end_year,
+            "is_current":     is_current,
+            "description":    _clean(" ".join(desc_lines[:3]))[:300],
         })
 
     return entries[:8]
@@ -392,141 +484,274 @@ def _extract_educations(text: str) -> list[dict]:
 
 # ── Skills ─────────────────────────────────────────────────────────────────────
 
-SKILL_LEVEL_RE = re.compile(
-    r"\b(expert|advanced|proficient|intermediate|familiar|basic|beginner)\b", re.I
+_LEVEL_RE = re.compile(
+    r"\b(expert|advanced|proficient|strong|solid|good|intermediate|"
+    r"working knowledge|familiar|basic|beginner|entry[- ]level)\b", re.I,
 )
-LEVEL_MAP = {
-    "expert": "expert", "advanced": "advanced", "proficient": "advanced",
-    "intermediate": "intermediate", "familiar": "intermediate",
-    "basic": "beginner", "beginner": "beginner",
+_LEVEL_MAP = {
+    "expert":"expert","advanced":"advanced","proficient":"advanced",
+    "strong":"advanced","solid":"advanced","good":"intermediate",
+    "intermediate":"intermediate","working knowledge":"intermediate",
+    "familiar":"intermediate","basic":"beginner","beginner":"beginner",
+    "entry-level":"beginner","entry level":"beginner",
 }
 
-TECH_SKILLS = re.compile(
-    r"\b(python|java|javascript|typescript|c\+\+|c#|php|ruby|swift|kotlin|go|rust|"
-    r"react|vue|angular|django|flask|fastapi|node(?:\.js)?|nextjs|spring|"
-    r"sql|mysql|postgresql|mongodb|redis|elasticsearch|"
-    r"aws|azure|gcp|docker|kubernetes|terraform|git|linux|"
-    r"excel|word|powerpoint|outlook|sap|erp|xero|quickbooks|"
-    r"illustrator|photoshop|figma|sketch|autocad|solidworks|"
-    r"machine learning|deep learning|tensorflow|pytorch|scikit|pandas|numpy)\b",
+_TECH_RE = re.compile(
+    r"\b(python|java(?:script)?|typescript|c\+\+|c#|php|ruby|swift|kotlin|"
+    r"go(?:lang)?|rust|scala|r(?:\s+language)?|matlab|bash|shell|powershell|"
+    r"html5?|css3?|react(?:\.js)?|vue(?:\.js)?|angular(?:js)?|next(?:\.js)?|"
+    r"node(?:\.js)?|express(?:\.js)?|django|flask|fastapi|spring(?:\s+boot)?|"
+    r"laravel|rails|asp\.net|\.net|"
+    r"sql|mysql|postgresql|sqlite|mongodb|redis|elasticsearch|firebase|"
+    r"aws|azure|gcp|google cloud|heroku|vercel|netlify|"
+    r"docker|kubernetes|terraform|ansible|jenkins|gitlab(?:\s+ci)?|github(?:\s+actions)?|"
+    r"git|linux|ubuntu|debian|centos|windows\s+server|"
+    r"excel|word|powerpoint|outlook|office\s+365|google\s+workspace|"
+    r"sap|erp|sage|xero|quickbooks|pastel|"
+    r"illustrator|photoshop|figma|sketch|canva|indesign|autocad|solidworks|"
+    r"machine\s+learning|deep\s+learning|tensorflow|pytorch|scikit|keras|"
+    r"pandas|numpy|matplotlib|power\s+bi|tableau|looker|"
+    r"jira|confluence|trello|asana|monday|slack|teams|zoom)\b",
     re.I,
 )
 
 
 def _extract_skills(text: str) -> list[dict]:
-    section = _section_text(
+    text = _norm(text)
+    section = _get_section(
         text,
-        "SKILLS", "TECHNICAL SKILLS", "CORE COMPETENCIES",
-        "COMPETENCIES", "TECHNOLOGIES", "TOOLS",
+        "TECHNICAL SKILLS", "CORE COMPETENCIES", "KEY COMPETENCIES",
+        "COMPUTER SKILLS", "IT SKILLS", "COMPETENCIES", "SKILLS",
     )
     source = section or text
 
-    found: dict[str, str] = {}
+    found: dict[str, dict] = {}
 
-    # 1. Match known tech terms
-    for m in TECH_SKILLS.finditer(source):
-        skill = _clean(m.group())
-        # Look for a level modifier nearby
-        context = source[max(0, m.start()-30):m.end()+30]
-        lm = SKILL_LEVEL_RE.search(context)
-        level = LEVEL_MAP.get(lm.group(1).lower(), "intermediate") if lm else "intermediate"
-        found[skill.lower()] = level
+    # 1. Known tech terms
+    for m in _TECH_RE.finditer(source):
+        name = _clean(m.group())
+        ctx  = source[max(0,m.start()-40):m.end()+40]
+        lm   = _LEVEL_RE.search(ctx)
+        level = _LEVEL_MAP.get((lm.group(1).lower() if lm else "").replace("-"," "), "intermediate")
+        key  = name.lower()
+        if key not in found:
+            found[key] = {"name": name.title(), "level": level, "category": "Technical"}
 
-    # 2. If skills section exists, also parse comma/bullet lists
+    # 2. Comma/bullet/pipe lists in the skills section
     if section:
-        # Remove tech already found
-        clean_section = TECH_SKILLS.sub("", section)
-        # Split on common delimiters
-        items = re.split(r"[,•\|\n/;]+", clean_section)
-        for item in items:
-            item = _clean(item)
-            if 2 < len(item) < 50 and not re.search(r"\d{4}", item):
-                lm = SKILL_LEVEL_RE.search(item)
-                level = LEVEL_MAP.get(lm.group(1).lower(), "intermediate") if lm else "intermediate"
-                key = re.sub(SKILL_LEVEL_RE, "", item).strip().lower()
-                if key and key not in found:
-                    found[key] = level
+        # Handle "Category: skill1, skill2" patterns
+        for cat_match in re.finditer(r"^([A-Z][A-Za-z\s/&]{2,30}):\s*(.+)$", section, re.M):
+            cat_name = _clean(cat_match.group(1))
+            items    = re.split(r"[,;|•\n]+", cat_match.group(2))
+            for item in items:
+                item = _clean(item.lstrip("*•-– "))
+                if 2 < len(item) < 60 and not re.search(r"\d{4}", item):
+                    lm    = _LEVEL_RE.search(item)
+                    level = _LEVEL_MAP.get((lm.group(1).lower() if lm else "").replace("-"," "), "intermediate")
+                    clean_name = _LEVEL_RE.sub("", item).strip(" ()")
+                    key = clean_name.lower()
+                    if key and key not in found and len(key) > 1:
+                        found[key] = {"name": clean_name.title(), "level": level, "category": cat_name}
 
-    return [{"name": k.title(), "level": v, "category": ""} for k, v in found.items()][:30]
+        # Plain list items
+        plain = _TECH_RE.sub("", section)
+        for item in re.split(r"[,•|\n/;]+", plain):
+            item = _clean(item.lstrip("*•-–> "))
+            if 2 < len(item) < 60 and not re.search(r"\d{4}", item):
+                lm    = _LEVEL_RE.search(item)
+                level = _LEVEL_MAP.get((lm.group(1).lower() if lm else "").replace("-"," "), "intermediate")
+                clean_name = _LEVEL_RE.sub("", item).strip(" ()")
+                key = clean_name.lower()
+                if key and key not in found and len(key) > 1:
+                    found[key] = {"name": clean_name.title(), "level": level, "category": ""}
+
+    return list(found.values())[:35]
 
 
 # ── Languages ──────────────────────────────────────────────────────────────────
 
-COMMON_LANGS = [
-    "english", "afrikaans", "zulu", "xhosa", "sotho", "tswana", "venda",
-    "tsonga", "swati", "ndebele", "pedi", "french", "spanish", "portuguese",
-    "mandarin", "arabic", "hindi", "german", "italian",
+# All 11 SA official + common international languages
+_LANG_LIST = [
+    "english","afrikaans","zulu","isizulu","xhosa","isixhosa","sotho","sesotho",
+    "tswana","setswana","venda","tshivenda","tsonga","xitsonga","swati","siswati",
+    "ndebele","isindebele","pedi","sepedi",
+    "french","spanish","portuguese","mandarin","cantonese","arabic","hindi",
+    "urdu","german","italian","dutch","russian","japanese","korean",
 ]
-PROF_MAP = {
-    "native": "native", "fluent": "native", "mother tongue": "native",
-    "professional": "professional", "business": "professional",
-    "conversational": "conversational", "intermediate": "conversational",
-    "basic": "basic", "elementary": "basic",
+
+_PROF_MAP = {
+    "native":"native","mother tongue":"native","home language":"native",
+    "first language":"native","fluent":"native","bilingual":"native",
+    "professional":"professional","business":"professional","advanced":"professional",
+    "full professional":"professional",
+    "conversational":"conversational","intermediate":"conversational",
+    "working":"conversational","limited working":"conversational",
+    "basic":"basic","elementary":"basic","beginner":"basic","some":"basic",
 }
+
+_LANG_RE = re.compile(
+    r"\b(" + "|".join(re.escape(l) for l in _LANG_LIST) + r")\b"
+    r"(?:"
+    r"\s*[-:–(]+\s*([A-Za-z\s]+?)(?:[,;\n)]|$)"   # English - Native  or  English (Fluent)
+    r"|"
+    r"\s*\(([^)]+)\)"                              # English (Native Speaker)
+    r")?",
+    re.I,
+)
 
 
 def _extract_languages(text: str) -> list[dict]:
-    section = _section_text(text, "LANGUAGES", "LANGUAGE PROFICIENCY", "LANGUAGE SKILLS")
-    source = section or text[:1500]
+    text = _norm(text)
+    section = _get_section(text, "LANGUAGE PROFICIENCY", "LANGUAGES SPOKEN", "LANGUAGES")
+    source  = section if section else text[:3000]
 
-    found: list[dict] = []
-    seen: set[str] = set()
+    found: dict[str, dict] = {}
 
-    lang_pattern = re.compile(
-        r"\b(" + "|".join(COMMON_LANGS) + r")\b(?:[:\s\-–]+([A-Za-z]+))?",
-        re.I,
-    )
-    for m in lang_pattern.finditer(source):
+    for m in _LANG_RE.finditer(source):
         lang = m.group(1).title()
-        if lang.lower() in seen:
+        # Normalise isiZulu → Zulu etc.
+        lang = re.sub(r"^(?:Isi|Se|Si|Tshi|Xi)", "", lang, flags=re.I).strip().title()
+        if not lang:
             continue
-        seen.add(lang.lower())
-        prof_word = (m.group(2) or "").lower()
-        proficiency = PROF_MAP.get(prof_word, "professional")
-        found.append({"name": lang, "proficiency": proficiency})
 
-    return found[:10]
+        # Proficiency from inline tag or nearby text
+        raw_prof = (m.group(2) or m.group(3) or "").strip().lower()
+        # If no inline tag, look for proficiency word within 40 chars
+        if not raw_prof:
+            ctx = source[m.start():m.start()+60].lower()
+            for kw in _PROF_MAP:
+                if kw in ctx:
+                    raw_prof = kw
+                    break
+
+        proficiency = "professional"
+        for kw, val in _PROF_MAP.items():
+            if kw in raw_prof:
+                proficiency = val
+                break
+
+        key = lang.lower()
+        if key not in found:
+            found[key] = {"name": lang, "proficiency": proficiency}
+
+    # Fallback: scan lines in the section for "Language: Level" pattern
+    if section:
+        for line in _lines(section):
+            m2 = re.match(r"([A-Za-z]{3,})\s*[-:–]\s*([A-Za-z\s]+)", line)
+            if m2:
+                lang_cand = m2.group(1).strip().title()
+                prof_cand = m2.group(2).strip().lower()
+                if lang_cand.lower() in _LANG_LIST:
+                    key = lang_cand.lower()
+                    proficiency = "professional"
+                    for kw, val in _PROF_MAP.items():
+                        if kw in prof_cand:
+                            proficiency = val
+                            break
+                    if key not in found:
+                        found[key] = {"name": lang_cand, "proficiency": proficiency}
+
+    return list(found.values())[:12]
 
 
 # ── References ─────────────────────────────────────────────────────────────────
 
+_RELATIONSHIP_RE = re.compile(
+    r"\b(line manager|direct manager|reporting manager|senior manager|hr manager|"
+    r"human resources|supervisor|director|colleague|peer|mentor|coach|"
+    r"client|customer|lecturer|professor|academic)\b",
+    re.I,
+)
+
+
 def _extract_references(text: str) -> list[dict]:
-    section = _section_text(text, "REFERENCES", "REFEREES")
-    if not section or re.search(r"available on request|furnished upon", section, re.I):
+    text = _norm(text)
+    section = _get_section(text, "PROFESSIONAL REFERENCES", "CHARACTER REFERENCES", "REFERENCES")
+
+    if not section:
+        return []
+    if re.search(r"available\s+(?:on|upon)\s+request|furnished\s+upon|upon\s+request", section, re.I):
         return []
 
     entries: list[dict] = []
-    blocks = re.split(r"\n{2,}", section)
+
+    # Split on double newlines or lines that look like a new name (title-case, no digits)
+    blocks = re.split(r"\n{2,}", section.strip())
+
     for block in blocks:
         block = block.strip()
-        if not block:
+        if not block or len(block) < 10:
             continue
-        lines = [l.strip() for l in block.splitlines() if l.strip()]
-        if not lines:
+
+        lines  = [l.strip() for l in block.splitlines() if l.strip()]
+        email  = _extract_email(block)
+        phone  = _extract_phone(block)
+
+        name = position = company = relationship = ""
+
+        # Try "Name: John Smith" style first
+        for line in lines:
+            km = re.match(r"(?:name|person|contact)\s*[:\-]\s*(.+)", line, re.I)
+            if km:
+                name = _clean(km.group(1))
+                break
+            tm = re.match(r"(?:title|position|designation|job title)\s*[:\-]\s*(.+)", line, re.I)
+            if tm:
+                position = _clean(tm.group(1))
+            cm = re.match(r"(?:company|organisation|organization|employer|firm)\s*[:\-]\s*(.+)", line, re.I)
+            if cm:
+                company = _clean(cm.group(1))
+            rm = re.match(r"(?:relationship|capacity)\s*[:\-]\s*(.+)", line, re.I)
+            if rm:
+                relationship = _clean(rm.group(1))
+
+        # Fallback: first non-contact line is the name
+        if not name:
+            for line in lines:
+                if "@" not in line and not _PHONE_RE.search(line) and not re.search(r"\d{4}", line):
+                    if _NAME_RE.match(line):
+                        name = _clean(line)
+                        break
+
+        # Position / company from following lines
+        if not position and len(lines) > 1:
+            for line in lines[1:]:
+                if line != name and "@" not in line and not _PHONE_RE.search(line):
+                    if not position:
+                        position = _clean(line)
+                    elif not company:
+                        company = _clean(line)
+                    else:
+                        break
+
+        # Relationship from any line
+        for line in lines:
+            rm = _RELATIONSHIP_RE.search(line)
+            if rm and not relationship:
+                relationship = rm.group(1).title()
+                break
+
+        if not name:
             continue
-        name    = lines[0]
-        company = lines[1] if len(lines) > 1 else ""
-        pos     = lines[2] if len(lines) > 2 else ""
-        email   = _extract_email(block)
-        phone   = _extract_phone(block)
+
         entries.append({
-            "name": _clean(name), "company": _clean(company),
-            "position": _clean(pos), "email": email, "phone": phone,
+            "name":         name[:150],
+            "position":     position[:150],
+            "company":      company[:150],
+            "relationship": relationship[:100],
+            "email":        email,
+            "phone":        phone,
         })
+
     return entries[:5]
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def parse_cv(file_bytes: bytes, mime_type: str = "application/pdf") -> dict[str, Any]:
-    """
-    Main entry point.  Returns a dict matching the Anthropic-extraction schema.
-    """
-    # 1. Extract raw text
     if "pdf" in mime_type:
         text = extract_text_from_pdf(file_bytes)
     elif "image" in mime_type:
-        # Can't do OCR without tessseract; return empty
         return _empty()
     else:
         text = extract_text_from_docx(file_bytes)
@@ -534,24 +759,24 @@ def parse_cv(file_bytes: bytes, mime_type: str = "application/pdf") -> dict[str,
     if not text.strip():
         return _empty()
 
+    text  = _norm(text)
     lines = _lines(text)
 
-    # 2. Build data
-    email         = _extract_email(text)
-    phone         = _extract_phone(text)
-    first, last   = _extract_name(lines, email)
-    location      = _extract_location(text)
-    linkedin      = _extract_linkedin(text)
-    github        = _extract_github(text)
-    portfolio     = _extract_portfolio(text)
-    bio           = _extract_bio(text)
-    occupation    = _extract_occupation(lines, f"{first} {last}")
-    experiences   = _extract_work_experiences(text)
-    educations    = _extract_educations(text)
-    skills        = _extract_skills(text)
-    languages     = _extract_languages(text)
-    references    = _extract_references(text)
-    years_exp     = _infer_years_experience(text, experiences)
+    email      = _extract_email(text)
+    phone      = _extract_phone(text)
+    first, last= _extract_name(lines)
+    location   = _extract_location(lines, text)
+    linkedin   = _extract_linkedin(text)
+    github     = _extract_github(text)
+    portfolio  = _extract_portfolio(text)
+    bio        = _extract_bio(text)
+    occupation = _extract_occupation(lines, f"{first} {last}")
+    experiences= _extract_work_experiences(text)
+    educations = _extract_educations(text)
+    skills     = _extract_skills(text)
+    languages  = _extract_languages(text)
+    references = _extract_references(text)
+    years_exp  = _infer_years_experience(text, experiences)
 
     return {
         "first_name":       first,
@@ -574,9 +799,9 @@ def parse_cv(file_bytes: bytes, mime_type: str = "application/pdf") -> dict[str,
 
 def _empty() -> dict[str, Any]:
     return {
-        "first_name": "", "last_name": "", "phone": "", "location": "",
-        "occupation": "", "years_experience": "", "bio": "",
-        "linkedin_url": "", "github_url": "", "portfolio_url": "",
-        "work_experiences": [], "educations": [], "skills": [],
-        "languages": [], "references": [],
+        "first_name":"","last_name":"","phone":"","location":"",
+        "occupation":"","years_experience":"","bio":"",
+        "linkedin_url":"","github_url":"","portfolio_url":"",
+        "work_experiences":[],"educations":[],"skills":[],
+        "languages":[],"references":[],
     }
