@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1>My Documents</h1>
+  <span class="badge">{{ total }} uploaded</span>
+</div>
+
+<!-- Upload form -->
+<div class="card upload-card">
+  <h2>Upload Document</h2>
+  <form method="post" action="{% url 'upload_document' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="form-row">
+      <select name="doc_type" required>
+        <option value="">— Select type —</option>
+        {% for val, label in doc_type_choices %}
+          <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="label" placeholder="Label (optional)">
+      <input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
+    </div>
+    <input type="text" name="note" placeholder="Note (optional)" class="full-width">
+    <button type="submit" class="btn-primary">Upload</button>
+  </form>
+</div>
+
+<!-- Grouped document list -->
+{% for doc_type, group in grouped.items %}
+  {% if group.docs %}
+  <div class="doc-group">
+    <h3>{{ group.label }}</h3>
+    <div class="doc-list">
+      {% for doc in group.docs %}
+      <div class="doc-row {% if doc.active %}active{% endif %}">
+        <div class="doc-info">
+          <span class="doc-name">{{ doc.display_label }}</span>
+          {% if doc.active %}<span class="badge-active">Active</span>{% endif %}
+          {% if doc.note %}<span class="doc-note">{{ doc.note }}</span>{% endif %}
+          <span class="doc-date">{{ doc.uploaded_at|date:"d M Y" }}</span>
+        </div>
+        <div class="doc-actions">
+          <a href="{% url 'download_document' doc.pk %}" class="btn-sm">Download</a>
+          {% if not doc.active %}
+          <form method="post" action="{% url 'set_document_active' doc.pk %}" style="display:inline">
+            {% csrf_token %}
+            <button type="submit" class="btn-sm btn-activate">Set Active</button>
+          </form>
+          {% endif %}
+          <button class="btn-sm btn-danger" 
+                  onclick="deleteDoc({{ doc.pk }}, this)">Delete</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+<script>
+function deleteDoc(id, btn) {
+  if (!confirm("Delete this document?")) return;
+  fetch(`/documents/${id}/delete/`, {
+    method: "POST",
+    headers: {"X-CSRFToken": "{{ csrf_token }}"},
+  }).then(r => r.json()).then(d => {
+    if (d.deleted) btn.closest(".doc-row").remove();
+  });
+}
+</script>
+{% endblock %}

@@ -20,6 +20,7 @@ urlpatterns = [
     path("job/<int:job_id>/", job_detail, name="job_detail"),
     path("job/<int:job_id>/spider/", spider_job, name="spider_job"),
     path("job/<int:job_id>/apply/", apply_single, name="apply_single"),
+    path("documents/", include("apps.documents.urls")),
     path("test/", test_view, name="test"),
     path("accounts/", include("allauth.urls")),
     path("accounts/", include(("apps.accounts.urls", "accounts"), namespace="accounts")),
