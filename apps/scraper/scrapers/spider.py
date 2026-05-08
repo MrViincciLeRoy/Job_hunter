@@ -13,28 +13,72 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}")
-SKIP_EMAILS = {
-    "noreply", "no-reply", "donotreply", "support", "info", "hello",
-    "admin", "careers@linkedin", "jobs@indeed", "privacy", "legal",
-    "news", "newsletter", "unsubscribe", "webmaster", "postmaster",
+
+EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}")
+
+# Fragments matched anywhere in the address
+SKIP_EMAIL_FRAGMENTS = {
+    "noreply", "no-reply", "donotreply", "support", "hello",
+    "privacy", "legal", "news", "newsletter", "unsubscribe",
+    "webmaster", "postmaster", "gdpr", "dpo",
 }
+
+# Block any email whose domain is a job board / aggregator platform.
+# This is the core fix — catches gdpr@nijobs.com, info@nijobs.com, etc.
+SKIP_EMAIL_DOMAINS = {
+    "nijobs.com",
+    "jobplacements.com",
+    "jobvine.co.za",
+    "jobcrystal.co.za",
+    "executiveplacements.com",
+    "bestjobs.co.za",
+    "careerjunction.co.za",
+    "careers24.com",
+    "pnet.co.za",
+    "jobmail.co.za",
+    "gumtree.co.za",
+    "sayouth.mobi",
+    "essa.gov.za",
+    "dpsa.gov.za",
+    "linkedin.com",
+    "indeed.com",
+    "glassdoor.com",
+    "seek.com",
+    "stepstone.com",
+    "monster.com",
+    "reed.co.uk",
+}
+
+# Domains the spider won't even fetch — no point visiting them
 LOW_EMAIL_DOMAINS = {
     "linkedin.com", "indeed.com", "glassdoor.com", "seek.com",
     "stepstone.com", "monster.com", "reed.co.uk",
+    "nijobs.com", "jobplacements.com", "jobvine.co.za",
+    "jobcrystal.co.za", "executiveplacements.com",
 }
 
 
 def _is_low_email_domain(url):
-    domain = urlparse(url).netloc.lower()
+    domain = urlparse(url).netloc.lower().lstrip("www.")
     return any(d in domain for d in LOW_EMAIL_DOMAINS)
+
+
+def _is_skip_email(addr: str) -> bool:
+    a = addr.lower().strip().rstrip(".")
+    if any(frag in a for frag in SKIP_EMAIL_FRAGMENTS):
+        return True
+    if "@" in a:
+        domain = a.split("@", 1)[1]
+        if domain in SKIP_EMAIL_DOMAINS:
+            return True
+    return False
 
 
 def _clean_emails(emails):
     seen, out = set(), []
     for e in emails:
         e = e.lower().strip().rstrip(".")
-        if any(s in e for s in SKIP_EMAILS):
+        if _is_skip_email(e):
             continue
         if e not in seen:
             seen.add(e)
@@ -63,8 +107,11 @@ def _parse_page(html, url):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(separator=" ", strip=True)
 
-    cf_emails = [_decode_cloudflare_email(el.get("data-cfemail", ""))
-                 for el in soup.select("[data-cfemail]") if el.get("data-cfemail")]
+    cf_emails = [
+        _decode_cloudflare_email(el.get("data-cfemail", ""))
+        for el in soup.select("[data-cfemail]")
+        if el.get("data-cfemail")
+    ]
 
     emails = _clean_emails(
         EMAIL_RE.findall(text)
@@ -91,7 +138,12 @@ def _parse_page(html, url):
         h = a["href"].lower()
         if any(kw in t or kw in h for kw in ("contact", "apply", "email us", "careers", "vacancy")):
             full = urljoin(url, a["href"])
-            if urlparse(full).scheme in ("http", "https") and full != url:
+            parsed = urlparse(full)
+            # Don't follow links that go to blocked domains
+            link_domain = parsed.netloc.lower().lstrip("www.")
+            if parsed.scheme in ("http", "https") and full != url and not any(
+                d in link_domain for d in LOW_EMAIL_DOMAINS
+            ):
                 contact_links.append(full)
 
     return {
@@ -104,7 +156,10 @@ def _parse_page(html, url):
 
 
 async def _async_spider(url, session, timeout=12):
-    result = {"emails": [], "phone": "", "description": "", "followed_url": None, "error": None, "raw_url": url}
+    result = {
+        "emails": [], "phone": "", "description": "",
+        "followed_url": None, "error": None, "raw_url": url,
+    }
 
     if aiohttp is None:
         result["error"] = "aiohttp not installed"
@@ -156,7 +211,10 @@ async def _async_spider(url, session, timeout=12):
 
 async def _spider_many_async(urls, timeout=12, max_concurrent=15):
     if aiohttp is None:
-        return {url: {"emails": [], "phone": "", "description": "", "error": "aiohttp not installed"} for url in urls}
+        return {
+            url: {"emails": [], "phone": "", "description": "", "error": "aiohttp not installed"}
+            for url in urls
+        }
 
     sem = asyncio.Semaphore(max_concurrent)
     connector = aiohttp.TCPConnector(limit=max_concurrent, ssl=False)
@@ -172,16 +230,16 @@ async def _spider_many_async(urls, timeout=12, max_concurrent=15):
     return results
 
 
-def spider_url(url, timeout=12):
-    return run_async(_async_spider_single(url, timeout))
-
-
 async def _async_spider_single(url, timeout):
     if aiohttp is None:
         return {"emails": [], "phone": "", "description": "", "error": "aiohttp not installed"}
     connector = aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(headers=HEADERS, connector=connector) as session:
         return await _async_spider(url, session, timeout)
+
+
+def spider_url(url, timeout=12):
+    return run_async(_async_spider_single(url, timeout))
 
 
 def spider_many(urls, timeout=12, max_concurrent=15):

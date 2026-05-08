@@ -138,13 +138,39 @@ def job_record(overrides: dict) -> dict:
 
 _EMAIL_RE_UTIL = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
 
+# Fragments matched anywhere in the email address (local part or domain)
 _SKIP_EMAIL_FRAGMENTS = {
     'noreply', 'no-reply', 'donotreply', 'unsubscribe',
     'webmaster', 'postmaster', 'privacy', 'legal',
     'info@jobmail', 'info@gumtree', 'info@careerjunction',
     'info@careers24', 'info@pnet', 'support@', 'help@',
     'admin@', 'news@', 'newsletter@', 'gdpr@', 'dpo@',
-    'gdpr@nijobs.com',
+}
+
+# Block any email whose domain matches one of these job board / platform domains.
+# This is the main fix — catches gdpr@nijobs.com, info@nijobs.com, etc.
+_SKIP_EMAIL_DOMAINS = {
+    'nijobs.com',
+    'jobplacements.com',
+    'jobvine.co.za',
+    'jobcrystal.co.za',
+    'executiveplacements.com',
+    'bestjobs.co.za',
+    'careerjunction.co.za',
+    'careers24.com',
+    'pnet.co.za',
+    'jobmail.co.za',
+    'gumtree.co.za',
+    'sayouth.mobi',
+    'essa.gov.za',
+    'dpsa.gov.za',
+    'linkedin.com',
+    'indeed.com',
+    'glassdoor.com',
+    'seek.com',
+    'stepstone.com',
+    'monster.com',
+    'reed.co.uk',
 }
 
 _HOW_TO_APPLY_HEADERS_RE = re.compile(
@@ -203,8 +229,14 @@ _JOB_AD_SIGNALS_RE = re.compile(
 
 
 def _is_skip_email_util(addr: str) -> bool:
-    a = addr.lower()
-    return any(frag in a for frag in _SKIP_EMAIL_FRAGMENTS)
+    a = addr.lower().strip().rstrip('.')
+    if any(frag in a for frag in _SKIP_EMAIL_FRAGMENTS):
+        return True
+    if '@' in a:
+        domain = a.split('@', 1)[1]
+        if domain in _SKIP_EMAIL_DOMAINS:
+            return True
+    return False
 
 
 def _first_email_util(text: str) -> str:
@@ -216,7 +248,6 @@ def _first_email_util(text: str) -> str:
 
 
 def extract_email_priority(how_to_apply: str = '', description: str = '', raw_text: str = '') -> str:
-    """Priority: how_to_apply field → apply section in text → description → raw_text."""
     if how_to_apply:
         e = _first_email_util(how_to_apply)
         if e:
@@ -260,7 +291,6 @@ def _normalise_date_util(match) -> str:
 
 
 def extract_closing_date(text: str) -> str:
-    """Extract closing/deadline date from job ad text."""
     if not text:
         return ''
     for hm in _CLOSING_HEADERS_RE.finditer(text):
@@ -278,7 +308,6 @@ def extract_closing_date(text: str) -> str:
 
 
 def is_hire_me_post(title: str, description: str) -> bool:
-    """Return True if this looks like a CV/hire-me ad, not a real vacancy."""
     text = (title + ' ' + description)
     hire_hits = len(_HIRE_ME_SIGNALS_RE.findall(text))
     ad_hits = len(_JOB_AD_SIGNALS_RE.findall(text))
