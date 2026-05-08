@@ -38,6 +38,7 @@ jobs:
           python manage.py makemigrations scraper --no-input
           python manage.py makemigrations mailer --no-input
           python manage.py makemigrations matcher --no-input
+          python manage.py makemigrations documents --no-input
 
       - name: Merge migrations if needed
         run: python manage.py makemigrations --merge --no-input
