@@ -143,7 +143,8 @@ _SKIP_EMAIL_FRAGMENTS = {
     'webmaster', 'postmaster', 'privacy', 'legal',
     'info@jobmail', 'info@gumtree', 'info@careerjunction',
     'info@careers24', 'info@pnet', 'support@', 'help@',
-    'admin@', 'news@', 'newsletter@', 'gdpr@', 'dpo@','gdpr@nijobs.com'
+    'admin@', 'news@', 'newsletter@', 'gdpr@', 'dpo@',
+    'gdpr@nijobs.com',
 }
 
 _HOW_TO_APPLY_HEADERS_RE = re.compile(
