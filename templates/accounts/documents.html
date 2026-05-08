@@ -213,9 +213,20 @@
       <span class="doc-type-icon">
         {% if dt == "cv" %}📄
         {% elif dt == "cover_letter" %}✉️
-        {% elif dt == "certificate" %}🏆
         {% elif dt == "id_document" %}🪪
+        {% elif dt == "matric" %}🎓
+        {% elif dt == "qualifications" %}🏆
+        {% elif dt == "drivers_licence" %}🚗
+        {% elif dt == "police_clearance" %}🛡️
+        {% elif dt == "references" %}👥
+        {% elif dt == "proof_of_address" %}🏠
+        {% elif dt == "bank_details" %}🏦
         {% elif dt == "z83" %}📋
+        {% elif dt == "certified_copies" %}📎
+        {% elif dt == "saqa" %}✅
+        {% elif dt == "professional_reg" %}🔖
+        {% elif dt == "portfolio" %}🎨
+        {% elif dt == "transcript" %}📊
         {% else %}📁{% endif %}
       </span>
       {{ group.label }}
@@ -231,7 +242,7 @@
         <div class="doc-file-icon">
           {% if "pdf" in doc.mime_type %}📕
           {% elif "image" in doc.mime_type %}🖼️
-          {% elif "word" in doc.mime_type or "document" in doc.mime_type %}📝
+          {% word"elif " in doc.mime_type or "document" in doc.mime_type %}📝
           {% else %}📄{% endif %}
         </div>
 

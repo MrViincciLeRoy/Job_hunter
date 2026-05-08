@@ -25,12 +25,23 @@ class UserProfile(models.Model):
 
 
 DOC_TYPES = [
-    ("cv",           "CV / Resume"),
-    ("cover_letter", "Cover Letter Template"),
-    ("certificate",  "Certificate / Qualification"),
-    ("id_document",  "ID Document"),
-    ("z83",          "Z83 Application Form"),
-    ("other",        "Other Document"),
+    ("cv",               "CV / Resume"),
+    ("cover_letter",     "Cover Letter"),
+    ("id_document",      "ID Document"),
+    ("matric",           "Matric Certificate"),
+    ("qualifications",   "Qualifications / Certificates"),
+    ("drivers_licence",  "Driver's Licence"),
+    ("police_clearance", "Police Clearance Certificate"),
+    ("references",       "References"),
+    ("proof_of_address", "Proof of Address"),
+    ("bank_details",     "Bank Details"),
+    ("z83",              "Z83 Form"),
+    ("certified_copies", "Certified Copies"),
+    ("saqa",             "SAQA Verification"),
+    ("professional_reg", "Professional Body Registration"),
+    ("portfolio",        "Portfolio / Work Samples"),
+    ("transcript",       "Academic Transcript"),
+    ("other",            "Other"),
 ]
 
 
