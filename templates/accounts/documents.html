@@ -242,7 +242,7 @@
         <div class="doc-file-icon">
           {% if "pdf" in doc.mime_type %}📕
           {% elif "image" in doc.mime_type %}🖼️
-          {% word"elif " in doc.mime_type or "document" in doc.mime_type %}📝
+          {% elif "word" in doc.mime_type or "document" in doc.mime_type %}📝
           {% else %}📄{% endif %}
         </div>
 
