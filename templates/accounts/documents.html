@@ -167,13 +167,18 @@
     {% endfor %}
   {% endif %}
 
+  {# ── Upload form — POSTs to accounts:doc_upload ── #}
   <div class="upload-card">
     <div class="upload-title">Upload Document</div>
-    <form method="POST" enctype="multipart/form-data" id="upload-form" action="{% url 'accounts:doc_upload' %}">
+    <form method="POST" enctype="multipart/form-data" id="upload-form"
+          action="{% url 'accounts:doc_upload' %}">
       {% csrf_token %}
 
-      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <input type="file" id="file-input" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="onFileChange(this)">
+      <div class="drop-zone" id="drop-zone"
+           onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" name="file"
+               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+               onchange="onFileChange(this)">
         <span class="drop-hint">CLICK OR DRAG & DROP</span>
         <span class="drop-sub">PDF, JPG, PNG, DOCX — max 10 MB</span>
         <div class="file-picked" id="file-picked"></div>
@@ -184,30 +189,33 @@
           <label class="upload-label">Document Type</label>
           <select class="upload-select" name="doc_type" id="doc-type-sel">
             {% for dt, dt_label in doc_types %}
-            <option value="{{ dt }}"
-              {% if dt == "cv" %}selected{% endif %}>{{ dt_label }}</option>
+            <option value="{{ dt }}"{% if dt == "cv" %} selected{% endif %}>
+              {{ dt_label }}
+            </option>
             {% endfor %}
           </select>
         </div>
         <div class="upload-group">
           <label class="upload-label">Label / Name</label>
-          <input class="upload-input" type="text" name="label" id="label-inp" placeholder="e.g. My CV 2025">
+          <input class="upload-input" type="text" name="label" id="label-inp"
+                 placeholder="e.g. My CV 2025">
         </div>
         <button type="submit" class="upload-btn">UPLOAD →</button>
       </div>
     </form>
   </div>
 
+  {# ── Document sections — one per DOC_TYPE that has docs ── #}
   {% for dt, group in grouped.items %}
   {% if group.docs %}
   <div class="doc-section">
     <div class="doc-section-header">
       <span class="doc-type-icon">
         {% if dt == "cv" %}📄
+        {% elif dt == "cover_letter" %}✉️
+        {% elif dt == "certificate" %}🏆
         {% elif dt == "id_document" %}🪪
         {% elif dt == "z83" %}📋
-        {% elif dt == "certificate" %}🏆
-        {% elif dt == "cover_letter" %}✉️
         {% else %}📁{% endif %}
       </span>
       {{ group.label }}
@@ -216,32 +224,39 @@
 
     <div class="doc-list">
       {% for doc in group.docs %}
-      <div class="doc-row {% if doc.is_primary %}primary{% endif %}" id="doc-row-{{ doc.pk }}">
+      <div class="doc-row {% if doc.is_primary %}primary{% endif %}"
+           id="doc-row-{{ doc.pk }}">
 
+        {# File-type icon derived from mime_type #}
         <div class="doc-file-icon">
           {% if "pdf" in doc.mime_type %}📕
           {% elif "image" in doc.mime_type %}🖼️
-          {% elif "word" in doc.mime_type %}📝
+          {% elif "word" in doc.mime_type or "document" in doc.mime_type %}📝
           {% else %}📄{% endif %}
         </div>
 
         <div class="doc-info">
-          <div class="doc-label">{{ doc.label }}</div>
+          <div class="doc-label" title="{{ doc.file_name }}">{{ doc.label }}</div>
           <div class="doc-meta">
-            {# size_display is a method on UserDocument, not a property #}
+            {# size_display is a method — call it with () #}
             <span class="doc-tag size-tag">{{ doc.size_display }}</span>
             <span class="doc-tag">{{ doc.uploaded_at|date:"d M Y" }}</span>
             <span class="doc-tag">{{ doc.file_name }}</span>
-            {% if doc.is_primary %}<span class="doc-tag primary-tag">★ Primary</span>{% endif %}
+            {% if doc.is_primary %}
+              <span class="doc-tag primary-tag">★ Primary</span>
+            {% endif %}
           </div>
         </div>
 
         <div class="doc-actions">
           {% if not doc.is_primary %}
-          <button class="icon-btn primary-btn" onclick="setPrimary({{ doc.pk }})">★ Set Primary</button>
+          <button class="icon-btn primary-btn"
+                  onclick="setPrimary({{ doc.pk }})">★ Primary</button>
           {% endif %}
-          <a href="{% url 'accounts:doc_download' doc.pk %}" class="icon-btn">↓ Download</a>
-          <button class="icon-btn del-btn" onclick="deleteDoc({{ doc.pk }})">✕</button>
+          <a href="{% url 'accounts:doc_download' doc.pk %}"
+             class="icon-btn">↓ Download</a>
+          <button class="icon-btn del-btn"
+                  onclick="deleteDoc({{ doc.pk }})">✕</button>
         </div>
 
       </div>
@@ -251,16 +266,21 @@
   {% endif %}
   {% endfor %}
 
+  {# Show a friendly message when the user has no documents yet #}
+  {% if total == 0 %}
+  <div class="empty-section">No documents uploaded yet — use the form above to get started.</div>
+  {% endif %}
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 const CSRF = '{{ csrf_token }}';
-const URL_DELETE  = id => `{% url 'accounts:doc_delete'   0 %}`.replace('/0/', '/' + id + '/');
-const URL_PRIMARY = id => `{% url 'accounts:doc_primary'  0 %}`.replace('/0/', '/' + id + '/');
+// Build URLs by replacing the placeholder pk (0) at runtime
+const URL_DELETE  = id => `{% url 'accounts:doc_delete'  0 %}`.replace('/0/', '/' + id + '/');
+const URL_PRIMARY = id => `{% url 'accounts:doc_primary' 0 %}`.replace('/0/', '/' + id + '/');
 
-function showToast(msg, ok=true) {
+function showToast(msg, ok = true) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show ' + (ok ? 'ok' : 'err');
@@ -291,42 +311,55 @@ zone.addEventListener('drop', e => {
 
 function deleteDoc(id) {
   if (!confirm('Delete this document?')) return;
-  fetch(URL_DELETE(id), { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+  fetch(URL_DELETE(id), {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF },
+  })
     .then(r => r.json())
     .then(d => {
-      if (d.ok) { document.getElementById(`doc-row-${id}`)?.remove(); showToast('Deleted.'); }
+      if (d.ok) {
+        document.getElementById(`doc-row-${id}`)?.remove();
+        showToast('Deleted.');
+      } else {
+        showToast('Delete failed.', false);
+      }
     })
     .catch(() => showToast('Delete failed.', false));
 }
 
 function setPrimary(id) {
-  fetch(URL_PRIMARY(id), { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+  fetch(URL_PRIMARY(id), {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF },
+  })
     .then(r => r.json())
     .then(d => {
-      if (d.ok) {
-        const row = document.getElementById(`doc-row-${id}`);
-        if (!row) return;
-        // Clear primary state from all rows in this section
-        row.closest('.doc-section')?.querySelectorAll('.doc-row').forEach(r => {
-          r.classList.remove('primary');
-          r.querySelector('.primary-tag')?.remove();
-          const acts = r.querySelector('.doc-actions');
-          const rid  = parseInt(r.id.replace('doc-row-', ''));
-          if (acts && !acts.querySelector('.primary-btn')) {
-            const btn = document.createElement('button');
-            btn.className   = 'icon-btn primary-btn';
-            btn.textContent = '★ Set Primary';
-            btn.onclick     = () => setPrimary(rid);
-            acts.prepend(btn);
-          }
-        });
-        // Mark the new primary
-        row.classList.add('primary');
-        row.querySelector('.doc-meta')
-           ?.insertAdjacentHTML('beforeend', '<span class="doc-tag primary-tag">★ Primary</span>');
-        row.querySelector('.primary-btn')?.remove();
-        showToast('Primary document updated.');
-      }
+      if (!d.ok) { showToast('Failed.', false); return; }
+
+      const row = document.getElementById(`doc-row-${id}`);
+      if (!row) return;
+
+      // Demote all rows in this section
+      row.closest('.doc-section')?.querySelectorAll('.doc-row').forEach(r => {
+        r.classList.remove('primary');
+        r.querySelector('.primary-tag')?.remove();
+        const acts = r.querySelector('.doc-actions');
+        const rid  = parseInt(r.id.replace('doc-row-', ''), 10);
+        if (acts && !acts.querySelector('.primary-btn')) {
+          const btn = document.createElement('button');
+          btn.className   = 'icon-btn primary-btn';
+          btn.textContent = '★ Primary';
+          btn.onclick     = () => setPrimary(rid);
+          acts.prepend(btn);
+        }
+      });
+
+      // Promote the clicked row
+      row.classList.add('primary');
+      row.querySelector('.doc-meta')
+         ?.insertAdjacentHTML('beforeend', '<span class="doc-tag primary-tag">★ Primary</span>');
+      row.querySelector('.primary-btn')?.remove();
+      showToast('Primary document updated.');
     })
     .catch(() => showToast('Failed.', false));
 }

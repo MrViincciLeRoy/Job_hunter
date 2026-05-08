@@ -1,3 +1,4 @@
+# apps/accounts/urls.py
 from django.urls import path
 from . import views
 
@@ -9,39 +10,42 @@ urlpatterns = [
     path("onboarding/",                      views.onboarding_view,      name="onboarding"),
     path("onboarding/extract-cv/",           views.extract_cv_view,      name="extract_cv"),
     path("profile/",                         views.profile_view,         name="profile"),
-    path("documents/",                       views.documents_view,       name="documents"),
-    path("documents/<int:doc_id>/download/", views.document_download,    name="doc_download"),
-    path("documents/<int:doc_id>/delete/",   views.document_delete,      name="doc_delete"),
-    path("documents/<int:doc_id>/primary/",  views.document_set_primary, name="doc_primary"),
     path("photo/",                           views.photo_view,           name="user_photo"),
 
-    path("experience/add/",            views.experience_save,   name="experience_add"),
-    path("experience/<int:pk>/edit/",  views.experience_save,   name="experience_edit"),
-    path("experience/<int:pk>/delete/",views.experience_delete, name="experience_delete"),
+    # ?? Documents ?????????????????????????????????????????????????????????????
+    path("documents/",                           views.documents_view,       name="documents"),
+    path("documents/upload/",                    views.document_upload,      name="doc_upload"),
+    path("documents/<int:doc_id>/download/",     views.document_download,    name="doc_download"),
+    path("documents/<int:doc_id>/delete/",       views.document_delete,      name="doc_delete"),
+    path("documents/<int:doc_id>/primary/",      views.document_set_primary, name="doc_primary"),
 
-    path("education/add/",             views.education_save,    name="education_add"),
-    path("education/<int:pk>/edit/",   views.education_save,    name="education_edit"),
-    path("education/<int:pk>/delete/", views.education_delete,  name="education_delete"),
+    # ?? Work Experience ???????????????????????????????????????????????????????
+    path("experience/add/",             views.experience_save,   name="experience_add"),
+    path("experience/<int:pk>/edit/",   views.experience_save,   name="experience_edit"),
+    path("experience/<int:pk>/delete/", views.experience_delete, name="experience_delete"),
 
-    path("skills/add/",                views.skill_save,        name="skill_add"),
-    path("skills/<int:pk>/edit/",      views.skill_save,        name="skill_edit"),
-    path("skills/<int:pk>/delete/",    views.skill_delete,      name="skill_delete"),
+    # ?? Education ?????????????????????????????????????????????????????????????
+    path("education/add/",              views.education_save,    name="education_add"),
+    path("education/<int:pk>/edit/",    views.education_save,    name="education_edit"),
+    path("education/<int:pk>/delete/",  views.education_delete,  name="education_delete"),
 
-    path("languages/add/",             views.language_save,     name="language_add"),
-    path("languages/<int:pk>/edit/",   views.language_save,     name="language_edit"),
-    path("languages/<int:pk>/delete/", views.language_delete,   name="language_delete"),
+    # ?? Skills ????????????????????????????????????????????????????????????????
+    path("skills/add/",                 views.skill_save,        name="skill_add"),
+    path("skills/<int:pk>/edit/",       views.skill_save,        name="skill_edit"),
+    path("skills/<int:pk>/delete/",     views.skill_delete,      name="skill_delete"),
 
-    path("references/add/",            views.reference_save,    name="reference_add"),
-    path("references/<int:pk>/edit/",  views.reference_save,    name="reference_edit"),
-    path("references/<int:pk>/delete/",views.reference_delete,  name="reference_delete"),
+    # ?? Languages ?????????????????????????????????????????????????????????????
+    path("languages/add/",              views.language_save,     name="language_add"),
+    path("languages/<int:pk>/edit/",    views.language_save,     name="language_edit"),
+    path("languages/<int:pk>/delete/",  views.language_delete,   name="language_delete"),
 
-    path("links/add/",                 views.social_link_save,  name="link_add"),
-    path("links/<int:pk>/edit/",       views.social_link_save,  name="link_edit"),
-    path("links/<int:pk>/delete/",     views.social_link_delete,name="link_delete"),
-path("documents/",                         views.documents,           name="documents"),
-    path("documents/upload/",                  views.upload_document,     name="doc_upload"),
-    path("documents/<int:doc_id>/delete/",     views.delete_document,     name="doc_delete"),
-    path("documents/<int:doc_id>/set-primary/",views.set_primary_document,name="doc_primary"),
-    path("documents/<int:doc_id>/download/",   views.download_document,   name="doc_download"),
+    # ?? References ????????????????????????????????????????????????????????????
+    path("references/add/",             views.reference_save,    name="reference_add"),
+    path("references/<int:pk>/edit/",   views.reference_save,    name="reference_edit"),
+    path("references/<int:pk>/delete/", views.reference_delete,  name="reference_delete"),
 
+    # ?? Social Links ??????????????????????????????????????????????????????????
+    path("links/add/",                  views.social_link_save,  name="link_add"),
+    path("links/<int:pk>/edit/",        views.social_link_save,  name="link_edit"),
+    path("links/<int:pk>/delete/",      views.social_link_delete,name="link_delete"),
 ]
