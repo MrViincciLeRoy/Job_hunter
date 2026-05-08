@@ -1,53 +1,70 @@
-# Job Hunter
+# 🎯 Job Hunter
 
-Scrapes LinkedIn, Indeed, PNet, and CareerJunction. Matches jobs to your CV using Groq AI. Sends email applications automatically with a generated cover letter.
+Automated job discovery, AI-powered matching, and email application system.
 
-## Setup (Local)
+[![Deployment Status](https://img.shields.io/badge/Deploy-Render-blue?style=flat-square)](https://render.com)
+[![Engine](https://img.shields.io/badge/AI-Groq-green?style=flat-square)](https://groq.com)
 
+## 🚀 Key Features
+
+-   **Multi-Source Scraper**: Aggregates listings from LinkedIn, Indeed, PNet, CareerJunction, DPSA, and more.
+-   **AI Matching**: Uses Groq LLM to score jobs (0–100) based on your parsed CV.
+-   **Auto-Applier**: Automatically generates tailored cover letters and emails your CV to jobs meeting your threshold.
+-   **Termux Compatible**: Full support for running as a background bot on Android via Termux.
+-   **Dashboard**: Clean UI to manage your profile, documents, and tracked job applications.
+
+## 🛠️ Quick Start
+
+### Local Setup
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env   # fill in your keys + DATABASE_URL
+
+# Configure environment
+cp .env.example .env  # Update with your API keys & DATABASE_URL
+
+# Database setup
 python manage.py migrate
 python manage.py createsuperuser
+
+# Start server
 python manage.py runserver
 ```
 
-Go to `http://127.0.0.1:8000/upload-cv/` and upload your PDF CV first.
-
-## Deploy to Render + Neon
-
-1. Create a free Postgres DB at [neon.tech](https://neon.tech) → copy the connection string
-2. Push this repo to GitHub
-3. Create a new **Web Service** on Render, connect your repo, then set:
-   - **Build Command:** `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate`
-   - **Start Command:** `gunicorn job_hunter.wsgi:application --bind 0.0.0.0:$PORT --workers 2`
-4. Add env vars in Render dashboard:
-   - `DATABASE_URL` → your Neon connection string
-   - `GROQ_API_KEY`, `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `SECRET_KEY`
-
-## Running
-
+### Termux Installation
 ```bash
-python run.py all          # scrape + match + apply
-python run.py scrape
-python run.py match
-python run.py apply
-python run.py apply --dry-run
-
-python manage.py scrape_jobs --keywords "python developer" --limit 30
-python manage.py apply_jobs --threshold 50
+pkg install python git nodejs-lts
+git clone https://github.com/MrViincciLeRoy/Job_hunter.git
+cd Job_hunter
+pip install -r requirements-termux.txt
+# Follow local setup steps above
 ```
 
-## How It Works
+## 🤖 Operation
 
-1. Upload CV → Groq parses it → extracts name, email, skills, experience
-2. Scrape → pulls jobs from LinkedIn/Indeed (jobspy) + PNet/CareerJunction (custom)
-3. Match → Groq scores each job 0–100 against your CV
-4. Apply → sends email + cover letter + CV attachment to jobs scoring ≥60 with an email
+Use the unified runner to control the pipeline:
 
-## Notes
+| Command | Action |
+| :--- | :--- |
+| `python run.py scrape` | Fetch new jobs from all platforms |
+| `python run.py match` | Run AI scoring against your CV |
+| `python run.py apply` | Send applications (Emails/CVs) |
+| `python run.py all` | Run the full pipeline sequentially |
+| `python run.py apply --dry-run` | Preview applications without sending |
 
-- Green dot = job has an email (will be applied to)
-- Grey dot = no email found
-- PNet and CareerJunction expose the most email addresses
-- Admin panel at `/admin/`
+## 🏗️ Technical Architecture
+
+1.  **CV Parsing**: Uploaded PDFs are parsed via LLM into structured data (Skills, Experience, Education).
+2.  **Scraping**: `jobspy` handles major boards; custom scrapers (`utils/scraper_utils.py`) target niche sites and extract HR emails.
+3.  **Matching**: `matcher_algo.py` feeds job descriptions and CV data to Groq to determine fit.
+4.  **Mailing**: `apps.mailer` manages Gmail API integration for high-deliverability applications.
+
+## ☁️ Deployment
+
+Designed for easy deployment on **Render** using **Neon Postgres**:
+-   **Build:** `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate`
+-   **Start:** `gunicorn job_hunter.wsgi:application`
+-   **Env Vars Required:** `DATABASE_URL`, `GROQ_API_KEY`, `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `SECRET_KEY`.
+
+---
+*Developed for the modern job seeker.*
