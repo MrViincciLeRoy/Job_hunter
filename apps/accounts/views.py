@@ -582,3 +582,97 @@ def _sync_cv_to_pipeline(user, pdf_bytes, filename):
             cv.save()
     except Exception as e:
         print(f"[accounts] CV sync error: {e}")
+
+# Add/replace these views in your existing apps/accounts/views.py
+# (keep all your existing profile/auth views — only the document views are shown here)
+
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse, HttpResponse
+from django.contrib import messages
+
+from apps.accounts.models import UserDocument, DOC_TYPES
+
+
+@login_required
+def documents(request):
+    docs = UserDocument.objects.filter(user=request.user)
+
+    # Group by doc_type, preserving DOC_TYPES order
+    grouped = {}
+    for choice_value, choice_label in DOC_TYPES:
+        grouped[choice_value] = {
+            "label": choice_label,
+            "docs":  [d for d in docs if d.doc_type == choice_value],
+        }
+
+    return render(request, "accounts/documents.html", {
+        "grouped":   grouped,
+        "doc_types": DOC_TYPES,
+        "total":     docs.count(),
+    })
+
+
+@login_required
+@require_POST
+def upload_document(request):
+    doc_type = request.POST.get("doc_type")
+    label    = request.POST.get("label", "").strip()
+    file     = request.FILES.get("file")
+
+    if not doc_type or not file:
+        messages.error(request, "Document type and file are required.")
+        return redirect("accounts:documents")
+
+    if doc_type not in dict(DOC_TYPES):
+        messages.error(request, "Invalid document type.")
+        return redirect("accounts:documents")
+
+    # Read file into binary
+    file_data = file.read()
+    mime      = file.content_type or ""
+
+    # If uploading a new primary for this type, demote the old one
+    if doc_type in ("cv",):
+        UserDocument.objects.filter(user=request.user, doc_type=doc_type, is_primary=True).update(is_primary=False)
+
+    UserDocument.objects.create(
+        user      = request.user,
+        doc_type  = doc_type,
+        label     = label or file.name,
+        file_data = file_data,
+        file_name = file.name,
+        mime_type = mime,
+        file_size = len(file_data),
+        is_primary= True,   # newest upload becomes primary
+    )
+    messages.success(request, f"Uploaded {dict(DOC_TYPES)[doc_type]}.")
+    return redirect("accounts:documents")
+
+
+@login_required
+@require_POST
+def delete_document(request, doc_id):
+    doc = get_object_or_404(UserDocument, pk=doc_id, user=request.user)
+    doc.delete()
+    return JsonResponse({"deleted": True, "ok": True})
+
+
+@login_required
+@require_POST
+def set_primary_document(request, doc_id):
+    doc = get_object_or_404(UserDocument, pk=doc_id, user=request.user)
+    # Demote all others of same type for this user
+    UserDocument.objects.filter(user=request.user, doc_type=doc.doc_type, is_primary=True).update(is_primary=False)
+    doc.is_primary = True
+    doc.save(update_fields=["is_primary"])
+    return JsonResponse({"active": True, "ok": True})
+
+
+@login_required
+def download_document(request, doc_id):
+    doc = get_object_or_404(UserDocument, pk=doc_id, user=request.user)
+    resp = HttpResponse(bytes(doc.file_data), content_type=doc.mime_type or "application/octet-stream")
+    resp["Content-Disposition"] = f'attachment; filename="{doc.file_name}"'
+    return resp

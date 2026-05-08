@@ -38,4 +38,10 @@ urlpatterns = [
     path("links/add/",                 views.social_link_save,  name="link_add"),
     path("links/<int:pk>/edit/",       views.social_link_save,  name="link_edit"),
     path("links/<int:pk>/delete/",     views.social_link_delete,name="link_delete"),
+path("documents/",                         views.documents,           name="documents"),
+    path("documents/upload/",                  views.upload_document,     name="doc_upload"),
+    path("documents/<int:doc_id>/delete/",     views.delete_document,     name="doc_delete"),
+    path("documents/<int:doc_id>/set-primary/",views.set_primary_document,name="doc_primary"),
+    path("documents/<int:doc_id>/download/",   views.download_document,   name="doc_download"),
+
 ]

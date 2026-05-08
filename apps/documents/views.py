@@ -14,9 +14,10 @@ def documents_list(request):
             "docs":  [d for d in docs if d.doc_type == choice_value],
         }
     return render(request, "documents/list.html", {
-        "grouped":       grouped,
-        "doc_type_choices": DocumentType.choices,
-        "total":         docs.count(),
+        "grouped":          grouped,
+        "doc_type_choices": DocumentType.choices,   # used by documents/list.html
+        "doc_types":        DocumentType.choices,   # used by accounts/documents.html
+        "total":            docs.count(),
     })
 
 
@@ -39,11 +40,11 @@ def upload_document(request):
     Document.objects.filter(doc_type=doc_type, active=True).update(active=False)
 
     Document.objects.create(
-        doc_type = doc_type,
-        label    = label,
-        file     = file,
-        note     = note,
-        active   = True,
+        doc_type=doc_type,
+        label=label,
+        file=file,
+        note=note,
+        active=True,
     )
     messages.success(request, f"Uploaded {dict(DocumentType.choices)[doc_type]}.")
     return redirect("documents_list")
@@ -54,7 +55,8 @@ def delete_document(request, doc_id):
     doc = get_object_or_404(Document, pk=doc_id)
     doc.file.delete(save=False)
     doc.delete()
-    return JsonResponse({"deleted": True})
+    # Both templates check different keys; return both so either works.
+    return JsonResponse({"deleted": True, "ok": True})
 
 
 @require_POST
@@ -63,7 +65,8 @@ def set_active(request, doc_id):
     Document.objects.filter(doc_type=doc.doc_type, active=True).update(active=False)
     doc.active = True
     doc.save(update_fields=["active"])
-    return JsonResponse({"active": True})
+    # 'ok' key is what accounts/documents.html JS expects
+    return JsonResponse({"active": True, "ok": True})
 
 
 def download_document(request, doc_id):

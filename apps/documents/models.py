@@ -1,3 +1,4 @@
+import os
 from django.db import models
 from django.core.validators import FileExtensionValidator
 
@@ -26,6 +27,17 @@ def document_upload_path(instance, filename):
     return f"documents/{instance.doc_type}/{filename}"
 
 
+# Maps file extension → MIME-like string used by the template icon logic
+_EXT_MIME = {
+    "pdf":  "application/pdf",
+    "doc":  "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "jpg":  "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png":  "image/png",
+}
+
+
 class Document(models.Model):
     doc_type    = models.CharField(max_length=50, choices=DocumentType.choices)
     label       = models.CharField(max_length=255, blank=True)
@@ -43,13 +55,15 @@ class Document(models.Model):
     def __str__(self):
         return f"{self.get_doc_type_display()} — {self.display_label}"
 
+    # ── existing helpers ──────────────────────────────────────────────────────
+
     @property
     def display_label(self):
-        return self.label or self.file.name.split("/")[-1]
+        return self.label or self.filename
 
     @property
     def filename(self):
-        return self.file.name.split("/")[-1]
+        return os.path.basename(self.file.name)
 
     def get_bytes(self):
         try:
@@ -57,3 +71,33 @@ class Document(models.Model):
                 return f.read()
         except Exception:
             return None
+
+    # ── new helpers expected by accounts/documents.html ──────────────────────
+
+    @property
+    def file_name(self):
+        """Alias so the template can use doc.file_name."""
+        return self.filename
+
+    @property
+    def is_primary(self):
+        """True when this is the active record for its type (used as 'Primary CV' badge)."""
+        return self.active
+
+    @property
+    def mime_type(self):
+        ext = self.filename.rsplit(".", 1)[-1].lower() if "." in self.filename else ""
+        return _EXT_MIME.get(ext, "application/octet-stream")
+
+    @property
+    def size_display(self):
+        """Human-readable file size, e.g. '245 KB'. Returns '' if the file is missing."""
+        try:
+            size = self.file.size          # raises if storage can't stat the file
+        except Exception:
+            return ""
+        if size < 1024:
+            return f"{size} B"
+        if size < 1024 ** 2:
+            return f"{size // 1024} KB"
+        return f"{size / 1024 ** 2:.1f} MB"

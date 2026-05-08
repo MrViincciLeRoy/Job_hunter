@@ -30,7 +30,7 @@
     color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
     margin-bottom: 1rem;
   }
-  .upload-grid { display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 0.75rem; align-items: end; }
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; }
   .upload-group { display: flex; flex-direction: column; gap: 0.35rem; }
   .upload-label {
     font-family: 'Space Mono', monospace; font-size: 0.57rem;
@@ -137,7 +137,6 @@
 
   @media (max-width: 640px) {
     .upload-grid { grid-template-columns: 1fr 1fr; }
-    .upload-grid .upload-group:nth-child(3) { grid-column: 1 / -1; }
     .upload-btn { grid-column: 1 / -1; }
     .doc-row { grid-template-columns: 2rem 1fr auto; }
   }
@@ -148,9 +147,9 @@
 <div class="top-bar">
   <a href="{% url 'dashboard' %}" class="logo" style="text-decoration:none;color:inherit;">job<span>/</span>hunter</a>
   <div class="nav">
-    <a href="{% url 'dashboard' %}"          class="btn btn-outline btn-sm">← Dashboard</a>
-    <a href="{% url 'accounts:profile' %}"   class="btn btn-outline btn-sm">👤 Profile</a>
-    <a href="{% url 'accounts:logout' %}"    class="btn btn-outline btn-sm">Sign out</a>
+    <a href="{% url 'dashboard' %}"        class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="{% url 'accounts:profile' %}" class="btn btn-outline btn-sm">👤 Profile</a>
+    <a href="{% url 'accounts:logout' %}"  class="btn btn-outline btn-sm">Sign out</a>
   </div>
 </div>
 
@@ -170,11 +169,11 @@
 
   <div class="upload-card">
     <div class="upload-title">Upload Document</div>
-    <form method="POST" enctype="multipart/form-data" id="upload-form" action="{% url 'accounts:documents' %}">
+    <form method="POST" enctype="multipart/form-data" id="upload-form" action="{% url 'accounts:doc_upload' %}">
       {% csrf_token %}
 
       <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <input type="file" id="file-input" name="file" onchange="onFileChange(this)">
+        <input type="file" id="file-input" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="onFileChange(this)">
         <span class="drop-hint">CLICK OR DRAG & DROP</span>
         <span class="drop-sub">PDF, JPG, PNG, DOCX — max 10 MB</span>
         <div class="file-picked" id="file-picked"></div>
@@ -185,7 +184,8 @@
           <label class="upload-label">Document Type</label>
           <select class="upload-select" name="doc_type" id="doc-type-sel">
             {% for dt, dt_label in doc_types %}
-            <option value="{{ dt }}">{{ dt_label }}</option>
+            <option value="{{ dt }}"
+              {% if dt == "cv" %}selected{% endif %}>{{ dt_label }}</option>
             {% endfor %}
           </select>
         </div>
@@ -193,13 +193,13 @@
           <label class="upload-label">Label / Name</label>
           <input class="upload-input" type="text" name="label" id="label-inp" placeholder="e.g. My CV 2025">
         </div>
-        <div class="upload-group"></div>
         <button type="submit" class="upload-btn">UPLOAD →</button>
       </div>
     </form>
   </div>
 
   {% for dt, group in grouped.items %}
+  {% if group.docs %}
   <div class="doc-section">
     <div class="doc-section-header">
       <span class="doc-type-icon">
@@ -214,39 +214,41 @@
       <span class="count">{{ group.docs|length }}</span>
     </div>
 
-    {% if group.docs %}
     <div class="doc-list">
       {% for doc in group.docs %}
       <div class="doc-row {% if doc.is_primary %}primary{% endif %}" id="doc-row-{{ doc.pk }}">
+
         <div class="doc-file-icon">
           {% if "pdf" in doc.mime_type %}📕
           {% elif "image" in doc.mime_type %}🖼️
-          {% elif "word" in doc.mime_type or "docx" in doc.file_name %}📝
+          {% elif "word" in doc.mime_type %}📝
           {% else %}📄{% endif %}
         </div>
+
         <div class="doc-info">
           <div class="doc-label">{{ doc.label }}</div>
           <div class="doc-meta">
+            {# size_display is a method on UserDocument, not a property #}
             <span class="doc-tag size-tag">{{ doc.size_display }}</span>
             <span class="doc-tag">{{ doc.uploaded_at|date:"d M Y" }}</span>
             <span class="doc-tag">{{ doc.file_name }}</span>
-            {% if doc.is_primary %}<span class="doc-tag primary-tag">★ Primary CV</span>{% endif %}
+            {% if doc.is_primary %}<span class="doc-tag primary-tag">★ Primary</span>{% endif %}
           </div>
         </div>
+
         <div class="doc-actions">
-          {% if dt == "cv" and not doc.is_primary %}
+          {% if not doc.is_primary %}
           <button class="icon-btn primary-btn" onclick="setPrimary({{ doc.pk }})">★ Set Primary</button>
           {% endif %}
           <a href="{% url 'accounts:doc_download' doc.pk %}" class="icon-btn">↓ Download</a>
           <button class="icon-btn del-btn" onclick="deleteDoc({{ doc.pk }})">✕</button>
         </div>
+
       </div>
       {% endfor %}
     </div>
-    {% else %}
-    <div class="empty-section">No {{ group.label|lower }} uploaded yet.</div>
-    {% endif %}
   </div>
+  {% endif %}
   {% endfor %}
 
 </div>
@@ -255,9 +257,8 @@
 
 <script>
 const CSRF = '{{ csrf_token }}';
-// Build URLs via Django so they respect any prefix / namespace
-const URL_DELETE  = id => `{% url 'accounts:doc_delete'  0 %}`.replace('/0/', '/' + id + '/');
-const URL_PRIMARY = id => `{% url 'accounts:doc_primary' 0 %}`.replace('/0/', '/' + id + '/');
+const URL_DELETE  = id => `{% url 'accounts:doc_delete'   0 %}`.replace('/0/', '/' + id + '/');
+const URL_PRIMARY = id => `{% url 'accounts:doc_primary'  0 %}`.replace('/0/', '/' + id + '/');
 
 function showToast(msg, ok=true) {
   const t = document.getElementById('toast');
@@ -283,7 +284,7 @@ zone.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f) {
     const inp = document.getElementById('file-input');
-    const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
+    const dt  = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
     onFileChange(inp);
   }
 });
@@ -303,18 +304,28 @@ function setPrimary(id) {
     .then(r => r.json())
     .then(d => {
       if (d.ok) {
-        document.querySelectorAll('.doc-row').forEach(r => {
+        const row = document.getElementById(`doc-row-${id}`);
+        if (!row) return;
+        // Clear primary state from all rows in this section
+        row.closest('.doc-section')?.querySelectorAll('.doc-row').forEach(r => {
           r.classList.remove('primary');
           r.querySelector('.primary-tag')?.remove();
+          const acts = r.querySelector('.doc-actions');
+          const rid  = parseInt(r.id.replace('doc-row-', ''));
+          if (acts && !acts.querySelector('.primary-btn')) {
+            const btn = document.createElement('button');
+            btn.className   = 'icon-btn primary-btn';
+            btn.textContent = '★ Set Primary';
+            btn.onclick     = () => setPrimary(rid);
+            acts.prepend(btn);
+          }
         });
-        const row = document.getElementById(`doc-row-${id}`);
-        if (row) {
-          row.classList.add('primary');
-          const meta = row.querySelector('.doc-meta');
-          if (meta) meta.insertAdjacentHTML('beforeend', '<span class="doc-tag primary-tag">★ Primary CV</span>');
-          row.querySelector('.icon-btn.primary-btn')?.remove();
-        }
-        showToast('Primary CV updated.');
+        // Mark the new primary
+        row.classList.add('primary');
+        row.querySelector('.doc-meta')
+           ?.insertAdjacentHTML('beforeend', '<span class="doc-tag primary-tag">★ Primary</span>');
+        row.querySelector('.primary-btn')?.remove();
+        showToast('Primary document updated.');
       }
     })
     .catch(() => showToast('Failed.', false));
