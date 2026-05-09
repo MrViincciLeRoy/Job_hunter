@@ -1,0 +1,44 @@
+name: Test JobSpy Scraper
+
+on:
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install python-jobspy pandas
+
+    - name: Run JobSpy Script
+      run: |
+        python -c "
+        from jobspy import scrape_jobs
+        import pandas as pd
+        try:
+            df = scrape_jobs(
+                site_name=['linkedin'], 
+                search_term='developer', 
+                location='South Africa', 
+                results_wanted=1
+            )
+            print('Columns:', df.columns.tolist())
+            if not df.empty:
+                print('First result:', df.iloc[0].to_dict())
+            else:
+                print('No jobs found.')
+        except Exception as e:
+            print(f'Error occurred: {e}')
+            exit(1)
+        "
