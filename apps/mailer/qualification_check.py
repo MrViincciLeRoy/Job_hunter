@@ -1,26 +1,29 @@
 from datetime import date
 from apps.accounts.models import WorkExperience, Education, Skill
 
-NQF_RANK = {"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"other":7}
+NQF_RANK = {"4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "other": 7}
 
 LEVEL_XP = {
-    range(5,7):  0, range(7,9): 2, range(9,11): 3,
-    range(11,13): 5, range(13,15): 8,
+    range(5, 7):   0,
+    range(7, 9):   2,
+    range(9, 11):  3,
+    range(11, 13): 5,
+    range(13, 15): 8,
 }
 
 SPECIAL_FLAGS = [
-    ("driver",          "drivers_licence",  "Valid driver's licence"),
-    ("saqa",            "saqa",             "SAQA verification"),
-    ("ecsa",            "professional_reg", "ECSA registration"),
-    ("sacpcmp",         "professional_reg", "SACPCMP registration"),
-    ("professional bod","professional_reg", "Professional body registration"),
-    ("nyukela",         None,               "SMS Pre-entry (Nyukela) certificate"),
-    ("sms pre-entry",   None,               "SMS Pre-entry (Nyukela) certificate"),
-    ("security clearance", None,            "Security clearance"),
-    ("own transport",   None,               "Own transport"),
-    ("persal",          None,               "PERSAL proficiency"),
-    ("bas ",            None,               "BAS system proficiency"),
-    ("sap ",            None,               "SAP proficiency"),
+    ("driver",           "drivers_licence",  "Valid driver's licence"),
+    ("saqa",             "saqa",             "SAQA verification"),
+    ("ecsa",             "professional_reg", "ECSA registration"),
+    ("sacpcmp",          "professional_reg", "SACPCMP registration"),
+    ("professional bod", "professional_reg", "Professional body registration"),
+    ("nyukela",          None,               "SMS Pre-entry (Nyukela) certificate"),
+    ("sms pre-entry",    None,               "SMS Pre-entry (Nyukela) certificate"),
+    ("security clearance", None,             "Security clearance"),
+    ("own transport",    None,               "Own transport"),
+    ("persal",           None,               "PERSAL proficiency"),
+    ("bas ",             None,               "BAS system proficiency"),
+    ("sap ",             None,               "SAP proficiency"),
 ]
 
 
@@ -28,21 +31,21 @@ def _total_experience_years(user):
     total = 0
     for exp in WorkExperience.objects.filter(user=user):
         end = date.today() if exp.is_current else (exp.end_date or date.today())
-        months = (end.year - exp.start_date.year)*12 + (end.month - exp.start_date.month)
+        months = (end.year - exp.start_date.year) * 12 + (end.month - exp.start_date.month)
         total += max(0, months)
     return round(total / 12, 1)
 
 
 def _extract_required_nqf(description: str) -> int | None:
     desc = description.lower()
-    if "doctoral" in desc or "phd" in desc:             return 10
-    if "master"   in desc:                              return 9
-    if "honours"  in desc or "postgrad diploma" in desc: return 8
-    if "degree"   in desc or "bachelor" in desc:        return 7
-    if "advanced diploma" in desc:                      return 7
-    if "diploma"  in desc:                              return 6
-    if "higher certificate" in desc:                    return 5
-    if "matric"   in desc or "grade 12" in desc:        return 4
+    if "doctoral" in desc or "phd" in desc:              return 10
+    if "master" in desc:                                  return 9
+    if "honours" in desc or "postgrad diploma" in desc:   return 8
+    if "degree" in desc or "bachelor" in desc:            return 7
+    if "advanced diploma" in desc:                        return 7
+    if "diploma" in desc:                                 return 6
+    if "higher certificate" in desc:                      return 5
+    if "matric" in desc or "grade 12" in desc:            return 4
     return None
 
 
@@ -72,7 +75,6 @@ def _skills_score(user, description: str) -> tuple[int, list, list]:
     matched, missing = [], []
     for skill in user_skills:
         (matched if skill in desc else missing).append(skill)
-    # also pick up skills mentioned in desc not in profile
     total_mentioned = max(len(user_skills), 1)
     score = int(len(matched) / total_mentioned * 100)
     return score, matched, missing
@@ -81,16 +83,16 @@ def _skills_score(user, description: str) -> tuple[int, list, list]:
 def run_qualification_check(user, job) -> dict:
     desc = (job.description or "") + " " + (job.title or "")
     result = {
-        "verdict":      "PROCEED",
-        "education":    {"status": "✅", "reason": ""},
-        "experience":   {"status": "✅", "reason": ""},
-        "skills":       {"status": "✅", "score": 0, "matched": [], "missing": []},
+        "verdict":       "PROCEED",
+        "education":     {"status": "✅", "reason": ""},
+        "experience":    {"status": "✅", "reason": ""},
+        "skills":        {"status": "✅", "score": 0, "matched": [], "missing": []},
         "special_flags": [],
-        "disqualified": False,
-        "warnings":     [],
+        "disqualified":  False,
+        "warnings":      [],
     }
 
-    # ── Education ──────────────────────────────────────────────────────────
+    # ── Education ─────────────────────────────────────────────────────────────
     req_nqf = _extract_required_nqf(desc)
     if req_nqf:
         user_edu = Education.objects.filter(user=user).order_by("-nqf_level").first()
@@ -109,7 +111,7 @@ def run_qualification_check(user, job) -> dict:
     else:
         result["education"]["reason"] = "No specific NQF requirement detected"
 
-    # ── Experience ─────────────────────────────────────────────────────────
+    # ── Experience ────────────────────────────────────────────────────────────
     req_years = _extract_required_years(desc)
     sal_level = _extract_salary_level(desc)
     if not req_years and sal_level:
@@ -140,7 +142,7 @@ def run_qualification_check(user, job) -> dict:
     else:
         result["experience"]["reason"] = f"No specific requirement detected ({user_years} yrs on profile)"
 
-    # ── Skills ─────────────────────────────────────────────────────────────
+    # ── Skills ────────────────────────────────────────────────────────────────
     score, matched, missing = _skills_score(user, desc)
     result["skills"] = {"score": score, "matched": matched, "missing": missing}
     if score < 40:
@@ -155,7 +157,7 @@ def run_qualification_check(user, job) -> dict:
     else:
         result["skills"]["status"] = "✅"
 
-    # ── Special flags ──────────────────────────────────────────────────────
+    # ── Special flags ─────────────────────────────────────────────────────────
     for keyword, doc_type, label in SPECIAL_FLAGS:
         if keyword in desc.lower():
             result["special_flags"].append({

@@ -57,9 +57,9 @@ try:
 except ImportError:
     pass
 
-GOV_PLATFORMS   = {"dpsa", "sayouth", "essa", "govza"}
-IT_PLATFORMS    = {"pnet", "careerjunction", "careerjunction_it"}
-GOV_PRIORITY_KW = "internship learnership entry level graduate IT"
+GOV_PLATFORMS    = {"dpsa", "sayouth", "essa", "govza"}
+IT_PLATFORMS     = {"pnet", "careerjunction", "careerjunction_it"}
+GOV_PRIORITY_KW  = "internship learnership entry level graduate IT"
 GOV_PDF_SCRAPERS = {'dpsa'}
 
 SCRAPER_MAX_PAGES = {
@@ -273,10 +273,6 @@ class Command(BaseCommand):
             for jt, count in sorted(type_counts.items(), key=lambda x: -x[1]):
                 self.stdout.write(f"  {jt:<30} {count}\n")
 
-        # ── Write to DB ───────────────────────────────────────────────────────
-        # Refresh DB connections — Neon closes idle connections after ~5 min.
-        # The thread pool keeps the process alive past that timeout, so we
-        # must discard stale connections before touching the DB again.
         close_old_connections()
 
         created = updated = skipped = errors = 0
@@ -288,6 +284,16 @@ class Command(BaseCommand):
 
             if not title:
                 continue
+
+            # Pull reference_no: DPSA uses _ref_no / _post_ref, others use closing_date
+            reference_no = _t(
+                j.get("_ref_no") or j.get("_post_ref") or "",
+                100
+            )
+            closing_date = _t(
+                j.get("closing_date") or j.get("_closing_date") or "",
+                100
+            )
 
             try:
                 obj, new = Job.objects.get_or_create(
@@ -303,6 +309,8 @@ class Command(BaseCommand):
                         "job_type":      _t(j.get("job_type"),    100),
                         "how_to_apply":  j.get("how_to_apply",    ""),
                         "docs_required": j.get("docs_required",   ""),
+                        "reference_no":  reference_no,
+                        "closing_date":  closing_date,
                     },
                 )
             except Exception as e:
@@ -321,6 +329,11 @@ class Command(BaseCommand):
                 for field in ["how_to_apply", "docs_required", "description"]:
                     if not getattr(obj, field) and j.get(field):
                         setattr(obj, field, j[field])
+                        dirty.append(field)
+                # Always update reference_no and closing_date if we now have them
+                for field, val in [("reference_no", reference_no), ("closing_date", closing_date)]:
+                    if not getattr(obj, field) and val:
+                        setattr(obj, field, val)
                         dirty.append(field)
                 if dirty:
                     obj.save(update_fields=dirty)
