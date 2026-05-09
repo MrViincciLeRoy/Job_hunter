@@ -1,0 +1,201 @@
+name: Clean & Scrape Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      # ── Cleanup ────────────────────────────────────────────────────────────
+      cleanup:
+        description: "Run cleanup before scraping?"
+        required: false
+        default: "yes"
+        type: choice
+        options: [yes, no]
+      cleanup_platform:
+        description: "Cleanup: limit to platform slug (blank = all)"
+        required: false
+        default: ""
+        type: string
+      cleanup_dry_run:
+        description: "Cleanup: dry run only (preview, no delete)?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+
+      # ── Scrape ─────────────────────────────────────────────────────────────
+      step:
+        description: "Pipeline step to run after cleanup"
+        required: false
+        default: "all"
+        type: choice
+        options: [all, scrape, spider, match]
+      job_types:
+        description: "Job types: internship learnership bursary scholarship graduate entry_level low_barrier permanent all"
+        required: false
+        default: "all"
+        type: string
+      keywords:
+        description: "Search keywords (blank = use CV skills)"
+        required: false
+        default: ""
+        type: string
+      max_jobs:
+        description: "Max jobs per scraper (0 = unlimited)"
+        required: false
+        default: "0"
+        type: string
+      workers:
+        description: "Parallel scraper threads"
+        required: false
+        default: "4"
+        type: string
+      scrapers:
+        description: "Specific scrapers: pnet careerjunction careers24 jobmail dpsa sayouth essa govza linkedin indeed"
+        required: false
+        default: ""
+        type: string
+      gov_only:
+        description: "Government sources only?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      it_only:
+        description: "IT platforms only?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      email_only:
+        description: "Email-yielding platforms only?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+      no_skip:
+        description: "Re-scrape already-seen URLs?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+
+      # ── Spider ─────────────────────────────────────────────────────────────
+      spider_limit:
+        description: "Spider: max URLs to process"
+        required: false
+        default: "100"
+        type: string
+      spider_concurrent:
+        description: "Spider: concurrent async requests"
+        required: false
+        default: "15"
+        type: string
+      spider_delete_no_email:
+        description: "Spider: delete jobs where no email found?"
+        required: false
+        default: "no"
+        type: choice
+        options: [no, yes]
+
+      # ── Match ──────────────────────────────────────────────────────────────
+      match_limit:
+        description: "Match: max jobs to score per run"
+        required: false
+        default: "25"
+        type: string
+
+jobs:
+  clean_and_scrape:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: job_hunter.settings
+      DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+      SECRET_KEY:      ${{ secrets.SECRET_KEY }}
+      GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
+      HF_API_KEY:      ${{ secrets.HF_API_KEY }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASS: ${{ secrets.EMAIL_HOST_PASS }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
+      # ── Cleanup ─────────────────────────────────────────────────────────────
+      - name: Cleanup unapplied jobs
+        if: ${{ github.event.inputs.cleanup == 'yes' }}
+        run: |
+          CMD="python manage.py cleanup_jobs"
+
+          if [ "${{ github.event.inputs.cleanup_dry_run }}" = "no" ]; then
+            CMD="$CMD --confirm"
+          fi
+
+          PLATFORM="${{ github.event.inputs.cleanup_platform }}"
+          if [ -n "$PLATFORM" ]; then
+            CMD="$CMD --platform $PLATFORM"
+          fi
+
+          echo "Running: $CMD"
+          $CMD
+
+      # ── Scrape ──────────────────────────────────────────────────────────────
+      - name: Scrape jobs
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'scrape' || github.event.inputs.step == '' }}
+        run: |
+          CMD="python manage.py scrape_jobs"
+          CMD="$CMD --workers ${{ github.event.inputs.workers || '4' }}"
+
+          JOB_TYPES="${{ github.event.inputs.job_types || 'all' }}"
+          if [ "$JOB_TYPES" != "all" ] && [ -n "$JOB_TYPES" ]; then
+            CMD="$CMD --types $JOB_TYPES"
+          fi
+
+          KW="${{ github.event.inputs.keywords }}"
+          if [ -n "$KW" ]; then CMD="$CMD --keywords \"$KW\""; fi
+
+          MAX_JOBS="${{ github.event.inputs.max_jobs || '0' }}"
+          if [ "$MAX_JOBS" != "0" ]; then CMD="$CMD --max-jobs $MAX_JOBS"; fi
+
+          SCRAPERS="${{ github.event.inputs.scrapers }}"
+          if [ -n "$SCRAPERS" ]; then CMD="$CMD --scrapers $SCRAPERS"; fi
+
+          if [ "${{ github.event.inputs.gov_only }}"   = "yes" ]; then CMD="$CMD --gov-only"; fi
+          if [ "${{ github.event.inputs.it_only }}"    = "yes" ]; then CMD="$CMD --it-only"; fi
+          if [ "${{ github.event.inputs.email_only }}" = "yes" ]; then CMD="$CMD --email-only"; fi
+          if [ "${{ github.event.inputs.no_skip }}"    = "yes" ]; then CMD="$CMD --no-skip"; fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      # ── Spider ──────────────────────────────────────────────────────────────
+      - name: Spider for emails
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'spider' || github.event.inputs.step == '' }}
+        run: |
+          CMD="python manage.py spider_jobs"
+          CMD="$CMD --limit ${{ github.event.inputs.spider_limit || '100' }}"
+          CMD="$CMD --concurrent ${{ github.event.inputs.spider_concurrent || '15' }}"
+
+          if [ "${{ github.event.inputs.spider_delete_no_email }}" = "yes" ]; then
+            CMD="$CMD --delete-no-email"
+          fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      # ── Match ────────────────────────────────────────────────────────────────
+      - name: Match CV to jobs
+        if: ${{ github.event.inputs.step == 'all' || github.event.inputs.step == 'match' || github.event.inputs.step == '' }}
+        run: |
+          pip install -r requirements-heavy.txt
+          python manage.py match_jobs \
+            --limit ${{ github.event.inputs.match_limit || '25' }}
