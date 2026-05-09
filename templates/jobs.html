@@ -9,6 +9,23 @@
   <link rel="stylesheet" href="{% static 'css/base.css' %}" />
   <link rel="stylesheet" href="{% static 'css/jobs.css' %}" />
   <link rel="stylesheet" href="{% static 'css/drawer.css' %}" />
+  <style>
+    .tag.closing-tag {
+      border-color: rgba(255,159,67,0.4);
+      color: rgba(255,159,67,0.85);
+      background: rgba(255,159,67,0.06);
+    }
+    .tag.closing-tag.urgent {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: rgba(255,68,102,0.07);
+    }
+    .tag.closing-tag.expired {
+      border-color: rgba(255,68,102,0.25);
+      color: rgba(255,68,102,0.45);
+      text-decoration: line-through;
+    }
+  </style>
 </head>
 <body>
 
@@ -39,10 +56,7 @@
   <div class="stat"><div class="stat-val red">{{ no_email_count }}</div><div class="stat-label">No Email</div></div>
 </div>
 
-{# ── Filter bar ──────────────────────────────────────────────────────────── #}
 <div class="filter-bar">
-
-  {# Row 1: status tabs + search + spider trigger #}
   <div class="filter-row">
     {% for slug, label, css, count in tab_defs %}
     <a class="ftab {% if active_tab == slug %}{{ css }}{% endif %}"
@@ -68,7 +82,6 @@
     </form>
   </div>
 
-  {# Row 2: platform chips #}
   <div class="filter-row">
     <span class="filter-label">Platform:</span>
     <a class="pchip {% if not active_platforms %}on-all{% endif %}"
@@ -86,7 +99,6 @@
     {% endfor %}
   </div>
 
-  {# Row 3: job type dropdown + active filter pills + clear #}
   <div class="filter-row">
     <span class="filter-label">Type:</span>
     <form method="get" action="{{ request.path }}" style="display:contents">
@@ -120,7 +132,6 @@
       </div>
     </form>
 
-    {# Active filter pills #}
     {% for p in active_platforms %}
     <a class="pill"
        href="?tab={{ active_tab }}{% for op in active_platforms %}{% if op != p %}&platform={{ op }}{% endif %}{% endfor %}{% if active_job_type %}&job_type={{ active_job_type }}{% endif %}{% if active_search %}&q={{ active_search }}{% endif %}&page_size={{ page_size }}">
@@ -139,7 +150,6 @@
     <a class="clear-btn" href="?tab={{ active_tab }}&page_size={{ page_size }}">✕ Clear filters</a>
     {% endif %}
   </div>
-
 </div>
 
 <div class="results-bar">
@@ -149,7 +159,6 @@
   {% if active_search %} · Search: <strong>"{{ active_search }}"</strong>{% endif %}
 </div>
 
-{# ── Job cards ───────────────────────────────────────────────────────────── #}
 <div class="jobs-list">
   {% for job in jobs %}
   <div class="job-card
@@ -176,6 +185,7 @@
           <span class="tag plat-tag">{{ job.platform }}</span>
         {% endif %}
         {% if job.job_type %}<span class="tag type-tag">{{ job.job_type }}</span>{% endif %}
+        {% if job.closing_date %}<span class="tag closing-tag">📅 {{ job.closing_date }}</span>{% endif %}
         {% if job.apply_email %}<span class="tag email-tag">✉ {{ job.apply_email }}</span>{% endif %}
         {% if job.pk in applied_ids %}<span class="tag applied-tag">✓ applied</span>{% endif %}
       </div>
@@ -206,7 +216,6 @@
   {% endfor %}
 </div>
 
-{# ── Pagination ──────────────────────────────────────────────────────────── #}
 {% if jobs.paginator.num_pages > 1 %}
 <div class="pagination-bar" id="pg-bar"
      data-cur="{{ jobs.number }}"
@@ -221,7 +230,6 @@
      data-pagesize="{{ page_size }}"></div>
 {% endif %}
 
-{# ── Drawer + Toast ──────────────────────────────────────────────────────── #}
 <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer"><div id="drawer-inner"></div></div>
 <div class="toast" id="toast"></div>

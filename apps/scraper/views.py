@@ -57,10 +57,6 @@ def _parse_job_types(post_data):
     return " ".join(valid)
 
 
-# Replace the dashboard() function in apps/scraper/views.py with this version.
-# It adds platform/job_type/q filter params so the dashboard job list
-# can be filtered the same way the jobs page is.
-
 from django.db.models import Q
 
 GOV_PLATFORMS = {"dpsa", "sayouth", "essa", "govza"}
@@ -104,19 +100,17 @@ def dashboard(request):
         "id", "job__id", "job__title", "job__company", "sent_at", "status"
     ).order_by("-sent_at")
 
-    # ── Filters ──────────────────────────────────────────────────────────────
     active_platforms = request.GET.getlist("platform")
     active_platforms = [p for p in active_platforms if p]
     active_job_type  = request.GET.get("job_type", "").strip().lower()
     active_search    = request.GET.get("q", "").strip()
-    active_tab       = request.GET.get("tab", "all")   # all | email | matched | gov
+    active_tab       = request.GET.get("tab", "all")
 
     qs = Job.objects.only(
         "id", "title", "company", "match_score", "apply_email",
-        "scraped_at", "platform", "job_type", "location",
+        "scraped_at", "platform", "job_type", "location", "closing_date",
     ).order_by("-match_score", "-scraped_at")
 
-    # Tab filter
     applied_ids = set(Application.objects.values_list("job_id", flat=True))
     if active_tab == "email":
         qs = qs.filter(~Q(apply_email=""))
@@ -127,11 +121,9 @@ def dashboard(request):
     elif active_tab == "gov":
         qs = qs.filter(platform__in=GOV_PLATFORMS)
 
-    # Platform filter
     if active_platforms:
         qs = qs.filter(platform__in=active_platforms)
 
-    # Job type filter
     if active_job_type and active_job_type in JOB_TYPE_MAP:
         patterns = JOB_TYPE_MAP[active_job_type]
         q_obj = Q()
@@ -139,7 +131,6 @@ def dashboard(request):
             q_obj |= Q(job_type__icontains=p)
         qs = qs.filter(q_obj)
 
-    # Search filter
     if active_search:
         qs = qs.filter(
             Q(title__icontains=active_search) |
@@ -152,7 +143,7 @@ def dashboard(request):
         "id", "title", "company", "match_score", "apply_email"
     )[:5]
 
-    total_qs = Job.objects
+    total_qs      = Job.objects
     email_count   = total_qs.exclude(apply_email="").count()
     matched_count = total_qs.filter(match_score__gte=60).count()
     applied_count = applications.count()
@@ -175,7 +166,6 @@ def dashboard(request):
         "matched_count":     matched_count,
         "top_jobs":          top_jobs,
         "applied_ids":       applied_ids,
-        # filter context
         "active_tab":        active_tab,
         "active_platforms":  active_platforms,
         "active_job_type":   active_job_type,
@@ -184,6 +174,7 @@ def dashboard(request):
         "platform_defs":     PLATFORM_DEFS,
         "filter_count":      qs.count(),
     })
+
 
 def job_detail(request, job_id):
     job = get_object_or_404(Job, pk=job_id)
@@ -200,6 +191,7 @@ def job_detail(request, job_id):
         "description":   job.description,
         "salary":        job.salary or "",
         "job_type":      job.job_type or "",
+        "closing_date":  job.closing_date or "",
         "how_to_apply":  job.how_to_apply or "",
         "docs_required": job.docs_required or "",
         "scraped_at":    job.scraped_at.strftime("%d %b %Y · %H:%M"),
