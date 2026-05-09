@@ -1,6 +1,7 @@
 import re
 import random
 import time
+from datetime import datetime, timedelta
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -138,7 +139,6 @@ def job_record(overrides: dict) -> dict:
 
 _EMAIL_RE_UTIL = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
 
-# Fragments matched anywhere in the email address (local part or domain)
 _SKIP_EMAIL_FRAGMENTS = {
     'noreply', 'no-reply', 'donotreply', 'unsubscribe',
     'webmaster', 'postmaster', 'privacy', 'legal',
@@ -147,30 +147,13 @@ _SKIP_EMAIL_FRAGMENTS = {
     'admin@', 'news@', 'newsletter@', 'gdpr@', 'dpo@',
 }
 
-# Block any email whose domain matches one of these job board / platform domains.
-# This is the main fix — catches gdpr@nijobs.com, info@nijobs.com, etc.
 _SKIP_EMAIL_DOMAINS = {
-    'nijobs.com',
-    'jobplacements.com',
-    'jobvine.co.za',
-    'jobcrystal.co.za',
-    'executiveplacements.com',
-    'bestjobs.co.za',
-    'careerjunction.co.za',
-    'careers24.com',
-    'pnet.co.za',
-    'jobmail.co.za',
-    'gumtree.co.za',
-    'sayouth.mobi',
-    'essa.gov.za',
-    'dpsa.gov.za',
-    'linkedin.com',
-    'indeed.com',
-    'glassdoor.com',
-    'seek.com',
-    'stepstone.com',
-    'monster.com',
-    'reed.co.uk',
+    'nijobs.com', 'jobplacements.com', 'jobvine.co.za', 'jobcrystal.co.za',
+    'executiveplacements.com', 'bestjobs.co.za', 'careerjunction.co.za',
+    'careers24.com', 'pnet.co.za', 'jobmail.co.za', 'gumtree.co.za',
+    'sayouth.mobi', 'essa.gov.za', 'dpsa.gov.za', 'linkedin.com',
+    'indeed.com', 'glassdoor.com', 'seek.com', 'stepstone.com',
+    'monster.com', 'reed.co.uk',
 }
 
 _HOW_TO_APPLY_HEADERS_RE = re.compile(
@@ -183,6 +166,21 @@ _HOW_TO_APPLY_HEADERS_RE = re.compile(
 _CLOSING_HEADERS_RE = re.compile(
     r'(?:closing\s+date|application\s+deadline|deadline|close\s+date|'
     r'applications?\s+close|last\s+date\s+to\s+apply|apply\s+by|submit\s+by)[:\s]*',
+    re.IGNORECASE,
+)
+
+# Matches "Expires in 18 days", "Expires in 1 day"
+_EXPIRES_IN_RE = re.compile(r'[Ee]xpires?\s+in\s+(\d+)\s+days?')
+
+# Matches "Expires: 20 May 2026" or "Expiry date: 20 May 2026"
+_EXPIRES_DATE_RE = re.compile(
+    r'[Ee]xpir(?:es?|y)[:\s]+(\d{1,2}\s+\w+\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{4})',
+    re.IGNORECASE,
+)
+
+# Posted date — used to EXCLUDE, not capture
+_POSTED_RE = re.compile(
+    r'[Pp]osted\s+(?:on\s+)?(\d{1,2}\s+\w+\s+\d{4}|\d{4}-\d{2}-\d{2})',
     re.IGNORECASE,
 )
 
@@ -290,20 +288,67 @@ def _normalise_date_util(match) -> str:
         return match.group(0).strip()[:40]
 
 
+def _resolve_relative_expiry(days: int) -> str:
+    """Convert 'Expires in N days' to an absolute date string."""
+    target = datetime.utcnow() + timedelta(days=days)
+    return f"{target.day:02d} {_MONTH_NAMES_OUT_UTIL[target.month]} {target.year}"
+
+
+def _get_posted_date_strings(text: str) -> set:
+    """Collect all date strings that appear after 'Posted' so we can exclude them."""
+    posted = set()
+    for m in _POSTED_RE.finditer(text):
+        posted.add(m.group(1).strip().lower())
+    return posted
+
+
 def extract_closing_date(text: str) -> str:
+    """
+    Extract closing/expiry date from raw job listing text.
+
+    Priority order:
+    1. Explicit closing date header  ("Closing date: 30 May 2026")
+    2. Explicit expiry date header   ("Expires: 30 May 2026")
+    3. Relative expiry               ("Expires in 18 days")
+    4. Any date NOT matching posted date
+    """
     if not text:
         return ''
+
+    # 1. Explicit closing date header
     for hm in _CLOSING_HEADERS_RE.finditer(text):
         snippet = text[hm.end(): hm.end() + 80]
         for pat in _DATE_PATTERNS_UTIL:
             dm = pat.search(snippet)
             if dm:
-                return _normalise_date_util(dm)
+                result = _normalise_date_util(dm)
+                if result:
+                    return result
+
+    # 2. Explicit expiry date header ("Expires: 20 May 2026")
+    em = _EXPIRES_DATE_RE.search(text)
+    if em:
+        snippet = em.group(1)
+        for pat in _DATE_PATTERNS_UTIL:
+            dm = pat.search(snippet)
+            if dm:
+                result = _normalise_date_util(dm)
+                if result:
+                    return result
+
+    # 3. Relative expiry ("Expires in 18 days")
+    rm = _EXPIRES_IN_RE.search(text)
+    if rm:
+        return _resolve_relative_expiry(int(rm.group(1)))
+
+    # 4. Fallback: first date that isn't the posted date
+    posted_strings = _get_posted_date_strings(text)
     for pat in _DATE_PATTERNS_UTIL:
         for dm in pat.finditer(text):
             raw = _normalise_date_util(dm)
-            if raw:
+            if raw and raw.lower() not in posted_strings:
                 return raw
+
     return ''
 
 

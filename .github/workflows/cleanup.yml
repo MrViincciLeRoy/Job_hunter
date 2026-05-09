@@ -10,7 +10,7 @@ on:
       dry_run:
         description: "Dry run? (yes = preview only, no = actually delete)"
         required: true
-        default: "yes"
+        default: "no"
         type: choice
         options:
           - "yes"
