@@ -18,7 +18,6 @@ HEADERS = {
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}')
 SKIP_EMAILS = {'noreply', 'no-reply', 'donotreply', 'webmaster', 'admin', 'info@dpsa', 'privacy'}
 
-# Priority tiers for job types (higher = more interesting to surface first)
 JOB_TYPE_PRIORITY = {
     'internship':  10,
     'learnership': 9,
@@ -30,7 +29,6 @@ JOB_TYPE_PRIORITY = {
 }
 
 GOV_JOB_TYPES = [
-    # Check longest/most-specific terms first to avoid false matches
     ('internship',  ['internship programme', 'internship program', 'internship (', 'internship:', 'internship\n', 'internship ']),
     ('learnership', ['learnership programme', 'learnership program', 'learnership (', 'learnership:', 'learnership\n', 'learnership ']),
     ('bursary',     ['bursary programme', 'bursary program', 'bursary (', 'bursary:', 'bursary\n', 'bursary ']),
@@ -39,13 +37,11 @@ GOV_JOB_TYPES = [
     ('entry level', ['entry level', 'entry-level']),
 ]
 
-# Qualifications that indicate low barrier to entry
 LOW_BARRIER_QUALS = [
     'grade 10', 'grade 11', 'grade 12', 'abet', 'matric',
     'std 8', 'std 9', 'std 10', 'no experience', 'no formal',
 ]
 
-# Regex to detect minimum qualification level from requirements text
 GRADE_RE = re.compile(r'grade\s+(\d+)', re.IGNORECASE)
 NQF_RE = re.compile(r'nqf\s+level\s+(\d+)', re.IGNORECASE)
 SALARY_LEVEL_RE = re.compile(r'salary level\s+0*(\d+)', re.IGNORECASE)
@@ -71,10 +67,8 @@ def _detect_gov_job_type(title, description='', salary=''):
 
 
 def _is_low_barrier(requirements_text):
-    """True if the job needs Grade 12 or less / ABET / no experience."""
     t = requirements_text.lower()
     if any(q in t for q in LOW_BARRIER_QUALS):
-        # Make sure there's no higher qualification also mentioned
         has_degree = any(w in t for w in ['degree', 'diploma', 'bachelor', 'honours', 'postgraduate', 'llb', 'b.com'])
         if not has_degree:
             return True
@@ -82,19 +76,12 @@ def _is_low_barrier(requirements_text):
 
 
 def _check_qualification_match(requirements_text, user_qualifications=None):
-    """
-    Check if user meets or exceeds the minimum requirements.
-    Returns: 'exceeds' | 'meets' | 'below' | 'unknown'
-    user_qualifications: list of strings e.g. ['grade 12', 'diploma']
-    If not provided, assumes Grade 12 as baseline.
-    """
     if user_qualifications is None:
         user_qualifications = ['grade 12', 'matric']
 
     t = requirements_text.lower()
     user_t = ' '.join(user_qualifications).lower()
 
-    # Detect minimum grade required
     grade_m = GRADE_RE.search(t)
     if grade_m:
         min_grade = int(grade_m.group(1))
@@ -107,7 +94,6 @@ def _check_qualification_match(requirements_text, user_qualifications=None):
         else:
             return 'below'
 
-    # No grade requirement found — check for degree/diploma
     needs_degree = any(w in t for w in ['degree', 'diploma', 'bachelor', 'honours', 'postgraduate', 'llb'])
     has_degree = any(w in user_t for w in ['degree', 'diploma', 'bachelor', 'honours', 'postgraduate'])
     if needs_degree and not has_degree:
@@ -144,14 +130,8 @@ def _extract_docs_required(field_data):
 
 
 def _parse_stipend(stipend_text):
-    """
-    Internship stipends look like:
-    'A stipend will be paid ... Diploma/Degree/Honours R7860.50 and Master's R9482.00 per month'
-    Extract the range or the base amount.
-    """
     if not stipend_text:
         return stipend_text
-    # Try to extract R amounts
     amounts = re.findall(r'R[\d\s,]+(?:\.\d+)?', stipend_text)
     if amounts:
         cleaned = [a.strip() for a in amounts]
@@ -159,6 +139,29 @@ def _parse_stipend(stipend_text):
             return f"{cleaned[0]} – {cleaned[-1]} per month (stipend)"
         return f"{cleaned[0]} per month (stipend)"
     return stipend_text.strip()[:200]
+
+
+def _extract_global_closing_date(text):
+    """
+    Extract the circular-level closing date from the preamble text
+    (the block before any POST section).
+
+    Handles formats like:
+      CLOSING DATE  : 05 May 2026 at 16:00
+      CLOSING DATE  : 05 May 2026
+      CLOSING DATE    05/05/2026
+    """
+    m = re.search(
+        r'CLOSING\s+DATE\s*[:\-]?\s*([^\n]{5,60})',
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return ''
+    raw = re.sub(r'\s+', ' ', m.group(1)).strip()
+    # Optionally strip trailing "at HH:MM" — comment out if you want the time kept
+    raw = re.sub(r'\s+at\s+\d{1,2}:\d{2}.*$', '', raw, flags=re.IGNORECASE).strip()
+    return raw
 
 
 def _get_all_circulars(max_circulars=5):
@@ -194,10 +197,6 @@ def _get_all_circulars(max_circulars=5):
         import datetime
         now = datetime.datetime.now()
         year = now.year
-        # Use ISO week number as approximation — DPSA publishes ~1 circular per week
-        # starting from circular 1 in January. isocalendar()[1] gives week 1-53.
-        # Subtract 1 to account for the fact that the current week's circular
-        # may not be published yet.
         approx_num = max(1, now.isocalendar()[1] - 1)
         fallback_url = f'{BASE_URL}/newsroom/psvc/circular-{approx_num}-of-{year}/'
         print(f'[DPSA] Falling back to estimated circular {approx_num} of {year}')
@@ -225,7 +224,6 @@ def _get_pdf_url(circular_page_url, circ_num, circ_year):
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/psv%20circular%20{padded}%20of%20{circ_year}.pdf',
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/Circular{padded}of{circ_year}.pdf',
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/CIRCULAR%20{padded}%20OF%20{circ_year}.pdf',
-        # Some circulars use no leading zero for single-digit numbers
         f'{BASE_URL}/dpsa2g/documents/vacancies/{circ_year}/PSV%20CIRCULAR%20{circ_num}%20of%20{circ_year}.pdf',
     ]
     for url in candidates:
@@ -263,7 +261,6 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
         r'(?m)^\s*(DEPARTMENT\s+OF[^\n]+|OFFICE\s+OF[^\n]+|[A-Z\s]+ADMINISTRATION[^\n]*)$'
     )
 
-    # STIPEND added — critical for internship posts
     field_labels = [
         'SALARY', 'STIPEND', 'CENTRE', 'REQUIREMENTS', 'DUTIES',
         'ENQUIRIES', 'APPLICATIONS', 'NOTE', 'CLOSING DATE',
@@ -272,6 +269,15 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
 
     splits = list(post_pattern.finditer(full_text))
     print(f'[DPSA] Found {len(splits)} job posts in PDF')
+
+    # ── Extract global closing date from preamble (before first POST) ──────
+    preamble = full_text[:splits[0].start()] if splits else full_text
+    global_closing_date = _extract_global_closing_date(preamble)
+    if global_closing_date:
+        print(f'[DPSA] Global closing date: {global_closing_date}')
+    else:
+        print('[DPSA] No global closing date found in preamble')
+
     jobs = []
 
     for i, match in enumerate(splits):
@@ -301,12 +307,13 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
 
         enquiries = field_data.get('ENQUIRIES', '')
         applications = field_data.get('APPLICATIONS', '')
-        closing_date = field_data.get('CLOSING DATE', '')
         requirements_text = field_data.get('REQUIREMENTS', '')
         duties_text = field_data.get('DUTIES', '')
         centre = field_data.get('CENTRE', 'South Africa')
 
-        # Handle both SALARY and STIPEND fields
+        # Per-job closing date — fall back to global if absent
+        closing_date = field_data.get('CLOSING DATE', '').strip() or global_closing_date
+
         salary_raw = field_data.get('SALARY', '')
         stipend_raw = field_data.get('STIPEND', '')
         is_internship_stipend = bool(stipend_raw and not salary_raw)
@@ -317,10 +324,8 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
 
         job_type = _detect_gov_job_type(title, requirements_text + ' ' + duties_text, salary_raw)
 
-        # Low-barrier flag — Grade 12 / ABET only
         low_barrier = _is_low_barrier(requirements_text) and job_type not in ('internship', 'learnership', 'bursary')
 
-        # Qualification match check (baseline: Grade 12)
         qual_match = _check_qualification_match(requirements_text)
 
         def _split_field(text):
@@ -342,10 +347,9 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
         if not title or len(title) < 4:
             continue
 
-        # Priority score: internships/learnerships/bursaries first, then low-barrier, then rest
         priority = JOB_TYPE_PRIORITY.get(job_type, 1)
         if low_barrier:
-            priority = max(priority, 5)  # bump low-barrier above regular gov jobs
+            priority = max(priority, 5)
 
         jobs.append(job_record({
             'title': title,
@@ -363,18 +367,16 @@ def _parse_pdf_jobs(pdf_bytes, circ_num, circ_year):
             'platform': 'dpsa',
             'description': description[:2000],
             'raw_text': block[:3000],
-            # DPSA-specific extras
             '_ref_no': ref_no,
             '_post_ref': f'POST {post_ref}',
             '_circular': f'{circ_num} of {circ_year}',
             '_closing_date': closing_date,
             '_is_internship_stipend': is_internship_stipend,
             '_low_barrier': low_barrier,
-            '_qual_match': qual_match,   # 'exceeds' | 'meets' | 'below' | 'unknown'
+            '_qual_match': qual_match,
             '_priority': priority,
         }))
 
-    # Sort: highest priority first, then by closing date proximity
     jobs.sort(key=lambda j: -j.get('_priority', 1))
     return jobs
 
@@ -413,7 +415,6 @@ def scrape_dpsa(keywords=None, limit=500):
             traceback.print_exc()
             continue
 
-    # Final sort: priority desc, then internships/learnerships/bursaries float to top
     all_jobs.sort(key=lambda j: -j.get('_priority', 1))
 
     counts = {}
