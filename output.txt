@@ -1,0 +1,116 @@
+
+============================================================
+  JOBJACK
+  URL: https://www.jobjack.co.za/search
+============================================================
+  Status      : 200
+  Final URL   : https://www.jobjack.co.za/search?search=developer&page=1
+  Content-Type: text/html; charset=UTF-8
+  HTML length : 1659676 chars
+  ⚠ Bot-detection signal found: 'captcha'
+  ⚠ Bot-detection signal found: '403'
+  ⚠ Bot-detection signal found: 'robot'
+  ⚠ Bot-detection signal found: 'challenge'
+
+  Selector hits:
+      89  li[class]
+      18  div[class*='item']
+     110  a[href*='job']
+
+  Best match: 'a[href*='job']' (110 elements)
+  First element snippet:
+<a class="h1DYhE" data-motion-part="BG_LAYER comp-m49p8fv7_r_comp-m68ajeba" data-testid="linkElement" href="https://www.jobjack.co.za" target="_self">
+ <div class="QebvG3" data-motion-part="">
+  <div data-motion-part="BG_MEDIA comp-m49p8fv7_r_comp-m68ajeba">
+   <wow-image class="Ux33nC" data-has-ssr-src="true" data-image-info='{"containerId":"comp-m49p8fv7_r_comp-m68ajeba","alignType":"center","parallaxSpeed":1.5,"sourceSets":[],"imageData":{"uri":"8dde1b_ffd428ec0389445f80104422a650b62a~mv2.png","width":3456,"height":768,"alt":"JOBJACK Refined Logo_Primary.png","name":"JOBJACK Refined Logo_Primary.png","focalPoint":null},"hasAnimation":false,"encoding":"AVIF","allowFullGIFTransformation":false}' data-is-responsive="true" data-motion-part="BG_IMG comp-m49p8fv7_r_comp-m68ajeba" id="img-comp
+
+  Page title: Search Results | JOBJACK
+
+  --- RAW HTML (first 3000 chars) ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+  <meta charset='utf-8'>
+  <meta name="viewport" content="width=device-width, initial-scale=1" id="wixDesktopViewport" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="generator" content="Wix.com Website Builder"/>
+
+  <link rel="icon" sizes="192x192" href="https://static.wixstatic.com/media/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png/v1/fill/w_192%2Ch_192%2Clg_1%2Cusm_0.66_1.00_0.01/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png" type="image/png"/>
+  <link rel="shortcut icon" href="https://static.wixstatic.com/media/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png/v1/fill/w_32%2Ch_32%2Clg_1%2Cusm_0.66_1.00_0.01/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png" type="image/png"/>
+  <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png/v1/fill/w_180%2Ch_180%2Clg_1%2Cusm_0.66_1.00_0.01/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png" type="image/png"/>
+
+  <!-- Safari Pinned Tab Icon -->
+  <!-- <link rel="mask-icon" href="https://static.wixstatic.com/media/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png/v1/fill/w_32%2Ch_32%2Clg_1%2Cusm_0.66_1.00_0.01/8dde1b_4f70591cd34c4eb48188b6a309154f43%7Emv2.png"> -->
+
+  <!-- Segmenter Polyfill -->
+  <script>
+    if (!window.Intl || !window.Intl.Segmenter) {
+      (function() {
+        var script = document.createElement('script');
+        script.src = 'https://static.parastorage.com/unpkg/@formatjs/intl-segmenter@11.7.10/polyfill.iife.js';
+        document.head.appendChild(script);
+      })();
+    }
+  </script>
+
+  <!-- Legacy Polyfills -->
+  <script nomodule="" src="https://static.parastorage.com/unpkg/core-js-bundle@3.2.1/minified.js"></script>
+  <script nomodule="" src="https://static.parastorage.com/unpkg/focus-within-polyfill@5.0.9/dist/focus-within-polyfill.js"></script>
+
+  <!-- Performance API Polyfills -->
+  <script>
+  (function () {
+    var noop = function noop() {};
+    if ("performance" in window === false) {
+      window.performance = {};
+    }
+    window.performance.mark = performance.mark || noop;
+    window.performance.measure = performance.measure || noop;
+    if ("now" in window.performance === false) {
+      var nowOffset = Date.now();
+      if (performance.timing && performance.timing.navigationStart) {
+        nowOffset = performance.timing.navigationStart;
+      }
+      window.performance.now = function now() {
+        return Date.now() - nowOffset;
+      };
+    }
+  })();
+  </script>
+
+  <!-- Essential Viewer Model -->
+  <script type="application/json" id="wix-essential-viewer-model">{"fleetConfig":{"fleetName":"wix-thunderbolt","type":"GA","code":0},"mode":{"qa":false,"enableTestApi":false,"debug":false,"ssrIndicator":false,"ssrOnly":false,"siteAssetsFallback":"enable","versionIndicator":false},"componentsLibrariesTopology":[{"artifactId":"editor-elements","namespace":"wixui","url":"https:\/\/static.parastorage.com\/services\/editor-elements\/1.15
+
+============================================================
+  OFFERZEN
+  URL: https://www.offerzen.com/jobs
+============================================================
+  Status      : 200
+  Final URL   : https://www.offerzen.com/jobs?q=developer&page=1
+  Content-Type: text/html
+  HTML length : 284352 chars
+
+  Selector hits:
+       3  li[class]
+       2  div[class*='card']
+     150  div[class*='item']
+       3  a[href*='job']
+
+  Best match: 'div[class*='item']' (150 elements)
+  First element snippet:
+<div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 lg:max-h-[65px]">
+ <a href="/">
+  <img alt="OfferZen" class="h-8 w-[145px]" src="https://oz-public.vercel.app/_astro/offerzen_logo_white.vsvXmsAA.svg"/>
+  <span class="sr-only">
+   OfferZen
+  </span>
+ </a>
+ <div class="ml-auto flex items-center gap-4">
+  <div class="relative h-10">
+   <a class="cursor-pointer text-lg md:text-base ring-offset-background h-11 md:h-10 focus-visible:ring-primary-light items-center justify-center gap-2 whitespace-nowrap rounded transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 bg-brand text-white hover:bg-blue-700 hover:bord
+
+  Page title: Job Directory
+
+  --- RAW HTML (first 3000 chars) ---
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><meta name="generator" content="Astro v5.18.1"><title>Job Directory</title><meta name="description" content="Browse available job opportunities on Offerzen.com"><!-- Open Graph  --><meta property="og:title" content="Job Directory"><meta property="og:type" content="website"><meta property="og:image" content="https://oz-public.vercel.app/_astro/job-directory-meta._XHT5fQK.png"><meta property="og:url" content="https://offerzen.com/jobs/"><meta property="og:site_name" content="OfferZen"><meta property="og:description" content="Browse available job opportunities on Offerzen.com"><!-- Twitter  --><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@offerzen"><meta name="twitter:url" content="https://offerzen.com/jobs/"><meta name="twitter:title" content="Job Directory"><meta name="twitter:description" content="Browse available job opportunities on Offerzen.com"><meta name="twitter:image" content="https://oz-public.vercel.app/_astro/job-directory-meta._XHT5fQK.png"><script type="module" src="https://oz-public.vercel.app/_astro/Segment.astro_astro_type_script_index_0_lang.lOFJY2Cr.js"></script><script type="module">(function(){try{var e=typeof window<"u"?window:typeof global<"u"?global:typeof globalThis<"u"?globalThis:typeof self<"u"?self:{};e.SENTRY_RELEASE={id:"ed987e3f37bcf8c56b9af82660d32a38bbfb1e61"};var t=new e.Error().stack;t&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[t]="5ab2fd9c-7674-433e-b196-bd3ab623126a",e._sentryDebugIdIdentifier="sentry-dbid-5ab2fd9c-7674-433e-b196-bd3ab623126a")}catch{}})();(function(e,t,a,n,b){e[n]=e[n]||[],e[n].push({"gtm.start":new Date().getTime(),event:"gtm.js"});var r=t.getElementsByTagName(a)[0],d=t.createElement(a),s="";d.async=!0,d.src="https://www.googletagmanager.com/gtm.js?id="+b+s,r.parentNode.insertBefore(d,r)})(window,document,"script","dataLayer","GTM-WTG6R2B");</script> <script type="module">(function(){try{var e=typeof window<"u"?window:typeof global<"u"?global:typeof globalThis<"u"?globalThis:typeof self<"u"?self:{};e.SENTRY_RELEASE={id:"ed987e3f37bcf8c56b9af82660d32a38bbfb1e61"};var d=new e.Error().stack;d&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[d]="55d4d064-e380-4a9d-9022-105033e6b194",e._sentryDebugIdIdentifier="sentry-dbid-55d4d064-e380-4a9d-9022-105033e6b194")}catch{}})();dataLayer=[];</script><!-- Favicons --><link rel="apple-touch-icon-precomposed" type="image/png" href="https://oz-public.vercel.app/img/favicons/apple-touch-icon-57x57.png" sizes="57x57"><link rel="apple-touch-icon-precomposed" type="image/png" href="https://oz-public.vercel.app/img/favicons/apple-touch-icon-114x114.png" sizes="114x114"><link rel="apple-touch-icon-precomposed" type="image/png" href="https://oz-public.vercel.app/img/favicons/apple-touch-icon-72x72.png" sizes="72x72"><link rel="

@@ -6,13 +6,6 @@ from apps.scraper.scrapers.careerjunction import scrape_careerjunction, scrape_c
 from apps.scraper.scrapers.careers24 import scrape_careers24
 from apps.scraper.scrapers.jobmail import scrape_jobmail
 from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_essa, scrape_govza
-from apps.scraper.scrapers.jobvine import scrape_jobvine
-from apps.scraper.scrapers.jobjack import scrape_jobjack
-from apps.scraper.scrapers.offerzen import scrape_offerzen
-from apps.scraper.scrapers.executiveplacements import scrape_executiveplacements
-from apps.scraper.scrapers.bizcommunity import scrape_bizcommunity
-from apps.scraper.scrapers.jobcrystal import scrape_jobcrystal
-from apps.scraper.scrapers.gumtree import scrape_gumtree
 from apps.scraper.models import Job
 from apps.cv.models import CV
 
@@ -40,64 +33,61 @@ FRIENDLY_NAMES = {
     'all':         'All Job Types',
 }
 
-# JobSpy — Indeed + Google (LinkedIn handled separately)
+# Conditionally import scrapers that may not work everywhere
+_OPTIONAL_SCRAPERS = []
+
+try:
+    from apps.scraper.scrapers.jobjack import scrape_jobjack
+    _OPTIONAL_SCRAPERS.append(("JobJack", scrape_jobjack, "medium", "jobjack"))
+except ImportError:
+    pass
+
+try:
+    from apps.scraper.scrapers.offerzen import scrape_offerzen
+    _OPTIONAL_SCRAPERS.append(("OfferZen", scrape_offerzen, "high", "offerzen"))
+except ImportError:
+    pass
+
+try:
+    from apps.scraper.scrapers.gumtree import scrape_gumtree
+    _OPTIONAL_SCRAPERS.append(("Gumtree", scrape_gumtree, "medium", "gumtree"))
+except ImportError:
+    pass
+
+# JobSpy — Indeed + Google
 _JOBSPY_SCRAPERS = []
 try:
     from apps.scraper.scrapers.jobspy_scraper import scrape_indeed, scrape_google
     _JOBSPY_SCRAPERS = [
-        ("Indeed",       scrape_indeed,  "high", "indeed"),
-        ("Google Jobs",  scrape_google,  "high", "google"),
+        ("Indeed",      scrape_indeed, "high", "indeed"),
+        ("Google Jobs", scrape_google, "high", "google"),
     ]
 except ImportError:
     pass
 
 SCRAPERS_PRIMARY = [
     # Gov platforms
-    ("DPSA",                 scrape_dpsa,                 "gov",    "dpsa"),
-    ("SAYouth",              scrape_sayouth,              "gov",    "sayouth"),
-    ("ESSA",                 scrape_essa,                 "gov",    "essa"),
-    ("GovZA",                scrape_govza,                "gov",    "govza"),
+    ("DPSA",           scrape_dpsa,           "gov",  "dpsa"),
+    ("SAYouth",        scrape_sayouth,        "gov",  "sayouth"),
+    ("ESSA",           scrape_essa,           "gov",  "essa"),
+    ("GovZA",          scrape_govza,          "gov",  "govza"),
     # Major SA boards
-    ("PNet",                 scrape_pnet,                 "high",   "pnet"),
-    ("CareerJunction",       scrape_careerjunction,       "high",   "careerjunction"),
-    ("CareerJunction-IT",    scrape_careerjunction_it,    "high",   "careerjunction_it"),
-    ("Careers24",            scrape_careers24,            "high",   "careers24"),
-    ("JobMail",              scrape_jobmail,              "high",   "jobmail"),
-    # Expanded SA boards
-    ("Jobvine",              scrape_jobvine,              "high",   "jobvine"),
-    ("JobJack",              scrape_jobjack,              "medium", "jobjack"),
-    ("OfferZen",             scrape_offerzen,             "high",   "offerzen"),
-    ("ExecutivePlacements",  scrape_executiveplacements,  "medium", "executiveplacements"),
-    ("Bizcommunity",         scrape_bizcommunity,         "medium", "bizcommunity"),
-    ("JobCrystal",           scrape_jobcrystal,           "medium", "jobcrystal"),
-    ("Gumtree",              scrape_gumtree,              "medium", "gumtree"),
-] + _JOBSPY_SCRAPERS
+    ("PNet",           scrape_pnet,           "high", "pnet"),
+    ("CareerJunction", scrape_careerjunction, "high", "careerjunction"),
+    ("CareerJunction-IT", scrape_careerjunction_it, "high", "careerjunction_it"),
+    ("Careers24",      scrape_careers24,      "high", "careers24"),
+    ("JobMail",        scrape_jobmail,        "high", "jobmail"),
+    # Removed — confirmed dead/JS-only:
+    #   Jobvine        (526 Cloudflare, origin down)
+    #   Bizcommunity   (410 Gone, endpoint removed)
+    #   JobCrystal     (redirects to WP homepage, JS-rendered)
+    #   ExecutivePlacements (200 but fully JS-rendered, no static content)
+] + _OPTIONAL_SCRAPERS + _JOBSPY_SCRAPERS
 
 GOV_PLATFORMS = {"dpsa", "sayouth", "essa", "govza"}
-IT_PLATFORMS  = {"pnet", "careerjunction", "careerjunction_it", "offerzen", "jobcrystal"}
+IT_PLATFORMS  = {"pnet", "careerjunction", "careerjunction_it", "offerzen"}
 GOV_PRIORITY_KW  = "internship learnership entry level graduate IT"
 GOV_PDF_SCRAPERS = {"dpsa"}
-
-SCRAPER_MAX_PAGES = {
-    "DPSA":                1,
-    "SAYouth":             20,
-    "ESSA":                20,
-    "GovZA":               10,
-    "PNet":                50,
-    "CareerJunction":      50,
-    "CareerJunction-IT":   50,
-    "Careers24":           30,
-    "JobMail":             30,
-    "Jobvine":             30,
-    "JobJack":             20,
-    "OfferZen":            20,
-    "ExecutivePlacements": 20,
-    "Bizcommunity":        15,
-    "JobCrystal":          20,
-    "Gumtree":             20,
-    "Indeed":              10,
-    "Google Jobs":         10,
-}
 
 
 def _t(value, max_len):
@@ -131,13 +121,12 @@ class Command(BaseCommand):
     help = "Bulk-scrape jobs from SA/gov platforms — filter by job type"
 
     def add_arguments(self, parser):
-        parser.add_argument("--keywords",   type=str,  default=None)
-        parser.add_argument("--max-jobs",   type=int,  default=0)
-        parser.add_argument("--max-pages",  type=int,  default=0)
+        parser.add_argument("--keywords",   type=str, default=None)
+        parser.add_argument("--max-jobs",   type=int, default=0)
         parser.add_argument("--email-only", action="store_true")
         parser.add_argument("--gov-only",   action="store_true")
         parser.add_argument("--it-only",    action="store_true")
-        parser.add_argument("--workers",    type=int,  default=4)
+        parser.add_argument("--workers",    type=int, default=4)
         parser.add_argument("--scrapers",   nargs="*", default=None)
         parser.add_argument("--no-skip",    action="store_true")
         parser.add_argument(
@@ -145,10 +134,7 @@ class Command(BaseCommand):
             nargs="*",
             default=["all"],
             metavar="TYPE",
-            help=(
-                "Job types: internship learnership bursary scholarship "
-                "graduate entry_level low_barrier permanent all"
-            ),
+            help="Job types: internship learnership bursary scholarship graduate entry_level low_barrier permanent all",
         )
 
     def handle(self, *args, **options):
@@ -174,12 +160,9 @@ class Command(BaseCommand):
 
         if type_filter and not user_set_keywords:
             extra_kw = []
-            if 'internship' in type_filter:
-                extra_kw.append('internship')
-            if 'learnership' in type_filter:
-                extra_kw.append('learnership')
-            if 'bursary' in type_filter or 'scholarship' in type_filter:
-                extra_kw.append('bursary')
+            if 'internship'  in type_filter: extra_kw.append('internship')
+            if 'learnership' in type_filter: extra_kw.append('learnership')
+            if 'bursary'     in type_filter or 'scholarship' in type_filter: extra_kw.append('bursary')
             if extra_kw:
                 keywords = f"{keywords} {' '.join(extra_kw)}"
 
@@ -218,13 +201,9 @@ class Command(BaseCommand):
         all_jobs = []
 
         def _run_scraper(name, fn, tier, slug):
-            kw = None
+            kw = keywords
             if slug in {"sayouth", "essa", "govza"} and not user_set_keywords:
                 kw = f"{keywords} {GOV_PRIORITY_KW}"
-            elif slug in {"indeed", "google"}:
-                kw = keywords
-            else:
-                kw = keywords
 
             limit_arg = max_jobs if max_jobs else 9999
 
@@ -250,10 +229,8 @@ class Command(BaseCommand):
                     f"  [{tier.upper():6}] {name:<22} {len(results):>4} jobs"
                     f" ({email_count} with email"
                 )
-                if filtered_out:
-                    msg += f", {filtered_out} filtered by type"
-                if skipped_url:
-                    msg += f", {skipped_url} skipped/existing"
+                if filtered_out: msg += f", {filtered_out} filtered by type"
+                if skipped_url:  msg += f", {skipped_url} skipped/existing"
                 msg += ")"
                 self.stdout.write(msg)
                 return results
