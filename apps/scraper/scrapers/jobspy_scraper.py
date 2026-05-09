@@ -12,37 +12,51 @@ def _df_to_list(df: pd.DataFrame, platform: str) -> list:
     for _, row in df.iterrows():
         email = row.get("emails", "")
         jobs.append({
-            "title": str(row.get("title", "")),
-            "company": str(row.get("company", "")),
-            "location": str(row.get("location", "")),
+            "title":       str(row.get("title", "") or ""),
+            "company":     str(row.get("company", "") or ""),
+            "location":    str(row.get("location", "") or ""),
             "description": str(row.get("description", "") or ""),
-            "url": str(row.get("job_url", "")),
+            "url":         str(row.get("job_url", "") or ""),
             "apply_email": str(email) if pd.notna(email) and email else "",
-            "platform": platform,
+            "salary":      str(row.get("min_amount", "") or ""),
+            "job_type":    str(row.get("job_type", "") or ""),
+            "platform":    platform,
         })
     return jobs
 
 
 def scrape_linkedin(keywords: str, limit: int = 20) -> list:
-    if not JOBSPY_AVAILABLE:
+    if not JOBSPY_AVAILABLE or not keywords:
         return []
-    df = scrape_jobs(
-        site_name=["linkedin"],
-        search_term=keywords,
-        location="South Africa",
-        results_wanted=limit,
-    )
-    return _df_to_list(df, "linkedin")
+    try:
+        df = scrape_jobs(
+            site_name=["linkedin"],
+            search_term=keywords,
+            location="South Africa",
+            results_wanted=min(limit, 50),
+        )
+        jobs = _df_to_list(df, "linkedin")
+        print(f"[LinkedIn] {len(jobs)} jobs scraped")
+        return jobs
+    except Exception as e:
+        print(f"[LinkedIn] Error: {e}")
+        return []
 
 
 def scrape_indeed(keywords: str, limit: int = 20) -> list:
-    if not JOBSPY_AVAILABLE:
+    if not JOBSPY_AVAILABLE or not keywords:
         return []
-    df = scrape_jobs(
-        site_name=["indeed"],
-        search_term=keywords,
-        location="South Africa",
-        results_wanted=limit,
-        country_indeed="south africa",
-    )
-    return _df_to_list(df, "indeed")
+    try:
+        df = scrape_jobs(
+            site_name=["indeed"],
+            search_term=keywords,
+            location="South Africa",
+            results_wanted=min(limit, 50),
+            country_indeed="south africa",
+        )
+        jobs = _df_to_list(df, "indeed")
+        print(f"[Indeed] {len(jobs)} jobs scraped")
+        return jobs
+    except Exception as e:
+        print(f"[Indeed] Error: {e}")
+        return []

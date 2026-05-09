@@ -5,7 +5,6 @@ from apps.scraper.scrapers.pnet import scrape_pnet
 from apps.scraper.scrapers.careerjunction import scrape_careerjunction, scrape_careerjunction_it
 from apps.scraper.scrapers.careers24 import scrape_careers24
 from apps.scraper.scrapers.jobmail import scrape_jobmail
-from apps.scraper.scrapers.gumtree import scrape_gumtree
 from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_essa, scrape_govza
 from apps.scraper.models import Job
 from apps.cv.models import CV
@@ -34,32 +33,34 @@ FRIENDLY_NAMES = {
     'all':         'All Job Types',
 }
 
-SCRAPERS_PRIMARY = [
-    ("DPSA",              scrape_dpsa,              "gov",    "dpsa"),
-    ("SAYouth",           scrape_sayouth,           "gov",    "sayouth"),
-    ("ESSA",              scrape_essa,              "gov",    "essa"),
-    ("GovZA",             scrape_govza,             "gov",    "govza"),
-    ("PNet",              scrape_pnet,              "high",   "pnet"),
-    ("CareerJunction",    scrape_careerjunction,    "high",   "careerjunction"),
-    ("CareerJunction-IT", scrape_careerjunction_it, "high",   "careerjunction_it"),
-    ("Careers24",         scrape_careers24,         "high",   "careers24"),
-    ("JobMail",           scrape_jobmail,           "high",   "jobmail"),
-    ("Gumtree",           scrape_gumtree,           "medium", "gumtree"),
-]
-
-SCRAPERS_JOBSPY = []
+# JobSpy scrapers — LinkedIn & Indeed via jobspy library
+_JOBSPY_SCRAPERS = []
 try:
     from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
-    SCRAPERS_JOBSPY = [
-        ("LinkedIn", scrape_linkedin, "low", "linkedin"),
-        ("Indeed",   scrape_indeed,   "low", "indeed"),
+    _JOBSPY_SCRAPERS = [
+        ("LinkedIn", scrape_linkedin, "high", "linkedin"),
+        ("Indeed",   scrape_indeed,   "high", "indeed"),
     ]
 except ImportError:
     pass
 
-GOV_PLATFORMS    = {"dpsa", "sayouth", "essa", "govza"}
-IT_PLATFORMS     = {"pnet", "careerjunction", "careerjunction_it"}
-GOV_PRIORITY_KW  = "internship learnership entry level graduate IT"
+SCRAPERS_PRIMARY = [
+    ("DPSA",              scrape_dpsa,              "gov",  "dpsa"),
+    ("SAYouth",           scrape_sayouth,           "gov",  "sayouth"),
+    ("ESSA",              scrape_essa,              "gov",  "essa"),
+    ("GovZA",             scrape_govza,             "gov",  "govza"),
+    ("PNet",              scrape_pnet,              "high", "pnet"),
+    ("CareerJunction",    scrape_careerjunction,    "high", "careerjunction"),
+    ("CareerJunction-IT", scrape_careerjunction_it, "high", "careerjunction_it"),
+    ("Careers24",         scrape_careers24,         "high", "careers24"),
+    ("JobMail",           scrape_jobmail,           "high", "jobmail"),
+    # Gumtree disabled — low email yield, high scrape cost
+    # ("Gumtree", scrape_gumtree, "medium", "gumtree"),
+] + _JOBSPY_SCRAPERS
+
+GOV_PLATFORMS   = {"dpsa", "sayouth", "essa", "govza"}
+IT_PLATFORMS    = {"pnet", "careerjunction", "careerjunction_it"}
+GOV_PRIORITY_KW = "internship learnership entry level graduate IT"
 GOV_PDF_SCRAPERS = {'dpsa'}
 
 SCRAPER_MAX_PAGES = {
@@ -72,7 +73,6 @@ SCRAPER_MAX_PAGES = {
     "CareerJunction-IT": 50,
     "Careers24":         30,
     "JobMail":           30,
-    "Gumtree":           20,
     "LinkedIn":          10,
     "Indeed":            10,
 }
@@ -109,26 +109,23 @@ class Command(BaseCommand):
     help = "Bulk-scrape jobs from SA/gov platforms — filter by job type"
 
     def add_arguments(self, parser):
-        parser.add_argument("--keywords",       type=str,   default=None)
-        parser.add_argument("--max-jobs",       type=int,   default=0)
-        parser.add_argument("--max-pages",      type=int,   default=0)
-        parser.add_argument("--email-only",     action="store_true")
-        parser.add_argument("--gov-only",       action="store_true")
-        parser.add_argument("--it-only",        action="store_true")
-        parser.add_argument("--include-jobspy", action="store_true")
-        parser.add_argument("--workers",        type=int,   default=4)
-        parser.add_argument("--scrapers",       nargs="*",  default=None)
-        parser.add_argument("--no-skip",        action="store_true")
+        parser.add_argument("--keywords",   type=str,  default=None)
+        parser.add_argument("--max-jobs",   type=int,  default=0)
+        parser.add_argument("--max-pages",  type=int,  default=0)
+        parser.add_argument("--email-only", action="store_true")
+        parser.add_argument("--gov-only",   action="store_true")
+        parser.add_argument("--it-only",    action="store_true")
+        parser.add_argument("--workers",    type=int,  default=4)
+        parser.add_argument("--scrapers",   nargs="*", default=None)
+        parser.add_argument("--no-skip",    action="store_true")
         parser.add_argument(
             "--types",
             nargs="*",
             default=["all"],
             metavar="TYPE",
             help=(
-                "Job types to include. Space-separated. "
-                "Options: internship learnership bursary scholarship graduate "
-                "entry_level low_barrier permanent all. "
-                "Default: all"
+                "Job types to include. Options: internship learnership bursary "
+                "scholarship graduate entry_level low_barrier permanent all. Default: all"
             ),
         )
 
@@ -169,8 +166,6 @@ class Command(BaseCommand):
         skip_existing = not options.get("no_skip", False)
 
         scrapers = list(SCRAPERS_PRIMARY)
-        if options["include_jobspy"] and SCRAPERS_JOBSPY:
-            scrapers += SCRAPERS_JOBSPY
 
         if options["gov_only"]:
             scrapers = [s for s in scrapers if s[3] in GOV_PLATFORMS]
@@ -191,9 +186,11 @@ class Command(BaseCommand):
             existing_urls = set(Job.objects.exclude(url="").values_list("url", flat=True))
             self.stdout.write(f"[skip-existing] {len(existing_urls)} URLs already in DB\n")
 
+        jobspy_active = any(s[3] in ("linkedin", "indeed") for s in scrapers)
         self.stdout.write(
             f"Keywords: '{keywords}' | max_jobs={'unlimited' if not max_jobs else max_jobs} "
-            f"| scrapers={len(scrapers)} | workers={workers}\n"
+            f"| scrapers={len(scrapers)} | workers={workers} "
+            f"| jobspy={'ON' if jobspy_active else 'OFF (not installed)'}\n"
         )
 
         all_jobs = []
@@ -202,6 +199,8 @@ class Command(BaseCommand):
             kw = None
             if slug in {"sayouth", "essa", "govza"} and not user_set_keywords:
                 kw = f"{keywords} {GOV_PRIORITY_KW}"
+            elif slug in {"linkedin", "indeed"}:
+                kw = keywords  # jobspy always needs keywords
 
             limit_arg = max_jobs if max_jobs else 9999
 
@@ -285,15 +284,8 @@ class Command(BaseCommand):
             if not title:
                 continue
 
-            # Pull reference_no: DPSA uses _ref_no / _post_ref, others use closing_date
-            reference_no = _t(
-                j.get("_ref_no") or j.get("_post_ref") or "",
-                100
-            )
-            closing_date = _t(
-                j.get("closing_date") or j.get("_closing_date") or "",
-                100
-            )
+            reference_no = _t(j.get("_ref_no") or j.get("_post_ref") or "", 100)
+            closing_date = _t(j.get("closing_date") or j.get("_closing_date") or "", 100)
 
             try:
                 obj, new = Job.objects.get_or_create(
@@ -330,7 +322,6 @@ class Command(BaseCommand):
                     if not getattr(obj, field) and j.get(field):
                         setattr(obj, field, j[field])
                         dirty.append(field)
-                # Always update reference_no and closing_date if we now have them
                 for field, val in [("reference_no", reference_no), ("closing_date", closing_date)]:
                     if not getattr(obj, field) and val:
                         setattr(obj, field, val)
