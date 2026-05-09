@@ -20,8 +20,52 @@ VALID_JOB_TYPES = {
     'graduate', 'entry_level', 'low_barrier', 'permanent', 'all',
 }
 
+GOV_PLATFORMS = {"dpsa", "sayouth", "essa", "govza"}
+
+JOB_TYPE_MAP = {
+    "internship":             ["internship"],
+    "learnership":            ["learnership"],
+    "bursary":                ["bursary", "scholarship"],
+    "graduate":               ["graduate"],
+    "entry level":            ["entry level", "entry-level"],
+    "permanent":              ["permanent"],
+    "contract":               ["contract"],
+    "temporary":              ["temporary"],
+    "part-time":              ["part-time", "part time"],
+    "full-time":              ["full-time", "full time"],
+    "government":             ["government"],
+    "government / permanent": ["government / permanent"],
+}
+
+PLATFORM_DEFS = [
+    # JobSpy
+    ("indeed",               "Indeed",               False),
+    ("google",               "Google Jobs",          False),
+    # Major SA boards
+    ("pnet",                 "PNet",                 False),
+    ("careerjunction",       "CareerJunction",       False),
+    ("careerjunction_it",    "CareerJunction IT",    False),
+    ("careers24",            "Careers24",            False),
+    ("jobmail",              "JobMail",              False),
+    # New SA boards
+    ("jobvine",              "Jobvine",              False),
+    ("jobjack",              "JobJack",              False),
+    ("offerzen",             "OfferZen",             False),
+    ("executiveplacements",  "Executive Placements", False),
+    ("bizcommunity",         "Bizcommunity",         False),
+    ("jobcrystal",           "JobCrystal",           False),
+    ("gumtree",              "Gumtree",              False),
+    # Gov
+    ("dpsa",                 "DPSA",                 True),
+    ("sayouth",              "SAYouth",              True),
+    ("essa",                 "ESSA",                 True),
+    ("govza",                "Gov.za",               True),
+]
+
+
 def test_view(request):
     return render(request, "base.html")
+
 
 def _trigger_github_workflow(step="all", job_types="all"):
     if not GITHUB_REPO or not GITHUB_TOKEN:
@@ -58,37 +102,6 @@ def _parse_job_types(post_data):
 
 
 from django.db.models import Q
-
-GOV_PLATFORMS = {"dpsa", "sayouth", "essa", "govza"}
-
-JOB_TYPE_MAP = {
-    "internship":   ["internship"],
-    "learnership":  ["learnership"],
-    "bursary":      ["bursary", "scholarship"],
-    "graduate":     ["graduate"],
-    "entry level":  ["entry level", "entry-level"],
-    "permanent":    ["permanent"],
-    "contract":     ["contract"],
-    "temporary":    ["temporary"],
-    "part-time":    ["part-time", "part time"],
-    "full-time":    ["full-time", "full time"],
-    "government":   ["government"],
-}
-
-PLATFORM_DEFS = [
-    ("linkedin",          "LinkedIn",          False),
-    ("indeed",            "Indeed",            False),
-    ("pnet",              "PNet",              False),
-    ("careerjunction",    "CareerJunction",    False),
-    ("careerjunction_it", "CareerJunction IT", False),
-    ("careers24",         "Careers24",         False),
-    ("jobmail",           "JobMail",           False),
-    ("gumtree",           "Gumtree",           False),
-    ("dpsa",              "DPSA",              True),
-    ("sayouth",           "SAYouth",           True),
-    ("essa",              "ESSA",              True),
-    ("govza",             "Gov.za",            True),
-]
 
 
 def dashboard(request):
@@ -158,21 +171,21 @@ def dashboard(request):
     ]
 
     return render(request, "dashboard.html", {
-        "cv":                cv,
-        "jobs":              jobs,
-        "applications":      applications[:10],
-        "total_jobs":        total_qs.count(),
-        "applied_count":     applied_count,
-        "matched_count":     matched_count,
-        "top_jobs":          top_jobs,
-        "applied_ids":       applied_ids,
-        "active_tab":        active_tab,
-        "active_platforms":  active_platforms,
-        "active_job_type":   active_job_type,
-        "active_search":     active_search,
-        "tab_defs":          tab_defs,
-        "platform_defs":     PLATFORM_DEFS,
-        "filter_count":      qs.count(),
+        "cv":               cv,
+        "jobs":             jobs,
+        "applications":     applications[:10],
+        "total_jobs":       total_qs.count(),
+        "applied_count":    applied_count,
+        "matched_count":    matched_count,
+        "top_jobs":         top_jobs,
+        "applied_ids":      applied_ids,
+        "active_tab":       active_tab,
+        "active_platforms": active_platforms,
+        "active_job_type":  active_job_type,
+        "active_search":    active_search,
+        "tab_defs":         tab_defs,
+        "platform_defs":    PLATFORM_DEFS,
+        "filter_count":     qs.count(),
     })
 
 

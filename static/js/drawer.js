@@ -1,6 +1,5 @@
 /* static/js/drawer.js */
-
-const GOV_PLATFORMS = ['dpsa', 'sayouth', 'essa', 'govza'];
+/* GOV_PLATFORMS is injected by the template as a <script> block */
 
 function scoreClass(s) {
   return s >= 70 ? 'high' : s >= 50 ? 'mid' : 'low';
@@ -76,7 +75,7 @@ function openDrawer(jobId, row) {
 
 function renderDrawer(d) {
   const cls   = scoreClass(d.match_score);
-  const isGov = GOV_PLATFORMS.includes(d.platform);
+  const isGov = Array.isArray(GOV_PLATFORMS) && GOV_PLATFORMS.includes(d.platform);
 
   let closingUrgency = '';
   let closingLabel   = null;
@@ -85,13 +84,9 @@ function renderDrawer(d) {
     const parsed = parseClosingDate(d.closing_date);
     if (parsed && !isNaN(parsed)) {
       const daysLeft = Math.ceil((parsed - Date.now()) / 86400000);
-      if (daysLeft < 0) {
-        closingUrgency = 'expired';
-      } else if (daysLeft <= 3) {
-        closingUrgency = 'urgent';
-      } else if (daysLeft <= 7) {
-        closingUrgency = 'soon';
-      }
+      if (daysLeft < 0)      closingUrgency = 'expired';
+      else if (daysLeft <= 3) closingUrgency = 'urgent';
+      else if (daysLeft <= 7) closingUrgency = 'soon';
 
       if (daysLeft < 0) {
         closingLabel = `${d.closing_date} <span style="color:var(--danger);font-size:0.55rem">(CLOSED)</span>`;
@@ -105,12 +100,11 @@ function renderDrawer(d) {
         closingLabel = `${d.closing_date} <span style="color:var(--muted);font-size:0.55rem">(${daysLeft}d)</span>`;
       }
     } else {
-      // Unparseable date — show raw string anyway
       closingLabel = d.closing_date;
     }
   }
 
-  // ── Status row ─────────────────────────────────────────────────────────────
+  // ── Status row ──────────────────────────────────────────────────────────────
   let statusHtml = '';
   if (d.applied) {
     statusHtml = `<span class="status-pill applied">✓ Applied</span><span class="status-time">${d.applied_at}</span>`;
@@ -126,13 +120,13 @@ function renderDrawer(d) {
     statusHtml += `<span class="gov-warn-chip" style="border-color:var(--danger);color:var(--danger)">⚠ ${closingUrgency === 'expired' ? 'Closing date passed' : 'Closes very soon'}</span>`;
   }
 
-  // ── Job info panel ─────────────────────────────────────────────────────────
+  // ── Job info panel ──────────────────────────────────────────────────────────
   const rows = [
-    d.salary       ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
-    d.job_type     ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
-    closingLabel   ? `<div class="info-row"><span class="info-label">📅 Closes</span><span class="info-val">${closingLabel}</span></div>` : '',
-    d.how_to_apply ? `<div class="info-row"><span class="info-label">📨 How to Apply</span><span class="info-val">${d.how_to_apply}</span></div>` : '',
-    d.docs_required? `<div class="info-row"><span class="info-label">📎 Docs Required</span><span class="info-val">${d.docs_required}</span></div>` : '',
+    d.salary        ? `<div class="info-row"><span class="info-label">💰 Salary</span><span class="info-val">${d.salary}</span></div>` : '',
+    d.job_type      ? `<div class="info-row"><span class="info-label">📋 Type</span><span class="info-val">${d.job_type}</span></div>` : '',
+    closingLabel    ? `<div class="info-row"><span class="info-label">📅 Closes</span><span class="info-val">${closingLabel}</span></div>` : '',
+    d.how_to_apply  ? `<div class="info-row"><span class="info-label">📨 How to Apply</span><span class="info-val">${d.how_to_apply}</span></div>` : '',
+    d.docs_required ? `<div class="info-row"><span class="info-label">📎 Docs Required</span><span class="info-val">${d.docs_required}</span></div>` : '',
   ].filter(Boolean).join('');
 
   const infoSection = rows ? `
@@ -141,7 +135,7 @@ function renderDrawer(d) {
       <div class="info-grid">${rows}</div>
     </div>` : '';
 
-  // ── Requirements ───────────────────────────────────────────────────────────
+  // ── Requirements ────────────────────────────────────────────────────────────
   const reqs = parseRequirements(d.description);
   const reqsHtml = reqs.length ? `
     <div class="drawer-section">
@@ -151,14 +145,14 @@ function renderDrawer(d) {
       </ul>
     </div>` : '';
 
-  // ── Cover letter ───────────────────────────────────────────────────────────
+  // ── Cover letter ────────────────────────────────────────────────────────────
   const coverHtml = d.cover_letter ? `
     <div class="drawer-section">
       <div class="drawer-section-title">Cover Letter Sent</div>
       <div class="cover-letter-box">${d.cover_letter}</div>
     </div>` : '';
 
-  // ── Gov notice ─────────────────────────────────────────────────────────────
+  // ── Gov notice ──────────────────────────────────────────────────────────────
   const govNotice = isGov ? `
     <div class="gov-notice">
       <strong>🏛 Government Position</strong>
@@ -166,7 +160,7 @@ function renderDrawer(d) {
       Visit the posting link to confirm requirements.
     </div>` : '';
 
-  // ── Action buttons ─────────────────────────────────────────────────────────
+  // ── Action buttons ──────────────────────────────────────────────────────────
   const spiderBtn = (!d.applied && d.url && !d.apply_email)
     ? `<button class="btn btn-orange btn-sm" id="spider-btn" onclick="doSpider(${d.id})">🕷 Spider for Email</button>`
     : '';
@@ -181,7 +175,6 @@ function renderDrawer(d) {
     ? `<div class="meta-chip">✉ <strong>${d.apply_email}</strong></div>`
     : '';
 
-  // ── Closing date chip (header meta row) ────────────────────────────────────
   const urgentStyle = (closingUrgency === 'urgent' || closingUrgency === 'expired')
     ? 'style="border-color:var(--danger);color:var(--danger)"'
     : '';

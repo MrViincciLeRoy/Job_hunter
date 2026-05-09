@@ -10,21 +10,9 @@
   <link rel="stylesheet" href="{% static 'css/jobs.css' %}" />
   <link rel="stylesheet" href="{% static 'css/drawer.css' %}" />
   <style>
-    .tag.closing-tag {
-      border-color: rgba(255,159,67,0.4);
-      color: rgba(255,159,67,0.85);
-      background: rgba(255,159,67,0.06);
-    }
-    .tag.closing-tag.urgent {
-      border-color: var(--danger);
-      color: var(--danger);
-      background: rgba(255,68,102,0.07);
-    }
-    .tag.closing-tag.expired {
-      border-color: rgba(255,68,102,0.25);
-      color: rgba(255,68,102,0.45);
-      text-decoration: line-through;
-    }
+    .tag.closing-tag { border-color: rgba(255,159,67,0.4); color: rgba(255,159,67,0.85); background: rgba(255,159,67,0.06); }
+    .tag.closing-tag.urgent  { border-color: var(--danger); color: var(--danger); background: rgba(255,68,102,0.07); }
+    .tag.closing-tag.expired { border-color: rgba(255,68,102,0.25); color: rgba(255,68,102,0.45); text-decoration: line-through; }
   </style>
 </head>
 <body>
@@ -32,10 +20,10 @@
 <div class="top-bar">
   <div class="logo">job<span>/</span>hunter</div>
   <div class="nav">
-    <a href="/"           class="btn btn-outline btn-sm">← Dashboard</a>
-    <a href="/upload-cv/" class="btn btn-outline btn-sm">+ CV</a>
+    <a href="/"             class="btn btn-outline btn-sm">← Dashboard</a>
+    <a href="/upload-cv/"   class="btn btn-outline btn-sm">+ CV</a>
     <a href="/credentials/" class="btn btn-outline btn-sm">🔑 Gmail</a>
-    <a href="/admin/"     class="btn btn-outline btn-sm">⚙ Admin</a>
+    <a href="/admin/"       class="btn btn-outline btn-sm">⚙ Admin</a>
   </div>
 </div>
 
@@ -164,7 +152,7 @@
   <div class="job-card
     {% if job.pk in applied_ids %}applied
     {% elif job.apply_email %}has-email
-    {% elif job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}gov-job
+    {% elif job.platform in gov_platforms %}gov-job
     {% else %}no-email{% endif %}"
        onclick="openDrawer({{ job.pk }}, this)"
        data-id="{{ job.pk }}"
@@ -179,7 +167,7 @@
       <div class="job-title">{{ job.title }}</div>
       <div class="job-company">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}</div>
       <div class="job-tags">
-        {% if job.platform == 'dpsa' or job.platform == 'sayouth' or job.platform == 'essa' or job.platform == 'govza' %}
+        {% if job.platform in gov_platforms %}
           <span class="tag gov-tag">🏛 {{ job.platform }}</span>
         {% else %}
           <span class="tag plat-tag">{{ job.platform }}</span>
@@ -235,8 +223,8 @@
 <div class="toast" id="toast"></div>
 
 <script>const CSRF = "{{ csrf_token }}";</script>
+<script>const GOV_PLATFORMS = {{ gov_platforms_js|safe }};</script>
 <script src="{% static 'js/drawer.js' %}"></script>
 <script src="{% static 'js/jobs.js' %}"></script>
-
 </body>
 </html>

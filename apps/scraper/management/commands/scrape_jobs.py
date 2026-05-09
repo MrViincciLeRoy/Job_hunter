@@ -6,6 +6,13 @@ from apps.scraper.scrapers.careerjunction import scrape_careerjunction, scrape_c
 from apps.scraper.scrapers.careers24 import scrape_careers24
 from apps.scraper.scrapers.jobmail import scrape_jobmail
 from apps.scraper.scrapers.govjobs import scrape_dpsa, scrape_sayouth, scrape_essa, scrape_govza
+from apps.scraper.scrapers.jobvine import scrape_jobvine
+from apps.scraper.scrapers.jobjack import scrape_jobjack
+from apps.scraper.scrapers.offerzen import scrape_offerzen
+from apps.scraper.scrapers.executiveplacements import scrape_executiveplacements
+from apps.scraper.scrapers.bizcommunity import scrape_bizcommunity
+from apps.scraper.scrapers.jobcrystal import scrape_jobcrystal
+from apps.scraper.scrapers.gumtree import scrape_gumtree
 from apps.scraper.models import Job
 from apps.cv.models import CV
 
@@ -33,48 +40,63 @@ FRIENDLY_NAMES = {
     'all':         'All Job Types',
 }
 
-# JobSpy scrapers — LinkedIn & Indeed via jobspy library
+# JobSpy — Indeed + Google (LinkedIn handled separately)
 _JOBSPY_SCRAPERS = []
 try:
-    from apps.scraper.scrapers.jobspy_scraper import scrape_linkedin, scrape_indeed
+    from apps.scraper.scrapers.jobspy_scraper import scrape_indeed, scrape_google
     _JOBSPY_SCRAPERS = [
-        ("LinkedIn", scrape_linkedin, "high", "linkedin"),
-        ("Indeed",   scrape_indeed,   "high", "indeed"),
+        ("Indeed",       scrape_indeed,  "high", "indeed"),
+        ("Google Jobs",  scrape_google,  "high", "google"),
     ]
 except ImportError:
     pass
 
 SCRAPERS_PRIMARY = [
-    ("DPSA",              scrape_dpsa,              "gov",  "dpsa"),
-    ("SAYouth",           scrape_sayouth,           "gov",  "sayouth"),
-    ("ESSA",              scrape_essa,              "gov",  "essa"),
-    ("GovZA",             scrape_govza,             "gov",  "govza"),
-    ("PNet",              scrape_pnet,              "high", "pnet"),
-    ("CareerJunction",    scrape_careerjunction,    "high", "careerjunction"),
-    ("CareerJunction-IT", scrape_careerjunction_it, "high", "careerjunction_it"),
-    ("Careers24",         scrape_careers24,         "high", "careers24"),
-    ("JobMail",           scrape_jobmail,           "high", "jobmail"),
-    # Gumtree disabled — low email yield, high scrape cost
-    # ("Gumtree", scrape_gumtree, "medium", "gumtree"),
+    # Gov platforms
+    ("DPSA",                 scrape_dpsa,                 "gov",    "dpsa"),
+    ("SAYouth",              scrape_sayouth,              "gov",    "sayouth"),
+    ("ESSA",                 scrape_essa,                 "gov",    "essa"),
+    ("GovZA",                scrape_govza,                "gov",    "govza"),
+    # Major SA boards
+    ("PNet",                 scrape_pnet,                 "high",   "pnet"),
+    ("CareerJunction",       scrape_careerjunction,       "high",   "careerjunction"),
+    ("CareerJunction-IT",    scrape_careerjunction_it,    "high",   "careerjunction_it"),
+    ("Careers24",            scrape_careers24,            "high",   "careers24"),
+    ("JobMail",              scrape_jobmail,              "high",   "jobmail"),
+    # Expanded SA boards
+    ("Jobvine",              scrape_jobvine,              "high",   "jobvine"),
+    ("JobJack",              scrape_jobjack,              "medium", "jobjack"),
+    ("OfferZen",             scrape_offerzen,             "high",   "offerzen"),
+    ("ExecutivePlacements",  scrape_executiveplacements,  "medium", "executiveplacements"),
+    ("Bizcommunity",         scrape_bizcommunity,         "medium", "bizcommunity"),
+    ("JobCrystal",           scrape_jobcrystal,           "medium", "jobcrystal"),
+    ("Gumtree",              scrape_gumtree,              "medium", "gumtree"),
 ] + _JOBSPY_SCRAPERS
 
-GOV_PLATFORMS   = {"dpsa", "sayouth", "essa", "govza"}
-IT_PLATFORMS    = {"pnet", "careerjunction", "careerjunction_it"}
-GOV_PRIORITY_KW = "internship learnership entry level graduate IT"
-GOV_PDF_SCRAPERS = {'dpsa'}
+GOV_PLATFORMS = {"dpsa", "sayouth", "essa", "govza"}
+IT_PLATFORMS  = {"pnet", "careerjunction", "careerjunction_it", "offerzen", "jobcrystal"}
+GOV_PRIORITY_KW  = "internship learnership entry level graduate IT"
+GOV_PDF_SCRAPERS = {"dpsa"}
 
 SCRAPER_MAX_PAGES = {
-    "DPSA":              1,
-    "SAYouth":           20,
-    "ESSA":              20,
-    "GovZA":             10,
-    "PNet":              50,
-    "CareerJunction":    50,
-    "CareerJunction-IT": 50,
-    "Careers24":         30,
-    "JobMail":           30,
-    "LinkedIn":          10,
-    "Indeed":            10,
+    "DPSA":                1,
+    "SAYouth":             20,
+    "ESSA":                20,
+    "GovZA":               10,
+    "PNet":                50,
+    "CareerJunction":      50,
+    "CareerJunction-IT":   50,
+    "Careers24":           30,
+    "JobMail":             30,
+    "Jobvine":             30,
+    "JobJack":             20,
+    "OfferZen":            20,
+    "ExecutivePlacements": 20,
+    "Bizcommunity":        15,
+    "JobCrystal":          20,
+    "Gumtree":             20,
+    "Indeed":              10,
+    "Google Jobs":         10,
 }
 
 
@@ -124,8 +146,8 @@ class Command(BaseCommand):
             default=["all"],
             metavar="TYPE",
             help=(
-                "Job types to include. Options: internship learnership bursary "
-                "scholarship graduate entry_level low_barrier permanent all. Default: all"
+                "Job types: internship learnership bursary scholarship "
+                "graduate entry_level low_barrier permanent all"
             ),
         )
 
@@ -142,7 +164,7 @@ class Command(BaseCommand):
             labels = [FRIENDLY_NAMES.get(s, s) for s in type_slugs if s != 'all']
             self.stdout.write(f"Type filter: {', '.join(labels)}\n")
         else:
-            self.stdout.write("Type filter: ALL (no filter)\n")
+            self.stdout.write("Type filter: ALL\n")
 
         keywords = options.get("keywords")
         user_set_keywords = bool(keywords)
@@ -186,11 +208,11 @@ class Command(BaseCommand):
             existing_urls = set(Job.objects.exclude(url="").values_list("url", flat=True))
             self.stdout.write(f"[skip-existing] {len(existing_urls)} URLs already in DB\n")
 
-        jobspy_active = any(s[3] in ("linkedin", "indeed") for s in scrapers)
+        jobspy_active = any(s[3] in ("indeed", "google") for s in scrapers)
         self.stdout.write(
             f"Keywords: '{keywords}' | max_jobs={'unlimited' if not max_jobs else max_jobs} "
             f"| scrapers={len(scrapers)} | workers={workers} "
-            f"| jobspy={'ON' if jobspy_active else 'OFF (not installed)'}\n"
+            f"| jobspy={'ON' if jobspy_active else 'OFF'}\n"
         )
 
         all_jobs = []
@@ -199,8 +221,10 @@ class Command(BaseCommand):
             kw = None
             if slug in {"sayouth", "essa", "govza"} and not user_set_keywords:
                 kw = f"{keywords} {GOV_PRIORITY_KW}"
-            elif slug in {"linkedin", "indeed"}:
-                kw = keywords  # jobspy always needs keywords
+            elif slug in {"indeed", "google"}:
+                kw = keywords
+            else:
+                kw = keywords
 
             limit_arg = max_jobs if max_jobs else 9999
 
@@ -223,7 +247,7 @@ class Command(BaseCommand):
 
                 email_count = sum(1 for j in results if j.get("apply_email"))
                 msg = (
-                    f"  [{tier.upper():6}] {name:<20} {len(results):>4} jobs"
+                    f"  [{tier.upper():6}] {name:<22} {len(results):>4} jobs"
                     f" ({email_count} with email"
                 )
                 if filtered_out:
@@ -235,7 +259,7 @@ class Command(BaseCommand):
                 return results
 
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"  [{tier.upper():6}] {name:<20} FAILED — {e}"))
+                self.stdout.write(self.style.ERROR(f"  [{tier.upper():6}] {name:<22} FAILED — {e}"))
                 return []
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
