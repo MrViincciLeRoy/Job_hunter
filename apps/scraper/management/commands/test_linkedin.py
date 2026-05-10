@@ -1,9 +1,12 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from apps.scraper.scrapers.linkedin import scrape_linkedin
 
 
 class Command(BaseCommand):
-    help = "Test the LinkedIn scraper and print results"
+    help = "Test the LinkedIn scraper and print results — no DB required"
+
+    # Skip system checks (model/DB validation) so this runs without a real DB
+    requires_system_checks = []
 
     def add_arguments(self, parser):
         parser.add_argument("--keywords", type=str, default="python developer south africa")
@@ -28,9 +31,9 @@ class Command(BaseCommand):
 
         if not jobs:
             self.stdout.write(self.style.WARNING("\nNo jobs returned. Possible causes:"))
-            self.stdout.write("  • LINKEDIN_EMAIL / LINKEDIN_PASSWORD not set")
-            self.stdout.write("  • Chrome / chromedriver not installed")
-            self.stdout.write("  • LinkedIn blocked the session")
+            self.stdout.write("  • LinkedIn is blocking the runner IP (common on GHA)")
+            self.stdout.write("  • Selectors have changed — check BeautifulSoup output")
+            self.stdout.write("  • Network timeout")
             return
 
         self.stdout.write(self.style.SUCCESS(f"\n{len(jobs)} job(s) returned:\n"))
@@ -48,7 +51,6 @@ class Command(BaseCommand):
             self.stdout.write(f"    Desc     : {desc[:120]}{'...' if len(desc) > 120 else ''}")
             self.stdout.write("")
 
-        # Summary
         with_email   = sum(1 for j in jobs if j.get('apply_email'))
         with_salary  = sum(1 for j in jobs if j.get('salary'))
         with_closing = sum(1 for j in jobs if j.get('closing_date'))
