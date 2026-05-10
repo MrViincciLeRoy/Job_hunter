@@ -1,0 +1,45 @@
+name: Test LinkedIn Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: "Search keywords"
+        required: false
+        default: "python developer south africa"
+      limit:
+        description: "Max jobs to return"
+        required: false
+        default: "10"
+
+jobs:
+  test-linkedin:
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: sqlite:///test.db
+      SECRET_KEY: test-secret-key-for-ci
+      DEBUG: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --run-syncdb
+
+      - name: Test LinkedIn scraper
+        run: |
+          python manage.py test_linkedin \
+            --keywords "${{ github.event.inputs.keywords }}" \
+            --limit ${{ github.event.inputs.limit }}
