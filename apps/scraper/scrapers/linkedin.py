@@ -1,87 +1,172 @@
 """
-LinkedIn job scraper using joeyism/linkedin_scraper.
+LinkedIn job scraper — pure requests + BeautifulSoup, no Selenium/Playwright.
 
-Requirements:
-    pip install linkedin-scraper selenium
-    Chrome + chromedriver installed and on PATH
-
-Env vars needed:
-    LINKEDIN_EMAIL    — your LinkedIn login email
-    LINKEDIN_PASSWORD — your LinkedIn password
+Scrapes LinkedIn's public (no-auth) guest job search endpoint.
+No env vars or login required.
 
 Usage:
-    jobs = scrape_linkedin("python developer", limit=100)
+    jobs = scrape_linkedin("python developer south africa", limit=100)
 """
 
-import os
-import time
-import random
-from utils.scraper_utils import job_record, extract_email_priority, extract_closing_date
+import re
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlencode
+from utils.scraper_utils import (
+    job_record,
+    extract_email_priority,
+    extract_closing_date,
+    random_headers,
+    polite_delay,
+)
 
-try:
-    from linkedin_scraper import JobSearch, actions
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    _LINKEDIN_AVAILABLE = True
-except ImportError:
-    _LINKEDIN_AVAILABLE = False
+BASE_SEARCH = "https://www.linkedin.com/jobs/search"
+GUEST_API   = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+
+SESSION = requests.Session()
 
 
-def _make_driver(headless: bool = True):
-    opts = Options()
-    if headless:
-        opts.add_argument("--headless=new")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--disable-gpu")
-    opts.add_argument("--window-size=1920,1080")
-    opts.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+def _li_headers():
+    base = random_headers()
+    base.update({
+        "Referer":        "https://www.linkedin.com/jobs/search/",
+        "Accept":         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+    })
+    return base
+
+
+def _search_page(keywords: str, start: int = 0, location: str = "South Africa") -> list:
+    """
+    Fetch one page of job cards from the LinkedIn guest search API.
+    Returns list of stubs: title, company, location, url, job_id.
+    """
+    params = {
+        "keywords": keywords,
+        "location": location,
+        "start":    start,
+        "count":    25,
+    }
+
+    url = f"{BASE_SEARCH}?{urlencode(params)}" if start == 0 else f"{GUEST_API}?{urlencode(params)}"
+
+    try:
+        r = SESSION.get(url, headers=_li_headers(), timeout=20)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[LinkedIn] Search page start={start} error: {e}")
+        return []
+
+    soup    = BeautifulSoup(r.text, "lxml")
+    cards   = soup.select("div.base-card, li.jobs-search-results__list-item, li")
+    results = []
+
+    for card in cards:
+        title_el   = card.select_one("h3.base-search-card__title, h3, .job-search-card__title")
+        company_el = card.select_one("h4.base-search-card__subtitle, h4, .job-search-card__company-name")
+        loc_el     = card.select_one(".job-search-card__location, .base-search-card__metadata span")
+        link_el    = card.select_one("a.base-card__full-link, a[href*='/jobs/view/']")
+
+        title   = title_el.get_text(strip=True)  if title_el   else ""
+        company = company_el.get_text(strip=True) if company_el else ""
+        loc     = loc_el.get_text(strip=True)     if loc_el     else "South Africa"
+        href    = link_el["href"].split("?")[0]   if link_el    else ""
+
+        if not title or not href:
+            continue
+
+        job_id_m = re.search(r"/jobs/view/(\d+)", href)
+        results.append({
+            "title":    title,
+            "company":  company,
+            "location": loc,
+            "url":      href,
+            "job_id":   job_id_m.group(1) if job_id_m else "",
+        })
+
+    print(f"[LinkedIn] start={start} → {len(results)} cards")
+    return results
+
+
+def _scrape_detail(stub: dict) -> dict | None:
+    """
+    Fetch the LinkedIn job detail page and extract full fields.
+    Falls back to stub data if the detail page fails.
+    """
+    url = stub["url"]
+    if not url:
+        return None
+
+    try:
+        r = SESSION.get(url, headers=_li_headers(), timeout=20)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[LinkedIn] Detail error {url}: {e}")
+        return job_record({
+            "title":    stub["title"],
+            "company":  stub["company"],
+            "location": stub["location"],
+            "url":      url,
+            "platform": "linkedin",
+        })
+
+    soup     = BeautifulSoup(r.text, "lxml")
+    raw_text = soup.get_text(separator="\n", strip=True)
+
+    def _text(selector, default=""):
+        el = soup.select_one(selector)
+        return el.get_text(strip=True) if el else default
+
+    title   = _text("h1.top-card-layout__title, h1") or stub["title"]
+    company = _text(".topcard__org-name-link, .top-card-layout__card a") or stub["company"]
+    loc     = _text(".topcard__flavor--bullet, .top-card-layout__second-subline span") or stub["location"]
+
+    desc_el = soup.select_one(
+        ".show-more-less-html__markup, "
+        ".description__text, "
+        "section.description div"
     )
-    return webdriver.Chrome(options=opts)
+    description = desc_el.get_text(separator="\n", strip=True) if desc_el else ""
 
+    job_type = ""
+    salary   = ""
+    for item in soup.select("li.description__job-criteria-item"):
+        header = item.select_one("h3")
+        value  = item.select_one("span")
+        if not header or not value:
+            continue
+        h = header.get_text(strip=True).lower()
+        v = value.get_text(strip=True)
+        if "employment type" in h:
+            job_type = v
+        elif "salary" in h or "compensation" in h:
+            salary = v
 
-def _job_to_record(lj) -> dict:
-    """
-    Convert a linkedin_scraper Job/JobListing object to our standard job_record dict.
-    Attribute names vary slightly between versions — we check defensively.
-    """
-    def _attr(*names, default=""):
-        for n in names:
-            v = getattr(lj, n, None)
-            if v:
-                return str(v).strip()
-        return default
-
-    title        = _attr("job_title", "title", "name")
-    company      = _attr("company", "company_name", "employer")
-    location     = _attr("location", "job_location")
-    description  = _attr("job_description", "description", "summary")
-    url          = _attr("linkedin_url", "url", "job_url")
-    salary       = _attr("salary", "compensation")
-    job_type     = _attr("employment_type", "job_type", "work_type")
-    closing_date = extract_closing_date(description)
-    apply_email  = extract_email_priority(description=description, raw_text=description)
+    if not salary:
+        m = re.search(r'(?:salary|compensation|package)[:\s]+([^\n]{5,60})', raw_text, re.I)
+        if m:
+            salary = m.group(1).strip()
 
     return job_record({
-        "title":       title,
-        "company":     company,
-        "location":    location or "South Africa",
-        "salary":      salary,
-        "job_type":    job_type,
-        "closing_date": closing_date,
-        "apply_email": apply_email,
-        "url":         url,
-        "platform":    "linkedin",
-        "description": description[:2000],
-        "raw_text":    description[:3000],
+        "title":        title,
+        "company":      company,
+        "location":     loc,
+        "salary":       salary,
+        "job_type":     job_type,
+        "closing_date": extract_closing_date(raw_text),
+        "apply_email":  extract_email_priority(description=description, raw_text=raw_text),
+        "url":          url,
+        "platform":     "linkedin",
+        "description":  description[:2000],
+        "raw_text":     raw_text[:3000],
     })
 
 
 def scrape_linkedin(keywords: str = None, limit: int = 200) -> list:
     """
-    Scrape LinkedIn job listings.
+    Scrape LinkedIn public job listings — no login required.
 
     Args:
         keywords: search string, e.g. "python developer south africa"
@@ -90,67 +175,33 @@ def scrape_linkedin(keywords: str = None, limit: int = 200) -> list:
     Returns:
         list of job_record dicts
     """
-    if not _LINKEDIN_AVAILABLE:
-        print("[LinkedIn] linkedin-scraper or selenium not installed. "
-              "Run: pip install linkedin-scraper selenium")
-        return []
+    query    = keywords or "developer south africa"
+    stubs    = []
+    start    = 0
+    per_page = 25
 
-    email    = os.getenv("LINKEDIN_EMAIL", "")
-    password = os.getenv("LINKEDIN_PASSWORD", "")
+    print(f"[LinkedIn] Collecting listings for '{query}'...")
 
-    if not email or not password:
-        print("[LinkedIn] LINKEDIN_EMAIL / LINKEDIN_PASSWORD env vars not set.")
-        return []
+    while len(stubs) < limit:
+        page = _search_page(query, start=start)
+        if not page:
+            break
+        stubs.extend(page)
+        if len(page) < per_page:
+            break
+        start += per_page
+        polite_delay(1.5, 3.0)
 
-    driver = None
-    try:
-        print("[LinkedIn] Launching Chrome driver...")
-        driver = _make_driver(headless=True)
+    stubs = stubs[:limit]
+    print(f"[LinkedIn] {len(stubs)} stubs — fetching details...")
 
-        print("[LinkedIn] Logging in...")
-        actions.login(driver, email, password)
-        time.sleep(random.uniform(2.0, 4.0))
+    jobs = []
+    for i, stub in enumerate(stubs):
+        rec = _scrape_detail(stub)
+        if rec and rec.get("title"):
+            jobs.append(rec)
+            print(f"  [{i+1}/{len(stubs)}] {rec['title']} @ {rec['company']}")
+        polite_delay(0.8, 2.0)
 
-        search_query = keywords or "developer south africa"
-        print(f"[LinkedIn] Searching: '{search_query}'")
-
-        job_search = JobSearch(driver=driver, close_on_complete=False, scrape=False)
-        job_search.search(search_query)
-        time.sleep(random.uniform(2.0, 3.5))
-
-        # Scrape up to `limit` listings
-        raw_jobs = job_search.jobs[:limit] if hasattr(job_search, "jobs") else []
-
-        print(f"[LinkedIn] Found {len(raw_jobs)} raw listings — scraping details...")
-
-        results = []
-        for i, lj in enumerate(raw_jobs):
-            try:
-                # Trigger detail scrape if the object supports it
-                if hasattr(lj, "scrape"):
-                    lj.scrape(close_on_complete=False)
-                    time.sleep(random.uniform(0.8, 1.8))
-
-                rec = _job_to_record(lj)
-                if rec.get("title"):
-                    results.append(rec)
-                    print(f"  [{i+1}/{len(raw_jobs)}] {rec['title']} @ {rec['company']}")
-            except Exception as e:
-                print(f"  [LinkedIn] Detail error job {i+1}: {e}")
-                continue
-
-        print(f"[LinkedIn] Returning {len(results)} jobs")
-        return results
-
-    except Exception as e:
-        print(f"[LinkedIn] Scrape failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+    print(f"[LinkedIn] Done — {len(jobs)} jobs")
+    return jobs
